@@ -150,7 +150,7 @@ Friend Module ModSecret
             Application.Current.Resources("ColorObjectBg1") = CType(ColorBg1, Color)
             ThemeRefreshMain()
         Catch ex As Exception
-            Logger.Warn(ex, "刷新主题颜色失败", NotifyLevel.AllUsers)
+            Logger.Error(ex, "刷新主题颜色失败", LogBehavior.Toast)
         End Try
     End Sub
     Public Sub ThemeRefreshMain()
