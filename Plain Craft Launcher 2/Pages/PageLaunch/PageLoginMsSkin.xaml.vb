@@ -12,7 +12,7 @@
     ''' 刷新页面显示的所有信息。
     ''' </summary>
     Public Sub Reload(KeepInput As Boolean)
-        TextName.Text = Settings.Get("CacheMsV2Name")
+        TextName.Text = Settings.Get(Of String)("CacheMsV2Name")
         '皮肤在 Loaded 加载
     End Sub
     ''' <summary>
@@ -20,9 +20,9 @@
     ''' </summary>
     Public Shared Function GetLoginData() As McLoginMs
         If McLoginMsLoader.State = LoadState.Finished Then
-            Return New McLoginMs With {.OAuthRefreshToken = Settings.Get("CacheMsV2OAuthRefresh"), .UserName = Settings.Get("CacheMsV2Name"), .AccessToken = Settings.Get("CacheMsV2Access"), .Uuid = Settings.Get("CacheMsV2Uuid"), .ProfileJson = Settings.Get("CacheMsV2ProfileJson")}
+            Return New McLoginMs With {.OAuthRefreshToken = Settings.Get(Of String)("CacheMsV2OAuthRefresh"), .UserName = Settings.Get(Of String)("CacheMsV2Name"), .AccessToken = Settings.Get(Of String)("CacheMsV2Access"), .Uuid = Settings.Get(Of String)("CacheMsV2Uuid"), .ProfileJson = Settings.Get(Of String)("CacheMsV2ProfileJson")}
         Else
-            Return New McLoginMs With {.OAuthRefreshToken = Settings.Get("CacheMsV2OAuthRefresh"), .UserName = Settings.Get("CacheMsV2Name")}
+            Return New McLoginMs With {.OAuthRefreshToken = Settings.Get(Of String)("CacheMsV2OAuthRefresh"), .UserName = Settings.Get(Of String)("CacheMsV2Name")}
         End If
     End Function
 
@@ -49,6 +49,7 @@
         Settings.Set("CacheMsV2ProfileJson", "")
         Settings.Set("CacheMsV2Uuid", "")
         Settings.Set("CacheMsV2Name", "")
+        Settings.Set("CacheMsV2Expires", 0L)
         McLoginMsLoader.Interrupt()
         FrmLaunchLeft.RefreshPage(False, True)
     End Sub
@@ -88,14 +89,18 @@ Retry:
                 Thread.Sleep(10)
             Loop
             If McLoginMsLoader.State = LoadState.Failed Then Throw New Exception("登录失败", McLoginMsLoader.Error)
-            Dim AccessToken As String = Settings.Get("CacheMsV2Access")
-            Dim Uuid As String = Settings.Get("CacheMsV2Uuid")
-            Dim Result As String = NetRequestByClientRetry("https://api.minecraftservices.com/minecraft/profile/skins", HttpMethod.Post,
-                Content:=New Net.Http.MultipartFormDataContent From {
-                    {New Net.Http.StringContent(If(SkinInfo.IsSlim, "slim", "classic")), "variant"},
-                    {New Net.Http.ByteArrayContent(ReadFileBytes(SkinInfo.LocalFile)), "file", GetFileNameFromPath(SkinInfo.LocalFile)}
-                },
-                Headers:={{"Authorization", "Bearer " & AccessToken}, {"Accept", "*/*"}, {"User-Agent", "MojangSharp/0.1"}})
+            Dim AccessToken As String = Settings.Get(Of String)("CacheMsV2Access")
+            Dim Uuid As String = Settings.Get(Of String)("CacheMsV2Uuid")
+            Dim Result As String = Nothing
+            ResilientUtils.Retry( 'MultipartFormDataContent 在一次请求后就会被 Dispose，所以不能直接 Retry（#8397）
+            Sub()
+                Result = NetRequestByClient("https://api.minecraftservices.com/minecraft/profile/skins", HttpMethod.Post,
+                    Content:=New Net.Http.MultipartFormDataContent From {
+                        {New Net.Http.StringContent(If(SkinInfo.IsSlim, "slim", "classic")), "variant"},
+                        {New Net.Http.ByteArrayContent(FileUtils.ReadAsBytes(SkinInfo.LocalFile)), "file", PathUtils.GetLastPart(SkinInfo.LocalFile)}
+                    },
+                    Headers:={{"Authorization", "Bearer " & AccessToken}, {"Accept", "*/*"}, {"User-Agent", "MojangSharp/0.1"}})
+            End Sub, 3)
             If Result.Contains("request requires user authentication") Then
                 Hint("正在重新登录，将在登录后自动更改皮肤……")
                 McLoginMsLoader.Start(GetLoginData(), IsForceRestart:=True)
@@ -105,7 +110,7 @@ Retry:
                 Return
             End If
             '获取新皮肤地址
-            Log("[Skin] 皮肤修改返回值：" & vbCrLf & Result)
+            Logger.Info($"皮肤修改返回值：{vbCrLf}{Result}")
             Dim ResultJson As JObject = GetJson(Result)
             If ResultJson.ContainsKey("errorMessage") Then Throw New Exception(ResultJson("errorMessage").ToString) '#5309
             For Each Skin As JObject In ResultJson("skins")
@@ -116,15 +121,15 @@ Retry:
             Next
             Throw New Exception("未知错误（" & Result & "）")
         Catch ex As Exception
-            If TypeOf ex Is OperationCanceledException OrElse TypeOf ex Is TimeoutException Then
+            If ex.IsBadNetwork Then
                 Hint("更改皮肤失败：连接皮肤服务器超时，请稍后再试，或使用 VPN 改善网络环境", HintType.Red)
-            ElseIf TypeOf ex Is ResponsedWebException AndAlso CType(ex, ResponsedWebException).StatusCode = HttpStatusCode.Unauthorized Then
-                Log(ex, "更改皮肤时遭遇 401 错误", NotifyLevel.DevelopOnly)
+            ElseIf TypeOf ex Is HttpRequestCodeException AndAlso CType(ex, HttpRequestCodeException).StatusCode = HttpStatusCode.Unauthorized Then
+                Logger.Warn(ex, "更改皮肤时遭遇 401 错误")
                 Hint("正在重新登录，将在登录后自动更改皮肤……")
                 McLoginMsLoader.Start(GetLoginData(), IsForceRestart:=True)
                 GoTo Retry
             Else
-                Log(ex, "更改皮肤失败", NotifyLevel.AllUsers)
+                Logger.Error(ex, "更改皮肤失败", LogBehavior.Toast)
             End If
         Finally
             IsChanging = False

@@ -22,7 +22,7 @@
             End If
             If HintText.Length > 0 Then TextBox.HintText = HintText
         Catch ex As Exception
-            Log(ex, "初始化可编辑文本框失败（" & If(Name, "") & "）", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"初始化可编辑文本框失败（{If(Name, "")}）")
         End Try
     End Sub
     Private _Text As String = SelectedItem
@@ -107,7 +107,7 @@
         Try
             CType(Template.FindName("PanPopup", Me), Grid).Opacity = FrmMain.Opacity
         Catch ex As Exception
-            Log(ex, "设置下拉框透明度失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "设置下拉框透明度失败")
         End Try
     End Sub
     Private Sub MyComboBox_DropDownClosed(sender As Object, e As EventArgs) Handles Me.DropDownClosed
@@ -147,7 +147,7 @@
         ElseIf Items.Count > NewValue Then
             SelectedIndex = NewValue
         Else
-            Log($"[Setting] 尝试显示设置 {SettingService.GetKey(Me)}，但没有找到设置值 {NewValue} 的对应项", NotifyLevel.DebugModeOnly)
+            Logger.Warn($"尝试显示设置 {SettingService.GetKey(Me)}，但没有找到设置值 {NewValue} 的对应项")
             SelectedIndex = -1
             SelectedItem = Nothing
         End If

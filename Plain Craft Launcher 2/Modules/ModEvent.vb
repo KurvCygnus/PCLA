@@ -175,7 +175,7 @@ Public Class CustomEvent
     ''' </summary>
     Public Shared Sub Raise(Type As EventType, Arg As String)
         If Type = EventType.None Then Return
-        Log($"[Control] 执行自定义事件：{Type}, {Arg}")
+        Logger.Info($"执行自定义事件：{Type}, {Arg}")
         If Arg Is Nothing Then Arg = ""
         Dim Args As String() = Arg.Split("|")
         Try
@@ -196,7 +196,7 @@ Public Class CustomEvent
                             '确认实际路径
                             Dim ActualPaths = GetAbsoluteUrls(Args(0), Type)
                             Dim Location = ActualPaths(0), WorkingDir = ActualPaths(1)
-                            Log($"[Control] 打开类自定义事件实际路径：{Location}，工作目录：{WorkingDir}")
+                            Logger.Info($"打开类自定义事件实际路径：{Location}，工作目录：{WorkingDir}")
                             '执行
                             If Type = EventType.打开帮助 Then
                                 PageOtherHelp.EnterHelpPage(Location)
@@ -210,7 +210,7 @@ Public Class CustomEvent
                                 StartProcess(Info)
                             End If
                         Catch ex As Exception
-                            Log(ex, "执行打开类自定义事件失败", NotifyLevel.MsgBox)
+                            Logger.Error(ex, "执行打开类自定义事件失败", LogBehavior.Alert)
                         End Try
                     End Sub)
 
@@ -289,7 +289,7 @@ Public Class CustomEvent
                         Try
                             Select Case Args.Length
                                 Case 1
-                                    PageOtherTest.StartCustomDownload(Args(0), GetFileNameFromPath(Args(0)))
+                                    PageOtherTest.StartCustomDownload(Args(0), PathUtils.GetLastPart(Args(0)))
                                 Case 2
                                     PageOtherTest.StartCustomDownload(Args(0), Args(1))
                                 Case Else
@@ -328,7 +328,7 @@ Public Class CustomEvent
                     MyMsgBox("未知的事件类型：" & Type & vbCrLf & "请检查事件类型填写是否正确，或者 PCL 是否为最新版本。", "事件执行失败")
             End Select
         Catch ex As Exception
-            Log(ex, $"事件执行失败（{Type}, {Arg}）", NotifyLevel.MsgBox)
+            Logger.Error(ex, $"事件执行失败（{Type}, {Arg}）", LogBehavior.Alert)
         End Try
     End Sub
 
@@ -346,7 +346,7 @@ Public Class CustomEvent
             '获取文件名
             Dim RawFileName As String
             Try
-                RawFileName = GetFileNameFromPath(RelativeUrl)
+                RawFileName = PathUtils.GetLastPart(RelativeUrl)
                 If Not RawFileName.EndsWithF(".json", True) Then Throw New Exception("未指向 .json 后缀的文件")
             Catch ex As Exception
                 Throw New Exception("联网帮助页面须指向一个帮助 JSON 文件，并在同路径下包含相应 XAML 文件！" & vbCrLf &
@@ -356,7 +356,7 @@ Public Class CustomEvent
             End Try
             '下载文件
             Dim LocalTemp As String = RequestTaskTempFolder() & RawFileName
-            Log("[Event] 转换网络资源：" & RelativeUrl & " -> " & LocalTemp)
+            Logger.Info($"转换网络资源：{RelativeUrl} -> {LocalTemp}")
             Try
                 NetDownloadByClient(RelativeUrl, LocalTemp)
                 NetDownloadByClient(RelativeUrl.Replace(".json", ".xaml"), LocalTemp.Replace(".json", ".xaml"))
@@ -377,25 +377,25 @@ Public Class CustomEvent
         If RelativeUrl.Contains(":\") Then
             '绝对路径
             Location = RelativeUrl
-            Log("[Control] 自定义事件中由绝对路径" & Type & "：" & Location)
-        ElseIf File.Exists(PathExeFolder & "PCL\" & RelativeUrl) Then
+            Logger.Info($"自定义事件中由绝对路径{Type}：{Location}")
+        ElseIf FileUtils.Exists(PathExeFolder & "PCL\" & RelativeUrl) Then
             '相对 PCL 文件夹的路径
             Location = PathExeFolder & "PCL\" & RelativeUrl
-            Log("[Control] 自定义事件中由相对 PCL 文件夹的路径" & Type & "：" & Location)
-        ElseIf File.Exists(PathExeFolder & "PCL\Help\" & RelativeUrl) Then
+            Logger.Info($"自定义事件中由相对 PCL 文件夹的路径{Type}：{Location}")
+        ElseIf FileUtils.Exists(PathExeFolder & "PCL\Help\" & RelativeUrl) Then
             '相对 PCL 本地帮助文件夹的路径
             Location = PathExeFolder & "PCL\Help\" & RelativeUrl
             WorkingDir = PathExeFolder & "PCL\Help\"
-            Log("[Control] 自定义事件中由相对 PCL 本地帮助文件夹的路径" & Type & "：" & Location)
-        ElseIf Type = EventType.打开帮助 AndAlso File.Exists(PathTemp & "Help\" & RelativeUrl) Then
+            Logger.Info($"自定义事件中由相对 PCL 本地帮助文件夹的路径{Type}：{Location}")
+        ElseIf Type = EventType.打开帮助 AndAlso FileUtils.Exists(PathTemp & "Help\" & RelativeUrl) Then
             '相对 PCL 自带帮助文件夹的路径
             Location = PathTemp & "Help\" & RelativeUrl
             WorkingDir = PathTemp & "Help\"
-            Log("[Control] 自定义事件中由相对 PCL 自带帮助文件夹的路径" & Type & "：" & Location)
+            Logger.Info($"自定义事件中由相对 PCL 自带帮助文件夹的路径{Type}：{Location}")
         ElseIf Type = EventType.打开文件 OrElse Type = EventType.执行命令 Then
             '直接使用原有路径启动程序
             Location = RelativeUrl
-            Log("[Control] 自定义事件中直接" & Type & "：" & Location)
+            Logger.Info($"自定义事件中直接{Type}：{Location}")
         Else
             '打开帮助，但是格式不对劲
             Throw New FileNotFoundException("未找到 EventData 指向的本地 xaml 文件：" & RelativeUrl, RelativeUrl)
@@ -408,7 +408,7 @@ Public Class CustomEvent
     ''' 弹出安全确认弹窗。返回是否继续执行。
     ''' </summary>
     Private Shared Function EventSafetyConfirm(Message As String) As Boolean
-        If Settings.Get("HintCustomCommand") Then Return True
+        If Settings.Get(Of Boolean)("HintCustomCommand") Then Return True
         Select Case MyMsgBox(Message & vbCrLf & "请在确认没有安全隐患后再继续。", "执行确认", "继续", "继续且今后不再要求确认", "取消")
             Case 1
                 Return True

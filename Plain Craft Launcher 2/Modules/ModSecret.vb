@@ -150,7 +150,7 @@ Friend Module ModSecret
             Application.Current.Resources("ColorObjectBg1") = CType(ColorBg1, Color)
             ThemeRefreshMain()
         Catch ex As Exception
-            Log(ex, "刷新主题颜色失败", NotifyLevel.AllUsers)
+            Logger.Warn(ex, "刷新主题颜色失败", NotifyLevel.AllUsers)
         End Try
     End Sub
     Public Sub ThemeRefreshMain()
@@ -166,7 +166,7 @@ Friend Module ModSecret
             FrmMain.PanTitle.Background = Brush
             FrmMain.PanTitle.Background.Freeze()
             '主页面背景
-            If Settings.Get("UiBackgroundColorful") Then
+            If Settings.Get(Of Boolean)("UiBackgroundColorful") Then
                 Brush = New LinearGradientBrush With {.EndPoint = New Point(0.1, 1), .StartPoint = New Point(0.9, 0)}
                 Brush.GradientStops.Add(New GradientStop With {.Offset = -0.1, .Color = New MyColor().FromHSL2(ColorHue - 15, ColorSat * 0.8, 91)})
                 Brush.GradientStops.Add(New GradientStop With {.Offset = 0.4, .Color = New MyColor().FromHSL2(ColorHue, ColorSat * 0.8, 91)})
@@ -219,16 +219,16 @@ Friend Module ModSecret
     ''' </summary>
     Public ServerConfig As JObject
 
-    Public ServerLoader As New LoaderTask(Of Integer, Integer)("PCL 配置更新", Sub() Log("[Server] 该版本中不包含更新通知功能……"), Priority:=ThreadPriority.BelowNormal) With
+    Public ServerLoader As New LoaderTask(Of Integer, Integer)("PCL 配置更新", Sub() Logger.Info("该版本中不包含更新通知功能……"), Priority:=ThreadPriority.BelowNormal) With
         {.ReloadTimeout = 1000 * 60 * 60} '超时 1 小时
 
 #End Region
 
 #Region "赞助等级"
 
-    Public ReadOnly Property DonationRank As DonationRanks
+    Public ReadOnly Property CurrentRank As DonationRank
         Get
-            Return DonationRanks.None
+            Return DonationRank.None
         End Get
     End Property
 

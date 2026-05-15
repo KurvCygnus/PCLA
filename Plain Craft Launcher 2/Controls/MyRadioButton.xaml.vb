@@ -104,7 +104,7 @@ Public Class MyRadioButton
             RaiseCustomEvent()
 
         Catch ex As Exception
-            Log(ex, "单选按钮勾选改变错误", NotifyLevel.AllUsers)
+            Logger.Error(ex, "单选按钮勾选改变错误", LogBehavior.Toast)
         End Try
     End Sub
 
@@ -145,7 +145,7 @@ Public Class MyRadioButton
     Private Sub Radiobox_MouseUp() Handles Me.MouseLeftButtonUp
         If Checked Then Return
         If Not IsMouseDown Then Return
-        Log("[Control] 按下单选按钮：" & Text)
+        Logger.Info($"按下单选按钮：{Text}")
         IsMouseDown = False
         Dim e As New RouteEventArgs(True)
         RaiseEvent PreviewClick(Me, e)
@@ -167,6 +167,7 @@ Public Class MyRadioButton
     Private Const AnimationTimeOfMouseOut As Integer = 150 '鼠标移出动画长度
     Private Const AnimationTimeOfCheck As Integer = 120 '勾选状态变更动画长度
     Private Sub RefreshColor(Optional obj = Nothing, Optional e = Nothing) Handles Me.MouseEnter, Me.MouseLeave, Me.Loaded
+        Cursor = If(Checked, Nothing, Cursors.Hand)
         Try
             If IsLoaded AndAlso AniControlEnabled = 0 AndAlso Not False.Equals(e) Then '防止默认属性变更触发动画，若强制不执行动画，则 e 为 False
 
@@ -255,7 +256,7 @@ Public Class MyRadioButton
 
             End If
         Catch ex As Exception
-            Log(ex, "刷新单选按钮颜色出错")
+            Logger.Warn(ex, "刷新单选按钮颜色出错")
         End Try
     End Sub
 

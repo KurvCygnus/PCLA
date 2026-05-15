@@ -181,12 +181,25 @@ Namespace My.Resources
         End Property
         
         '''<summary>
-        '''  查找 System.Byte[] 类型的本地化资源。
+        '''  查找类似 
+        '''22107|industrial-craft@|工业时代2 (Industrial Craft 2)
+        '''21532|@redpower2-core|红石力量2 (RedPower2)
+        '''22036|buildcraft@|建筑 (BuildCraft)
+        '''22074|forestry@|林业*
+        '''21995|railcraft@railcraft-reborn|铁路*¨21996|railcraft-reborn|铁路 (Railcraft)
+        '''
+        '''
+        '''22054|@ee2|等价交换2 (Equivalent Exchange 2)
+        '''
+        '''21655|touhou-item-mod|辉夜姬的五难题 (五つの難題MOD+ ~ Touhou Items)
+        '''20236|secretroomsmod|密室 (SecretRoomsMod)
+        '''20521|the-camping-mod|野营*
+        '''20056|usefulfood|有用的食物 (UsefulFood)
+        '''20021|powerconverters-portablejims-fork|能源转换 (PowerConverters)¨20022|powerconverters|能源 [字符串的其余部分被截断]&quot;; 的本地化字符串。
         '''</summary>
-        Friend ReadOnly Property ModData() As Byte()
+        Friend ReadOnly Property ModData() As String
             Get
-                Dim obj As Object = ResourceManager.GetObject("ModData", resourceCulture)
-                Return CType(obj,Byte())
+                Return ResourceManager.GetString("ModData", resourceCulture)
             End Get
         End Property
         
@@ -236,16 +249,6 @@ Namespace My.Resources
         Friend ReadOnly Property System_Net_Http_Formatting() As Byte()
             Get
                 Dim obj As Object = ResourceManager.GetObject("System.Net.Http.Formatting", resourceCulture)
-                Return CType(obj,Byte())
-            End Get
-        End Property
-        
-        '''<summary>
-        '''  查找 System.Byte[] 类型的本地化资源。
-        '''</summary>
-        Friend ReadOnly Property System_ValueTuple() As Byte()
-            Get
-                Dim obj As Object = ResourceManager.GetObject("System.ValueTuple", resourceCulture)
                 Return CType(obj,Byte())
             End Get
         End Property

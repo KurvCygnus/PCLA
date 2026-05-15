@@ -61,7 +61,7 @@
             Next
 
         Catch ex As Exception
-            Log(ex, "加载帮助列表 UI 失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "加载帮助列表 UI 失败")
         End Try
     End Sub
 
@@ -76,7 +76,7 @@
                 EnterHelpPage(Entry)
             End If
         Catch ex As Exception
-            Log(ex, "处理帮助项目点击时发生意外错误", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "处理帮助项目点击时发生意外错误")
         End Try
     End Sub
     Public Shared Sub EnterHelpPage(Location As String)
@@ -90,7 +90,7 @@
                 If FrmHelpDetail.Init(Entry) Then
                     FrmMain.PageChange(New FormMain.PageStackData With {.Page = FormMain.PageType.HelpDetail, .Additional = {Entry, FrmHelpDetail}})
                 Else
-                    Log("[Help] 已取消进入帮助项目，这一般是由于 xaml 初始化失败，且用户在弹窗中手动放弃", NotifyLevel.DebugModeOnly)
+                    Logger.Warn("已取消进入帮助项目，这一般是由于 xaml 初始化失败，且用户在弹窗中手动放弃")
                 End If
             End Sub)
         End Sub)
@@ -105,20 +105,11 @@
                 If FrmHelpDetail.Init(Entry) Then
                     FrmMain.PageChange(New FormMain.PageStackData With {.Page = FormMain.PageType.HelpDetail, .Additional = {Entry, FrmHelpDetail}})
                 Else
-                    Log("[Help] 已取消进入帮助项目，这一般是由于 xaml 初始化失败，且用户在弹窗中手动放弃", NotifyLevel.DebugModeOnly)
+                    Logger.Warn("已取消进入帮助项目，这一般是由于 xaml 初始化失败，且用户在弹窗中手动放弃")
                 End If
             End Sub)
         End Sub)
     End Sub
-    Public Shared Function GetHelpPage(Location As String) As PageOtherHelpDetail
-        If Not HelpLoader.State = LoadState.Finished Then HelpLoader.WaitForExit(GetUuid)
-        Dim FrmHelpDetail As New PageOtherHelpDetail
-        If FrmHelpDetail.Init(New HelpEntry(Location)) Then
-            Return FrmHelpDetail
-        Else
-            Throw New Exception("已取消进入帮助项目，这一般是由于 xaml 初始化失败，且用户在弹窗中手动放弃")
-        End If
-    End Function
 
     ''' <summary>
     ''' 搜索帮助。

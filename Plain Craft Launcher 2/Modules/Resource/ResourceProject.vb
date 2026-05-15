@@ -52,9 +52,9 @@ Public Class ResourceProject
     ''' </summary>
     Public ReadOnly DownloadCount As Integer
     ''' <summary>
-    ''' 支持的 Mod 加载器列表。可能为空。
+    ''' 所有支持的 Mod 加载器。可能为 <see cref="ModLoaders.None"/>。
     ''' </summary>
-    Public ReadOnly Loaders As List(Of ModLoaderTypes)
+    Public ReadOnly ModLoaders As ModLoaders = ModLoaders.None
     ''' <summary>
     ''' 描述性标签的内容。已转换为中文。
     ''' </summary>
@@ -133,11 +133,7 @@ Public Class ResourceProject
             Website = Data("Website")
             LastUpdate = Data("LastUpdate")
             DownloadCount = Data("DownloadCount")
-            If Data.ContainsKey("ModLoaders") Then
-                Loaders = CType(Data("ModLoaders"), JArray).Select(Function(t) CType(t.ToObject(Of Integer), ModLoaderTypes)).ToList
-            Else
-                Loaders = New List(Of ModLoaderTypes)
-            End If
+            If Data.ContainsKey("ModLoaders") Then ModLoaders = Data("ModLoaders").ToObject(Of Integer)
             Tags = CType(Data("Tags"), JArray).Select(Function(t) t.ToString).ToList
             If Data.ContainsKey("LogoUrl") Then LogoUrl = Data("LogoUrl")
             If Data.ContainsKey("Drops") Then
@@ -181,12 +177,12 @@ Public Class ResourceProject
                     Types = ResourceTypes.DataPack
                 End If
                 'FileIndexes / VanillaMajorVersions / ModLoaders
-                Loaders = New List(Of ModLoaderTypes)
+                ModLoaders = ModLoaders.None
                 Dim Files As New List(Of KeyValuePair(Of Integer, List(Of String))) 'FileId, GameVersions
                 For Each File In If(Data("latestFiles"), New JArray)
                     Dim NewFile = ResourceVersion.FromPlatformJson(File, Types)
                     If Not NewFile.DownloadAvailable Then Continue For
-                    Loaders.AddRange(NewFile.Loaders)
+                    ModLoaders = ModLoaders Or NewFile.ModLoaders
                     Dim GameVersions = File("gameVersions").ToObject(Of List(Of String))
                     If Not GameVersions.Any(Function(v) McVersion.IsFormatFit(v)) Then Continue For
                     Files.Add(New KeyValuePair(Of Integer, List(Of String))(File("id"), GameVersions))
@@ -198,7 +194,6 @@ Public Class ResourceProject
                 CurseForgeFileIds = Files.Select(Function(f) f.Key).Distinct.ToList
                 Drops = Files.SelectMany(Function(f) f.Value).
                     Select(Function(v) McVersion.VersionToDrop(v)).Where(Function(v) v <> 209).Distinct.OrderByDescending(Function(v) v).ToList
-                Loaders = Loaders.Distinct.OrderBy(Of Integer)(Function(t) t).ToList
                 'Tags
                 Tags = New List(Of String)
                 For Each Category In If(Data("categories"), New JArray). '镜像源 API 可能丢失此字段 (4267#issuecomment-2254590831)
@@ -303,24 +298,17 @@ Public Class ResourceProject
                 End Select
                 'Tags & ModLoaders
                 Tags = New List(Of String)
-                Loaders = New List(Of ModLoaderTypes)
-                If Data.ContainsKey("loaders") Then
-                    For Each Category In Data("loaders").Select(Function(t) t.ToString)
-                        Select Case Category
-                            Case "forge" : Loaders.Add(ModLoaderTypes.Forge)
-                            Case "fabric" : Loaders.Add(ModLoaderTypes.Fabric)
-                            Case "quilt" : Loaders.Add(ModLoaderTypes.Quilt)
-                            Case "neoforge" : Loaders.Add(ModLoaderTypes.NeoForge)
-                        End Select
+                ModLoaders = ModLoaders.None
+                For Each Category In If(Data("loaders")?.Select(Function(t) t.ToString), {}).Concat(Data("categories").Select(Function(t) t.ToString))
+                    For Each Loader In EnumUtils.GetAllFlags(Of ModLoaders)()
+                        If Category = Loader.ToString.Lower Then
+                            ModLoaders = ModLoaders Or Loader
+                            Exit For
+                        End If
                     Next
-                End If
+                Next
                 For Each Category In Data("categories").Select(Function(t) t.ToString)
                     Select Case Category
-                            '加载器
-                        Case "forge" : Loaders.Add(ModLoaderTypes.Forge)
-                        Case "fabric" : Loaders.Add(ModLoaderTypes.Fabric)
-                        Case "quilt" : Loaders.Add(ModLoaderTypes.Quilt)
-                        Case "neoforge" : Loaders.Add(ModLoaderTypes.NeoForge)
                         Case "datapack" : Types = ResourceTypes.DataPack
                             '共用
                         Case "technology" : Tags.Add("科技")
@@ -388,12 +376,11 @@ Public Class ResourceProject
                         Case "vanilla" : Tags.Add("原版可用")
                     End Select
                 Next
-                If Types = ResourceTypes.DataPack AndAlso Loaders.Any Then Types = ResourceTypes.DataPack Or ResourceTypes.Mod
+                If Types = ResourceTypes.DataPack AndAlso ModLoaders <> ModLoaders.None Then Types = ResourceTypes.DataPack Or ResourceTypes.Mod
 #End Region
             End If
             If Not Tags.Any() Then Tags.Add("其他")
             Tags.Sort()
-            Loaders.Sort()
         End If
         '保存缓存
         Cache(Id) = Me
@@ -454,7 +441,7 @@ Public Class ResourceProject
         Json("Website") = Website
         Json("LastUpdate") = LastUpdate
         Json("DownloadCount") = DownloadCount
-        If Loaders IsNot Nothing AndAlso Loaders.Any Then Json("ModLoaders") = New JArray(Loaders.Select(Function(m) CInt(m)))
+        If ModLoaders <> ModLoaders.None Then Json("ModLoaders") = ModLoaders
         Json("Tags") = New JArray(Tags)
         If LogoUrl IsNot Nothing Then Json("LogoUrl") = LogoUrl
         If Drops.Any Then Json("Drops") = New JArray(Drops)
@@ -514,13 +501,13 @@ Public Class ResourceProject
         End If
         '获取 Mod 加载器描述
         Dim ModLoaderDescriptionFull As String, ModLoaderDescriptionPart As String
-        Dim ModLoadersForDesc As New List(Of ModLoaderTypes)(Loaders)
-        If Settings.Get("ToolDownloadIgnoreQuilt") Then ModLoadersForDesc.Remove(ModLoaderTypes.Quilt)
+        Dim ModLoadersForDesc = ModLoaders.Flags().ToList()
+        If Settings.Get(Of Boolean)("ToolDownloadIgnoreQuilt") Then ModLoadersForDesc.Remove(ModLoaders.Quilt)
         Select Case ModLoadersForDesc.Count
             Case 0
-                If Loaders.IsSingle Then
-                    ModLoaderDescriptionFull = "仅 " & Loaders.Single.ToString
-                    ModLoaderDescriptionPart = Loaders.Single.ToString
+                If ModLoadersForDesc.IsSingle Then
+                    ModLoaderDescriptionFull = "仅 " & ModLoadersForDesc.Single.ToString
+                    ModLoaderDescriptionPart = ModLoadersForDesc.Single.ToString
                 Else
                     ModLoaderDescriptionFull = "未知"
                     ModLoaderDescriptionPart = ""
@@ -530,10 +517,10 @@ Public Class ResourceProject
                 ModLoaderDescriptionPart = ModLoadersForDesc.Single.ToString
             Case Else
                 Dim NewestDrop As Integer = If(Drops.Any, Drops.First, 9999)
-                If Loaders.Contains(ModLoaderTypes.Forge) AndAlso
-                   (NewestDrop < 140 OrElse Loaders.Contains(ModLoaderTypes.Fabric)) AndAlso
-                   (NewestDrop < 200 OrElse Loaders.Contains(ModLoaderTypes.NeoForge)) AndAlso
-                   (NewestDrop < 140 OrElse Loaders.Contains(ModLoaderTypes.Quilt) OrElse Settings.Get("ToolDownloadIgnoreQuilt")) Then
+                If ModLoadersForDesc.Contains(ModLoaders.Forge) AndAlso
+                   (NewestDrop < 140 OrElse ModLoadersForDesc.Contains(ModLoaders.Fabric)) AndAlso
+                   (NewestDrop < 200 OrElse ModLoadersForDesc.Contains(ModLoaders.NeoForge)) AndAlso
+                   (NewestDrop < 140 OrElse ModLoadersForDesc.Contains(ModLoaders.Quilt) OrElse Settings.Get(Of Boolean)("ToolDownloadIgnoreQuilt")) Then
                     ModLoaderDescriptionFull = "任意"
                     ModLoaderDescriptionPart = ""
                 Else
@@ -596,7 +583,7 @@ Public Class ResourceProject
         If TranslatedName = RawName Then
             '没有中文翻译
             '将所有名称分段
-            Dim NameLists = TranslatedName.Split({" | ", " - ", "(", ")", "[", "]", "{", "}"}, StringSplitOptions.RemoveEmptyEntries).
+            Dim NameLists = TranslatedName.Split({" | ", " - ", "(", ")", "[", "]", "{", "}"}, True).
                 Select(Function(s) s.Trim(" /\".ToCharArray)).Where(Function(w) Not String.IsNullOrEmpty(w))
             If NameLists.IsSingle Then GoTo NoSubtitle
             '查找其中的缩写、Forge/Fabric 等版本标记
@@ -608,7 +595,7 @@ Public Class ResourceProject
                     '缩写
                     SubtitleList.Add(Name)
                 ElseIf {"neoforge", "forge", "fabric", "quilt"}.Any(Function(l) LowerName.Contains(l)) AndAlso
-                    Not RegexCheck(LowerName.Replace("neoforge", "").Replace("forge", "").Replace("fabric", "").Replace("quilt", ""), "[a-z]+") Then '去掉关键词后没有其他字母
+                    Not LowerName.Replace("neoforge", "").Replace("forge", "").Replace("fabric", "").Replace("quilt", "").RegexCheck("[a-z]+") Then '去掉关键词后没有其他字母
                     'Forge/Fabric 等版本标记
                     SubtitleList.Add(Name)
                 Else
@@ -631,7 +618,7 @@ Public Class ResourceProject
             If Suffix <> "" Then EnglishName = EnglishName.Replace(" - " & Suffix, "")
             EnglishName = EnglishName.Replace(Title, "").Trim("("c, ")"c, " "c)
             '中段的额外信息截取
-            SubtitleList = EnglishName.Split({" | ", " - ", "(", ")", "[", "]", "{", "}"}, StringSplitOptions.RemoveEmptyEntries).
+            SubtitleList = EnglishName.Split({" | ", " - ", "(", ")", "[", "]", "{", "}"}, True).
                     Select(Function(s) s.Trim(" /".ToCharArray)).Where(Function(w) Not String.IsNullOrEmpty(w)).ToList
             If SubtitleList.Count > 1 AndAlso
                Not SubtitleList.Any(Function(s) s.Lower.Contains("forge") OrElse s.Lower.Contains("fabric") OrElse s.Lower.Contains("quilt")) AndAlso '不是标注 XX 版
@@ -690,16 +677,16 @@ NoSubtitle:
         '来自不同的网站
         If Platform = Project.Platform Then Return False
         'Mod 加载器一致
-        If Loaders.Count <> Project.Loaders.Count OrElse Loaders.Except(Project.Loaders).Any() Then Return False
+        If ModLoaders <> Project.ModLoaders Then Return False
         '若不为光影，则要求 MC 版本一致
-        If Types <> ResourceTypes.Shader AndAlso (Drops.Count <> Project.Drops.Count OrElse Drops.Except(Project.Drops).Any()) Then Return False
+        If Types <> ResourceTypes.Shader AndAlso Drops.Ordered.SequenceEqual(Project.Drops.Ordered) Then Return False
         '最近更新时间差距在一周以内
         If Math.Abs((LastUpdate - Project.LastUpdate).TotalDays) > 7 Then Return False
         'MCMOD 翻译名 / 原名 / 描述文本 / Slug 的英文部分相同
         If TranslatedName = Project.TranslatedName OrElse
            RawName = Project.RawName OrElse Description = Project.Description OrElse
            GetRaw(Slug) = GetRaw(Project.Slug) Then
-            Log($"[Resource] 将 {RawName} ({Slug}) 与 {Project.RawName} ({Project.Slug}) 认定为相似工程")
+            Logger.Info($"将 {RawName} ({Slug}) 与 {Project.RawName} ({Project.Slug}) 认定为相似工程")
             '如果只有一个有 DatabaseEntry，设置给另外一个
             If WikiEntry Is Nothing AndAlso Project.WikiEntry IsNot Nothing Then WikiEntry = Project.WikiEntry
             If WikiEntry IsNot Nothing AndAlso Project.WikiEntry Is Nothing Then Project.WikiEntry = WikiEntry

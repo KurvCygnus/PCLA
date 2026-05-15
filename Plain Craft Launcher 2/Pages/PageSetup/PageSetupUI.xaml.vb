@@ -54,19 +54,19 @@
             '主页
             OnMainPageTypeChanged()
         Catch ex As NullReferenceException
-            Log(ex, "个性化设置项存在异常，已被自动重置", NotifyLevel.MsgBox)
+            Logger.Error(ex, "个性化设置项存在异常，已被自动重置", LogBehavior.Alert)
             Reset()
         Catch ex As Exception
-            Log(ex, "重载个性化设置时出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "重载个性化设置时出错")
         End Try
     End Sub
     Public Sub Reset()
         Try
             SettingService.ResetSettings(Me)
-            Log("[Setup] 已初始化个性化设置！")
+            Logger.Info("已初始化个性化设置！")
             Hint("已初始化个性化设置", HintType.Green, False)
         Catch ex As Exception
-            Log(ex, "初始化个性化设置失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "初始化个性化设置失败", LogBehavior.Alert)
         End Try
         Refresh()
     End Sub
@@ -97,7 +97,7 @@
     End Sub
     Private Sub BtnBackgroundClear_Click(sender As Object, e As EventArgs) Handles BtnBackgroundClear.Click
         If MyMsgBox("即将删除背景图片文件夹中的所有文件。" & vbCrLf & "此操作不可撤销，是否确定？", "警告",, "取消", IsWarn:=True) = 1 Then
-            DeleteDirectory(PathExeFolder & "PCL\Pictures")
+            DirectoryUtils.Delete(PathExeFolder & "PCL\Pictures")
             BackgroundRefresh(False, True)
             Hint("背景图片已清空！", HintType.Green)
         End If
@@ -113,10 +113,9 @@
             '获取可用的图片文件
             DirectoryUtils.Create(PathExeFolder & "PCL\Pictures\")
             Dim Pic As New List(Of String)
-            For Each File In EnumerateFiles(PathExeFolder & "PCL\Pictures\")
-                If File.Extension.Lower <> ".ini" AndAlso File.Extension.Lower <> ".db" Then '文件夹可能会被加入 .ini 和 thumbs.db
-                    Pic.Add(File.FullName)
-                End If
+            For Each File In DirectoryUtils.GetFiles(PathExeFolder & "PCL\Pictures\")
+                Dim Extension As String = PathUtils.GetExtension(File)
+                If Extension <> "ini" AndAlso Extension <> "db" Then Pic.Add(File) '文件夹可能会被加入 .ini 和 thumbs.db
             Next
             '加载
             If Not Pic.Any() Then
@@ -133,18 +132,16 @@
                 If Refresh Then
                     Dim Address As String = RandomOne(Pic)
                     Try
-                        Log("[UI] 加载背景图片：" & Address)
+                        Logger.Info($"加载背景图片：{Address}")
                         FrmMain.ImgBack.Background = New MyBitmap(Address)
                         FrmMain.ImgBack.Visibility = Visibility.Visible
                         FrmMain.UpdateBackgroundAndTitleBar()
-                        If IsHint Then Hint("背景图片已刷新：" & GetFileNameFromPath(Address), HintType.Green, False)
+                        If IsHint Then Hint("背景图片已刷新：" & PathUtils.GetLastPart(Address), HintType.Green, False)
                     Catch ex As Exception
                         If ex.Message.Contains("参数无效") Then
-                            Log("刷新背景图片失败，该图片文件可能并非标准格式。" & vbCrLf &
-                                "你可以尝试使用画图打开该文件并重新保存，这会让图片变为标准格式。" & vbCrLf &
-                                "文件：" & Address, NotifyLevel.MsgBox)
+                            Logger.Error($"刷新背景图片失败，该图片文件可能并非标准格式。{vbCrLf}你可以尝试使用画图打开该文件并重新保存，这会让图片变为标准格式。{vbCrLf}文件：{Address}", LogBehavior.Alert)
                         Else
-                            Log(ex, "刷新背景图片失败（" & Address & "）", NotifyLevel.MsgBox)
+                            Logger.Error(ex, $"刷新背景图片失败（{Address}）", LogBehavior.Alert)
                         End If
                     End Try
                 End If
@@ -152,27 +149,26 @@
             End If
 
         Catch ex As Exception
-            Log(ex, "刷新背景图片时出现未知错误", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "刷新背景图片时出现未知错误")
         End Try
     End Sub
 
     '顶部栏
     Private Sub BtnLogoChange_Click(sender As Object, e As EventArgs) Handles BtnLogoChange.Click
-        Dim FileName As String = SelectFile("常用图片文件(*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp", "选择图片")
-        If FileName = "" Then Return
+        Dim FileName As String = Dialogs.SelectFile("选择图片", False, filter:={({"png", "jpg", "jpeg", "gif", "webp"}, "常用图片文件")}).FirstOrDefault()
+        If String.IsNullOrEmpty(FileName) Then Return
+        Dim TargetPath As String = PathExeFolder & "PCL\Logo.png"
         Try
-            '拷贝文件
-            File.Delete(PathExeFolder & "PCL\Logo.png")
-            CopyFile(FileName, PathExeFolder & "PCL\Logo.png")
+            '复制文件
+            FileUtils.Copy(FileName, TargetPath)
             '设置当前显示
             FrmMain.ImageTitleLogo.Source = Nothing '防止因为 Source 属性前后的值相同而不更新 (#5628)
-            FrmMain.ImageTitleLogo.Source = PathExeFolder & "PCL\Logo.png"
+            FrmMain.ImageTitleLogo.Source = TargetPath
         Catch ex As Exception
             If ex.Message.Contains("参数无效") Then
-                Log("改变标题栏图片失败，该图片文件可能并非标准格式。" & vbCrLf &
-                    "你可以尝试使用画图打开该文件并重新保存，这会让图片变为标准格式。", NotifyLevel.MsgBox)
+                Logger.Error($"改变标题栏图片失败，该图片文件可能并非标准格式。{vbCrLf}你可以尝试使用画图打开该文件并重新保存，这会让图片变为标准格式。{vbCrLf}文件：{TargetPath}", LogBehavior.Alert)
             Else
-                Log(ex, "设置标题栏图片失败", NotifyLevel.MsgBox)
+                Logger.Error(ex, "设置标题栏图片失败", LogBehavior.Alert)
             End If
             FrmMain.ImageTitleLogo.Source = Nothing
         End Try
@@ -181,50 +177,48 @@
         If Not (AniControlEnabled = 0 AndAlso e.RaiseByMouse) Then Return
 Refresh:
         '已有图片则不再选择
-        If File.Exists(PathExeFolder & "PCL\Logo.png") Then
+        Dim TargetPath As String = PathExeFolder & "PCL\Logo.png"
+        If FileUtils.Exists(TargetPath) Then
             Try
                 FrmMain.ImageTitleLogo.Source = Nothing '防止因为 Source 属性前后的值相同而不更新 (#5628)
-                FrmMain.ImageTitleLogo.Source = PathExeFolder & "PCL\Logo.png"
+                FrmMain.ImageTitleLogo.Source = TargetPath
             Catch ex As Exception
                 If ex.Message.Contains("参数无效") Then
-                    Log("调整标题栏图片失败，该图片文件可能并非标准格式。" & vbCrLf &
-                    "你可以尝试使用画图打开该文件并重新保存，这会让图片变为标准格式。", NotifyLevel.MsgBox)
+                    Logger.Error($"改变标题栏图片失败，该图片文件可能并非标准格式。{vbCrLf}你可以尝试使用画图打开该文件并重新保存，这会让图片变为标准格式。{vbCrLf}文件：{TargetPath}", LogBehavior.Alert)
                 Else
-                    Log(ex, "调整标题栏图片失败", NotifyLevel.MsgBox)
+                    Logger.Error(ex, "调整标题栏图片失败", LogBehavior.Alert)
                 End If
                 FrmMain.ImageTitleLogo.Source = Nothing
                 e.Handled = True
                 Try
-                    File.Delete(PathExeFolder & "PCL\Logo.png")
+                    FileUtils.Delete(TargetPath)
                 Catch exx As Exception
-                    Log(exx, "清理错误的标题栏图片失败", NotifyLevel.MsgBox)
+                    Logger.Error(exx, "清理错误的标题栏图片失败", LogBehavior.Alert)
                 End Try
             End Try
             Return
         End If
         '没有图片则要求选择
-        Dim FileName As String = SelectFile("常用图片文件(*.png;*.jpeg;*.jpg;*.gif;*.webp)|*.png;*.jpeg;*.jpg;*.gif;*.webp", "选择图片")
-        If FileName = "" Then
+        Dim FileName As String = Dialogs.SelectFile("选择图片", False, filter:={({"png", "jpeg", "jpg", "gif", "webp"}, "常用图片文件")}).FirstOrDefault()
+        If String.IsNullOrEmpty(FileName) Then
             FrmMain.ImageTitleLogo.Source = Nothing
             e.Handled = True
         Else
             Try
-                '拷贝文件
-                File.Delete(PathExeFolder & "PCL\Logo.png")
-                CopyFile(FileName, PathExeFolder & "PCL\Logo.png")
+                FileUtils.Copy(FileName, TargetPath)
                 GoTo Refresh
             Catch ex As Exception
-                Log(ex, "复制标题栏图片失败", NotifyLevel.MsgBox)
+                Logger.Error(ex, "复制标题栏图片失败", LogBehavior.Alert)
             End Try
         End If
     End Sub
     Private Sub BtnLogoDelete_Click(sender As Object, e As EventArgs) Handles BtnLogoDelete.Click
         Try
-            File.Delete(PathExeFolder & "PCL\Logo.png")
+            FileUtils.Delete(PathExeFolder & "PCL\Logo.png")
             RadioLogoType1.SetChecked(True, True)
             Hint("标题栏图片已清空！", HintType.Green)
         Catch ex As Exception
-            Log(ex, "清空标题栏图片失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "清空标题栏图片失败", LogBehavior.Alert)
         End Try
     End Sub
 
@@ -242,7 +236,7 @@ Refresh:
             PanMusicDetail.Visibility = Visibility.Visible
             BtnMusicClear.Visibility = Visibility.Visible
             CardMusic.Title = "背景音乐（" &
-                EnumerateFiles(PathExeFolder & "PCL\Musics\").Count(Function(f) Not {".ini", ".jpg", ".txt", ".cfg", ".lrc", ".db", ".png"}.Contains(f.Extension.Lower)) &
+                DirectoryUtils.GetFiles(PathExeFolder & "PCL\Musics\").Count(Function(f) Not {"ini", "jpg", "txt", "cfg", "lrc", "db", "png"}.Contains(PathUtils.GetExtension(f))) &
                 " 首）"
         Else
             PanMusicVolume.Visibility = Visibility.Collapsed
@@ -264,16 +258,16 @@ Refresh:
                 Thread.Sleep(200)
                 '删除文件
                 Try
-                    DeleteDirectory(PathExeFolder & "PCL\Musics")
+                    DirectoryUtils.Delete(PathExeFolder & "PCL\Musics")
                     Hint("背景音乐已删除！", HintType.Green)
                 Catch ex As Exception
-                    Log(ex, "删除背景音乐失败", NotifyLevel.MsgBox)
+                    Logger.Error(ex, "删除背景音乐失败", LogBehavior.Alert)
                 End Try
                 Try
                     DirectoryUtils.Create(PathExeFolder & "PCL\Musics\")
                     RunInUi(Sub() MusicRefreshPlay(False))
                 Catch ex As Exception
-                    Log(ex, "重建背景音乐文件夹失败", NotifyLevel.MsgBox)
+                    Logger.Error(ex, "重建背景音乐文件夹失败", LogBehavior.Alert)
                 End Try
             End Sub)
         End If
@@ -290,14 +284,14 @@ Refresh:
     '主页
     Private Sub BtnCustomFile_Click(sender As Object, e As EventArgs) Handles BtnCustomFile.Click
         Try
-            If File.Exists(PathExeFolder & "PCL\Custom.xaml") Then
+            If FileUtils.Exists(PathExeFolder & "PCL\Custom.xaml") Then
                 If MyMsgBox("当前已存在布局文件，继续生成教学文件将会覆盖现有布局文件！", "覆盖确认", "继续", "取消", IsWarn:=True) = 2 Then Return
             End If
-            FileUtils.Write(PathExeFolder & "PCL\Custom.xaml", GetResources("Custom"))
+            ExtractResources(PathExeFolder & "PCL\Custom.xaml", "Custom")
             Hint("教学文件已生成！", HintType.Green)
             OpenExplorer(PathExeFolder & "PCL\Custom.xaml")
         Catch ex As Exception
-            Log(ex, "生成教学文件失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "生成教学文件失败")
         End Try
     End Sub
     Private Sub BtnCustomRefresh_Click() Handles BtnCustomRefresh.Click
@@ -314,7 +308,7 @@ Refresh:
     End Sub
     Public Shared Sub OnMainPageTypeChanged()
         If FrmSetupUI Is Nothing Then Return
-        Select Case CInt(Settings.Get("UiCustomType"))
+        Select Case CInt(Settings.Get(Of Integer)("UiCustomType"))
             Case 0 '无
                 FrmSetupUI.PanCustomPreset.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Collapsed
@@ -326,7 +320,7 @@ Refresh:
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Visible
                 FrmSetupUI.PanCustomNet.Visibility = Visibility.Collapsed
                 FrmSetupUI.HintCustom.Visibility = Visibility.Visible
-                FrmSetupUI.HintCustomWarn.Visibility = If(Settings.Get("HintCustomWarn"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupUI.HintCustomWarn.Visibility = If(Settings.Get(Of Boolean)("HintCustomWarn"), Visibility.Collapsed, Visibility.Visible)
                 FrmSetupUI.HintCustom.Text = $"从 PCL 文件夹下的 Custom.xaml 读取主页内容。{vbCrLf}你可以手动编辑该文件，向主页添加文本、图片、常用网站、快捷启动等功能。"
                 CustomEventService.SetEventType(FrmSetupUI.HintCustom, CustomEvent.EventType.None)
             Case 2 '联网
@@ -334,7 +328,7 @@ Refresh:
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomNet.Visibility = Visibility.Visible
                 FrmSetupUI.HintCustom.Visibility = Visibility.Visible
-                FrmSetupUI.HintCustomWarn.Visibility = If(Settings.Get("HintCustomWarn"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupUI.HintCustomWarn.Visibility = If(Settings.Get(Of Boolean)("HintCustomWarn"), Visibility.Collapsed, Visibility.Visible)
                 FrmSetupUI.HintCustom.Text = $"从指定网址联网获取主页内容。服主也可以用于动态更新服务器公告。{vbCrLf}如果你制作了稳定运行的联网主页，可以点击这条提示投稿，若合格即可加入预设！"
                 CustomEventService.SetEventType(FrmSetupUI.HintCustom, CustomEvent.EventType.打开网页)
                 CustomEventService.SetEventData(FrmSetupUI.HintCustom, "https://github.com/Meloong-Git/PCL/discussions/2528")
@@ -435,56 +429,56 @@ Refresh:
         If FrmMain.PanTitleSelect Is Nothing OrElse Not FrmMain.PanTitleSelect.IsLoaded Then Return
         Try
             '顶部栏
-            If Not HiddenForceShow AndAlso Settings.Get("UiHiddenPageDownload") AndAlso Settings.Get("UiHiddenPageLink") AndAlso Settings.Get("UiHiddenPageSetup") AndAlso Settings.Get("UiHiddenPageOther") Then
+            If Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload") AndAlso Settings.Get(Of Boolean)("UiHiddenPageLink") AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup") AndAlso Settings.Get(Of Boolean)("UiHiddenPageOther") Then
                 '顶部栏已被全部隐藏
                 FrmMain.PanTitleSelect.Visibility = Visibility.Collapsed
             Else
                 '顶部栏未被全部隐藏
                 FrmMain.PanTitleSelect.Visibility = Visibility.Visible
-                FrmMain.BtnTitleSelect1.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenPageDownload"), Visibility.Collapsed, Visibility.Visible)
-                FrmMain.BtnTitleSelect2.Visibility = Visibility.Collapsed 'If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenPageLink"), Visibility.Collapsed, Visibility.Visible)
-                FrmMain.BtnTitleSelect3.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenPageSetup"), Visibility.Collapsed, Visibility.Visible)
-                FrmMain.BtnTitleSelect4.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenPageOther"), Visibility.Collapsed, Visibility.Visible)
+                FrmMain.BtnTitleSelect1.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload"), Visibility.Collapsed, Visibility.Visible)
+                FrmMain.BtnTitleSelect2.Visibility = Visibility.Collapsed 'If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageLink"), Visibility.Collapsed, Visibility.Visible)
+                FrmMain.BtnTitleSelect3.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup"), Visibility.Collapsed, Visibility.Visible)
+                FrmMain.BtnTitleSelect4.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageOther"), Visibility.Collapsed, Visibility.Visible)
             End If
             '功能
             FrmLaunchLeft.RefreshButtonsUI()
             If FrmSetupUI IsNot Nothing Then
-                FrmSetupUI.CardSwitch.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenFunctionHidden"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupUI.CardSwitch.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenFunctionHidden"), Visibility.Collapsed, Visibility.Visible)
             End If
             '设置子页面
             If FrmSetupLeft IsNot Nothing Then
-                FrmSetupLeft.ItemLaunch.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenSetupLaunch"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupLeft.ItemUI.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenSetupUi"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupLeft.ItemLink.Visibility = Visibility.Collapsed 'If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenSetupLink"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupLeft.ItemSystem.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenSetupSystem"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupLeft.ItemLaunch.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLaunch"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupLeft.ItemUI.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupLeft.ItemLink.Visibility = Visibility.Collapsed 'If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink"), Visibility.Collapsed, Visibility.Visible)
+                FrmSetupLeft.ItemSystem.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem"), Visibility.Collapsed, Visibility.Visible)
                 '隐藏左边选择卡
                 Dim AvaliableCount As Integer = 0
-                If Not Settings.Get("UiHiddenSetupLaunch") Then AvaliableCount += 1
-                If Not Settings.Get("UiHiddenSetupUi") Then AvaliableCount += 1
-                'If Not Settings.Get("UiHiddenSetupLink") Then AvaliableCount += 1
-                If Not Settings.Get("UiHiddenSetupSystem") Then AvaliableCount += 1
+                If Not Settings.Get(Of Boolean)("UiHiddenSetupLaunch") Then AvaliableCount += 1
+                If Not Settings.Get(Of Boolean)("UiHiddenSetupUi") Then AvaliableCount += 1
+                'If Not Settings.Get(Of Boolean)("UiHiddenSetupLink") Then AvaliableCount += 1
+                If Not Settings.Get(Of Boolean)("UiHiddenSetupSystem") Then AvaliableCount += 1
                 FrmSetupLeft.PanItem.Visibility = If(AvaliableCount < 2 AndAlso Not HiddenForceShow, Visibility.Collapsed, Visibility.Visible)
             End If
             '更多子页面
             Dim OtherAvaliableCount As Integer = 0
-            If Not Settings.Get("UiHiddenOtherHelp") Then OtherAvaliableCount += 1
-            If Not Settings.Get("UiHiddenOtherAbout") Then OtherAvaliableCount += 1
-            If Not Settings.Get("UiHiddenOtherTest") Then OtherAvaliableCount += 1
-            If Not Settings.Get("UiHiddenOtherFeedback") Then OtherAvaliableCount += 1
-            If Not Settings.Get("UiHiddenOtherVote") Then OtherAvaliableCount += 1
+            If Not Settings.Get(Of Boolean)("UiHiddenOtherHelp") Then OtherAvaliableCount += 1
+            If Not Settings.Get(Of Boolean)("UiHiddenOtherAbout") Then OtherAvaliableCount += 1
+            If Not Settings.Get(Of Boolean)("UiHiddenOtherTest") Then OtherAvaliableCount += 1
+            If Not Settings.Get(Of Boolean)("UiHiddenOtherFeedback") Then OtherAvaliableCount += 1
+            If Not Settings.Get(Of Boolean)("UiHiddenOtherVote") Then OtherAvaliableCount += 1
             If FrmOtherLeft IsNot Nothing Then
-                FrmOtherLeft.ItemHelp.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenOtherHelp"), Visibility.Collapsed, Visibility.Visible)
-                FrmOtherLeft.ItemFeedback.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenOtherFeedback"), Visibility.Collapsed, Visibility.Visible)
-                FrmOtherLeft.ItemVote.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenOtherVote"), Visibility.Collapsed, Visibility.Visible)
-                FrmOtherLeft.ItemAbout.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenOtherAbout"), Visibility.Collapsed, Visibility.Visible)
-                FrmOtherLeft.ItemTest.Visibility = If(Not HiddenForceShow AndAlso Settings.Get("UiHiddenOtherTest"), Visibility.Collapsed, Visibility.Visible)
+                FrmOtherLeft.ItemHelp.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenOtherHelp"), Visibility.Collapsed, Visibility.Visible)
+                FrmOtherLeft.ItemFeedback.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenOtherFeedback"), Visibility.Collapsed, Visibility.Visible)
+                FrmOtherLeft.ItemVote.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenOtherVote"), Visibility.Collapsed, Visibility.Visible)
+                FrmOtherLeft.ItemAbout.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenOtherAbout"), Visibility.Collapsed, Visibility.Visible)
+                FrmOtherLeft.ItemTest.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenOtherTest"), Visibility.Collapsed, Visibility.Visible)
                 '隐藏左边选择卡
                 FrmOtherLeft.PanItem.Visibility = If(OtherAvaliableCount < 2 AndAlso Not HiddenForceShow, Visibility.Collapsed, Visibility.Visible)
             End If
             If OtherAvaliableCount = 1 AndAlso Not HiddenForceShow Then
-                If Not Settings.Get("UiHiddenOtherHelp") Then
+                If Not Settings.Get(Of Boolean)("UiHiddenOtherHelp") Then
                     FrmMain.BtnTitleSelect4.Text = "帮助"
-                ElseIf Not Settings.Get("UiHiddenOtherAbout") Then
+                ElseIf Not Settings.Get(Of Boolean)("UiHiddenOtherAbout") Then
                     FrmMain.BtnTitleSelect4.Text = "关于"
                 Else
                     FrmMain.BtnTitleSelect4.Text = "百宝箱"
@@ -499,7 +493,7 @@ Refresh:
             '备注
             If FrmSetupUI IsNot Nothing Then FrmSetupUI.CardSwitch.Title = If(HiddenForceShow, "功能隐藏（已暂时关闭，按 F12 以重新启用）", "功能隐藏")
         Catch ex As Exception
-            Log(ex, "刷新功能隐藏项目失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "刷新功能隐藏项目失败")
         End Try
     End Sub
 
@@ -514,7 +508,7 @@ Refresh:
             CheckHiddenSetupUI.Checked = True
         Else
             '关闭
-            If Settings.Get("UiHiddenSetupLaunch") AndAlso Settings.Get("UiHiddenSetupUi") AndAlso Settings.Get("UiHiddenSetupSystem") AndAlso Settings.Get("UiHiddenSetupLink") Then
+            If Settings.Get(Of Boolean)("UiHiddenSetupLaunch") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
                 CheckHiddenSetupLaunch.Checked = False
                 CheckHiddenSetupSystem.Checked = False
                 CheckHiddenSetupLink.Checked = False
@@ -524,7 +518,7 @@ Refresh:
     End Sub
     Private Sub HiddenSetupSub() Handles CheckHiddenSetupLaunch.Change, CheckHiddenSetupSystem.Change, CheckHiddenSetupLink.Change, CheckHiddenSetupUI.Change
         '设置子页面
-        If Settings.Get("UiHiddenSetupLaunch") AndAlso Settings.Get("UiHiddenSetupUi") AndAlso Settings.Get("UiHiddenSetupSystem") AndAlso Settings.Get("UiHiddenSetupLink") Then
+        If Settings.Get(Of Boolean)("UiHiddenSetupLaunch") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
             '已被全部隐藏
             CheckHiddenPageSetup.Checked = True
         Else
@@ -543,8 +537,8 @@ Refresh:
             CheckHiddenOtherHelp.Checked = True
         Else
             '关闭
-            If Settings.Get("UiHiddenOtherHelp") AndAlso Settings.Get("UiHiddenOtherAbout") AndAlso Settings.Get("UiHiddenOtherTest") AndAlso
-                Settings.Get("UiHiddenOtherVote") AndAlso Settings.Get("UiHiddenOtherFeedback") Then
+            If Settings.Get(Of Boolean)("UiHiddenOtherHelp") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherAbout") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherTest") AndAlso
+                Settings.Get(Of Boolean)("UiHiddenOtherVote") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherFeedback") Then
                 CheckHiddenOtherAbout.Checked = False
                 CheckHiddenOtherTest.Checked = False
                 CheckHiddenOtherFeedback.Checked = False
@@ -555,7 +549,7 @@ Refresh:
     End Sub
     Private Sub HiddenOtherSub(sender As Object, user As Boolean) Handles CheckHiddenOtherHelp.Change, CheckHiddenOtherAbout.Change, CheckHiddenOtherTest.Change
         '更多子页面（有具体内容的）
-        If Settings.Get("UiHiddenOtherHelp") AndAlso Settings.Get("UiHiddenOtherAbout") AndAlso Settings.Get("UiHiddenOtherTest") Then
+        If Settings.Get(Of Boolean)("UiHiddenOtherHelp") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherAbout") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherTest") Then
             '已被全部隐藏
             CheckHiddenPageOther.Checked = True
         Else
@@ -564,7 +558,7 @@ Refresh:
         End If
         '修改无具体内容的项
         If Not user Then Return
-        If Settings.Get("UiHiddenOtherHelp") AndAlso Settings.Get("UiHiddenOtherAbout") AndAlso Settings.Get("UiHiddenOtherTest") Then
+        If Settings.Get(Of Boolean)("UiHiddenOtherHelp") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherAbout") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherTest") Then
             CheckHiddenOtherFeedback.Checked = True
             CheckHiddenOtherVote.Checked = True
         End If
@@ -572,8 +566,8 @@ Refresh:
     Private Sub HiddenOtherNet(sender As Object, user As Boolean) Handles CheckHiddenOtherFeedback.Change, CheckHiddenOtherVote.Change
         '更多子页面（无具体内容的）
         If Not user Then Return
-        If Settings.Get("UiHiddenOtherHelp") AndAlso Settings.Get("UiHiddenOtherAbout") AndAlso Settings.Get("UiHiddenOtherTest") AndAlso
-            (Not Settings.Get("UiHiddenOtherFeedback") OrElse Not Settings.Get("UiHiddenOtherVote")) Then
+        If Settings.Get(Of Boolean)("UiHiddenOtherHelp") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherAbout") AndAlso Settings.Get(Of Boolean)("UiHiddenOtherTest") AndAlso
+            (Not Settings.Get(Of Boolean)("UiHiddenOtherFeedback") OrElse Not Settings.Get(Of Boolean)("UiHiddenOtherVote")) Then
             CheckHiddenOtherAbout.Checked = False
             CheckHiddenOtherTest.Checked = False
             CheckHiddenOtherHelp.Checked = False

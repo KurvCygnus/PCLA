@@ -61,11 +61,11 @@ Public Class MyLocalModItem
     End Property
 
     '相关联的 Mod
-    Public Property Entry As ResourceFile
+    Public Property Entry As LocalResourceFile
         Get
             Return Tag
         End Get
-        Set(value As ResourceFile)
+        Set(value As LocalResourceFile)
             Tag = value
         End Set
     End Property
@@ -80,7 +80,7 @@ Public Class MyLocalModItem
         If IsMouseDown Then
             RaiseEvent Click(sender, e)
             If e.Handled Then Return
-            Log("[Control] 按下本地 Mod 列表项：" & LabTitle.Text)
+            Logger.Info($"按下本地 Mod 列表项：{LabTitle.Text}")
         End If
     End Sub
 
@@ -203,7 +203,7 @@ Public Class MyLocalModItem
                     AniStop("MyLocalModItem Checked " & Uuid)
                 End If
             Catch ex As Exception
-                Log(ex, "设置 Checked 失败")
+                Logger.Warn(ex, "设置 Checked 失败")
             End Try
         End Set
     End Property
@@ -335,9 +335,9 @@ Public Class MyLocalModItem
             BtnUpdate.Visibility = Visibility.Collapsed
         End If
         '标题与描述
-        Dim DescFileName As String = Path.GetFileNameWithoutExtension(Entry.File.FullName)
+        Dim DescFileName As String = Entry.File.Name.BeforeLast(".")
         Dim NewDescription As String
-        If Settings.Get("ToolModLocalNameStyle") = 1 Then
+        If Settings.Get(Of Integer)("ToolModLocalNameStyle") = 1 Then
             '标题显示文件名，详情显示译名
             '标题
             Title = DescFileName

@@ -23,39 +23,39 @@
         Sub()
             '自动整合包安装：准备
             Dim PackInstallPath As String = Nothing
-            If File.Exists(PathExeFolder & "modpack.zip") Then PackInstallPath = PathExeFolder & "modpack.zip"
-            If File.Exists(PathExeFolder & "modpack.mrpack") Then PackInstallPath = PathExeFolder & "modpack.mrpack"
+            If FileUtils.Exists(PathExeFolder & "modpack.zip") Then PackInstallPath = PathExeFolder & "modpack.zip"
+            If FileUtils.Exists(PathExeFolder & "modpack.mrpack") Then PackInstallPath = PathExeFolder & "modpack.mrpack"
             If PackInstallPath IsNot Nothing Then
-                Log("[Launch] 需自动安装整合包：" & PackInstallPath, NotifyLevel.DebugModeOnly)
+                Logger.Warn($"需自动安装整合包：{PackInstallPath}")
                 PageSelectLeft.CreateMcFolderInCurrentPath()
                 McFolderListLoader.WaitForExit()
             End If
             '确认 Minecraft 文件夹存在
-            If McFolderSelected = "" OrElse Not Directory.Exists(McFolderSelected) Then
+            If McFolderSelected = "" OrElse Not DirectoryUtils.Exists(McFolderSelected) Then
                 '无效的文件夹
                 If McFolderSelected = "" Then
-                    Log("[Launch] 没有已储存的 Minecraft 文件夹")
+                    Logger.Info("没有已储存的 Minecraft 文件夹")
                 Else
-                    Log("[Launch] Minecraft 文件夹无效，该文件夹已不存在：" & McFolderSelected, NotifyLevel.DebugModeOnly)
+                    Logger.Warn($"Minecraft 文件夹无效，该文件夹已不存在：{McFolderSelected}")
                 End If
                 McFolderListLoader.WaitForExit(IsForceRestart:=True)
                 McFolderSelected = McFolderList.First.Location
             End If
-            If Settings.Get("SystemDebugDelay") Then Thread.Sleep(RandomInteger(500, 3000))
+            If Settings.Get(Of Boolean)("SystemDebugDelay") Then Thread.Sleep(RandomInteger(500, 3000))
             '自动整合包安装
             If PackInstallPath IsNot Nothing Then
                 Try
                     Dim InstallLoader = ModpackInstall(PackInstallPath)
-                    Log("[Launch] 自动安装整合包已开始：" & PackInstallPath)
+                    Logger.Info($"自动安装整合包已开始：{PackInstallPath}")
                     InstallLoader.WaitForExit()
                     If InstallLoader.State = LoadState.Finished Then
-                        Log("[Launch] 自动安装整合包成功，清理安装包：" & PackInstallPath)
-                        If File.Exists(PackInstallPath) Then File.Delete(PackInstallPath)
+                        Logger.Info($"自动安装整合包成功，清理安装包：{PackInstallPath}")
+                        FileUtils.Delete(PackInstallPath)
                     End If
                 Catch ex As CancelledException
-                    Log(ex, "自动安装整合包被用户取消：" & PackInstallPath)
+                    Logger.Warn(ex, $"自动安装整合包被用户取消：{PackInstallPath}")
                 Catch ex As Exception
-                    Log(ex, "自动安装整合包失败：" & PackInstallPath, NotifyLevel.MsgBox)
+                    Logger.Error(ex, $"自动安装整合包失败：{PackInstallPath}", LogBehavior.Alert)
                 End Try
             End If
             '确认 Minecraft 版本存在
@@ -63,14 +63,14 @@
             Dim Instance As McInstance = If(Selection = "", Nothing, New McInstance(Selection))
             If Instance Is Nothing OrElse Not Instance.PathVersion.StartsWithF(McFolderSelected) OrElse Not Instance.Check() Then
                 '无效的版本
-                Log("[Launch] 当前选择的 Minecraft 版本无效：" & If(Instance Is Nothing, "null", Instance.PathVersion), If(IsNothing(Instance), NotifyLevel.Silent, NotifyLevel.DebugModeOnly))
+                Logger.Info($"当前选择的 Minecraft 版本无效：{If(Instance Is Nothing, "null", Instance.PathVersion)}", If(IsNothing(Instance), LogBehavior.None, LogBehavior.ToastIfDebug))
                 If Not McInstanceListLoader.State = LoadState.Finished Then LoaderFolderRun(McInstanceListLoader, McFolderSelected, LoaderFolderRunType.ForceRun, MaxDepth:=1, ExtraPath:="versions\", WaitForExit:=True)
                 If Not McInstanceList.Any() OrElse McInstanceList.First.Value(0).Logo.Contains("RedstoneBlock") Then
                     Instance = Nothing
-                    Log("[Launch] 无可用 Minecraft 版本")
+                    Logger.Info("无可用 Minecraft 版本")
                 Else
                     Instance = McInstanceList.First.Value(0)
-                    Log("[Launch] 自动选择 Minecraft 版本：" & Instance.PathVersion)
+                    Logger.Info($"自动选择 Minecraft 版本：{Instance.PathVersion}")
                 End If
             End If
             RunInUi(
@@ -85,7 +85,7 @@
         End Sub, "Version Check", ThreadPriority.AboveNormal)
 
         '改变页面
-        Dim LoginType As McLoginType = Settings.Get("LoginType")
+        Dim LoginType = Settings.Get(Of McLoginType)("LoginType")
         If LoginType = McLoginType.Legacy OrElse LoginType = McLoginType.Ms Then CType(FindName("RadioLoginType" & LoginType), MyRadioButton).Checked = True
         RefreshPage(False, False)
 
@@ -99,7 +99,7 @@
     ''' </summary>
     Public Sub PageChangeToLaunching()
         '修改登陆方式
-        Select Case Settings.Get("LoginType")
+        Select Case Settings.Get(Of McLoginType)("LoginType")
             Case McLoginType.Legacy
                 LabLaunchingMethod.Text = "离线登录"
             Case McLoginType.Ms
@@ -257,7 +257,7 @@
             PageCurrent = Type
             Return PageNew
         Catch ex As Exception
-            Log(ex, "切换登录分页失败（" & GetStringFromEnum(CType(Type, [Enum])) & "）", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"切换登录分页失败（{Type}）")
             Return PageNew
         End Try
     End Function
@@ -270,17 +270,17 @@
         Dim Type As PageType
         Dim LoginPageType As Integer
         If McInstanceSelected IsNot Nothing Then
-            LoginPageType = Settings.Get("VersionServerLogin", Instance:=McInstanceSelected)
+            LoginPageType = Settings.Get(Of Integer)("VersionServerLogin", Instance:=McInstanceSelected)
             '缓存当前版本的页面种类，下一次打开 McInstanceSelected 为空时才能加载出正确的页面
             Settings.Set("LoginPageType", LoginPageType)
         Else
-            LoginPageType = Settings.Get("LoginPageType")
+            LoginPageType = Settings.Get(Of Integer)("LoginPageType")
         End If
         Select Case LoginPageType
             Case 0 '正版或离线
 UnknownType:
                 If RadioLoginType5.Checked Then
-                    If Settings.Get("CacheMsV2Access") = "" Then
+                    If Settings.Get(Of String)("CacheMsV2Access") = "" Then
                         Type = PageType.Ms
                     Else
                         Type = PageType.MsSkin
@@ -295,7 +295,7 @@ UnknownType:
                 RadioLoginType5.Visibility = Visibility.Visible
                 RadioLoginType0.Visibility = Visibility.Visible
             Case 1 '仅正版
-                If Settings.Get("CacheMsV2Access") = "" Then
+                If Settings.Get(Of String)("CacheMsV2Access") = "" Then
                     Type = PageType.Ms
                 Else
                     Type = PageType.MsSkin
@@ -315,7 +315,7 @@ UnknownType:
                 PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonOffline)
                 LabTypeOne.Text = "离线登录"
             Case 3 '统一通行证
-                If Settings.Get("CacheNideAccess") = "" Then
+                If Settings.Get(Of String)("CacheNideAccess") = "" Then
                     Type = PageType.Nide
                 Else
                     Type = PageType.NideSkin
@@ -326,7 +326,7 @@ UnknownType:
                 PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonCard)
                 LabTypeOne.Text = "统一通行证登录"
             Case 4 'Authlib-Injector
-                If Settings.Get("CacheAuthAccess") = "" Then
+                If Settings.Get(Of String)("CacheAuthAccess") = "" Then
                     Type = PageType.Auth
                 Else
                     Type = PageType.AuthSkin
@@ -335,16 +335,16 @@ UnknownType:
                 PanType.Visibility = Visibility.Collapsed
                 PanTypeOne.Visibility = Visibility.Visible
                 PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonCard)
-                LabTypeOne.Text = If(McInstanceSelected Is Nothing, Settings.Get("CacheAuthServerName"), Settings.Get("VersionServerAuthName", Instance:=McInstanceSelected))
+                LabTypeOne.Text = If(McInstanceSelected Is Nothing, Settings.Get(Of String)("CacheAuthServerName"), Settings.Get(Of String)("VersionServerAuthName", Instance:=McInstanceSelected))
                 If LabTypeOne.Text = "" Then LabTypeOne.Text = "第三方登录"
             Case Else
-                Log("[Control] 未知的登录页面：" & LoginPageType, NotifyLevel.AllUsers)
+                Logger.Error($"未知的登录页面：{LoginPageType}", LogBehavior.Toast)
                 GoTo UnknownType
         End Select
         '刷新页面
         If PageCurrent = Type Then Return
         PageChange(Type, Anim).Reload(KeepInput)
-        Dim Control As MyRadioButton = FindName("RadioLoginType" & Settings.Get("LoginType"))
+        Dim Control As MyRadioButton = FindName("RadioLoginType" & Settings.Get(Of McLoginType)("LoginType"))
         If Control IsNot Nothing Then Control.Checked = True
     End Sub
     Private Sub RadioLoginType_Change(sender As Object, raiseByMouse As Boolean) Handles RadioLoginType0.Check, RadioLoginType5.Check
@@ -356,21 +356,21 @@ UnknownType:
 #Region "皮肤"
 
     '微软正版皮肤
-    Public Shared SkinMs As New LoaderTask(Of EqualableList(Of String), String)("Loader Skin Ms", AddressOf SkinMsLoad, AddressOf SkinMsInput, ThreadPriority.AboveNormal)
-    Private Shared Function SkinMsInput() As EqualableList(Of String)
+    Public Shared SkinMs As New LoaderTask(Of (String, String), String)("Loader Skin Ms", AddressOf SkinMsLoad, AddressOf SkinMsInput, ThreadPriority.AboveNormal)
+    Private Shared Function SkinMsInput() As (String, String)
         '获取名称
-        Return New EqualableList(Of String) From {Settings.Get("CacheMsV2Name"), Settings.Get("CacheMsV2Uuid")}
+        Return (Settings.Get(Of String)("CacheMsV2Name"), Settings.Get(Of String)("CacheMsV2Uuid"))
     End Function
-    Private Shared Sub SkinMsLoad(Data As LoaderTask(Of EqualableList(Of String), String))
+    Private Shared Sub SkinMsLoad(Data As LoaderTask(Of (String, String), String))
         '清空已有皮肤
         '如果在输入时清空皮肤，若输入内容一样则不会执行 Load 方法，导致皮肤不被加载
         RunInUi(Sub() If FrmLoginMsSkin IsNot Nothing AndAlso FrmLoginMsSkin.Skin IsNot Nothing Then FrmLoginMsSkin.Skin.Clear())
         '获取 Url
-        Dim UserName As String = Data.Input(0)
-        Dim Uuid As String = Data.Input(1)
+        Dim UserName As String = Data.Input.Item1
+        Dim Uuid As String = Data.Input.Item2
         If UserName = "" Then
             Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(UserName)) & ".png"
-            Log("[Minecraft] 获取微软正版皮肤失败，ID 为空")
+            Logger.Info("获取微软正版皮肤失败，ID 为空")
             GoTo Finish
         End If
         Try
@@ -383,15 +383,15 @@ UnknownType:
             Data.Output = ""
             Return
         Catch ex As Exception
-            If ex.GetBrief.Contains("(429)") Then
+            If ex.GetDisplay(False).Contains("(429)") Then
                 Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(UserName)) & ".png"
-                Log("[Minecraft] 获取正版皮肤失败（" & UserName & "）：获取皮肤太过频繁，请 5 分钟后再试！", NotifyLevel.AllUsers)
-            ElseIf ex.GetBrief.Contains("未设置自定义皮肤") Then
+                Logger.Error($"获取正版皮肤失败（{UserName}）：获取皮肤太过频繁，请 5 分钟后再试！", LogBehavior.Toast)
+            ElseIf ex.GetDisplay(False).Contains("未设置自定义皮肤") Then
                 Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(UserName)) & ".png"
-                Log("[Minecraft] 用户未设置自定义皮肤，跳过皮肤加载")
+                Logger.Info("用户未设置自定义皮肤，跳过皮肤加载")
             Else
                 Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(UserName)) & ".png"
-                Log(ex, "获取微软正版皮肤失败（" & UserName & "）", NotifyLevel.AllUsers)
+                Logger.Error(ex, $"获取微软正版皮肤失败（{UserName}）", LogBehavior.Toast)
             End If
         End Try
 Finish:
@@ -404,39 +404,39 @@ Finish:
     End Sub
 
     '离线皮肤
-    Public Shared SkinLegacy As New LoaderTask(Of EqualableList(Of String), String)("Loader Skin Legacy", AddressOf SkinLegacyLoad, AddressOf SkinLegacyInput, ThreadPriority.AboveNormal)
-    Private Shared Function SkinLegacyInput() As EqualableList(Of String)
+    Public Shared SkinLegacy As New LoaderTask(Of (String, String), String)("Loader Skin Legacy", AddressOf SkinLegacyLoad, AddressOf SkinLegacyInput, ThreadPriority.AboveNormal)
+    Private Shared Function SkinLegacyInput() As (String, String)
         '根据类型判断输入
-        Dim Type As Integer = Settings.Get("LaunchSkinType")
+        Dim Type As Integer = Settings.Get(Of Integer)("LaunchSkinType")
         Select Case Type
             Case 0
-                If FrmLoginLegacy IsNot Nothing AndAlso FrmLoginLegacy.IsReloaded Then
-                    Return New EqualableList(Of String) From {0, If(FrmLoginLegacy.ComboName.Text.Trim, "")}
-                ElseIf Settings.Get("LoginLegacyName") = "" Then
-                    Return New EqualableList(Of String) From {0, ""}
+                If FrmLoginLegacy?.IsReloaded Then
+                    Return ("0", If(FrmLoginLegacy.ComboName.Text.Trim, ""))
+                ElseIf Settings.Get(Of String)("LoginLegacyName") = "" Then
+                    Return ("0", "")
                 Else
-                    Return New EqualableList(Of String) From {0, If(Settings.Get("LoginLegacyName").ToString.BeforeFirst("¨"), "")}
+                    Return ("0", If(Settings.Get(Of String)("LoginLegacyName").ToString.BeforeFirst("¨"), ""))
                 End If
             Case 3
-                Return New EqualableList(Of String) From {3, Settings.Get("LaunchSkinID")}
+                Return ("3", Settings.Get(Of String)("LaunchSkinID"))
             Case Else
-                Return New EqualableList(Of String) From {Type}
+                Return (Type.ToString, "")
         End Select
     End Function
-    Private Shared Sub SkinLegacyLoad(Data As LoaderTask(Of EqualableList(Of String), String))
+    Private Shared Sub SkinLegacyLoad(Data As LoaderTask(Of (String, String), String))
         '清空已有皮肤
         RunInUi(Sub() If FrmLoginLegacy IsNot Nothing AndAlso FrmLoginLegacy.Skin IsNot Nothing Then FrmLoginLegacy.Skin.Clear())
         '获取 Url
-        Select Case Data.Input(0)
+        Select Case CInt(Data.Input.Item1)
             Case 0 '默认
-                Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(Data.Input(1))) & ".png"
+                Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(Data.Input.Item2)) & ".png"
             Case 1 'Steve
 UseDefault:
                 Data.Output = PathImage & "Skins/Steve.png"
             Case 2 'Alex
                 Data.Output = PathImage & "Skins/Alex.png"
             Case 3 '正版
-                Dim ID As String = Data.Input(1)
+                Dim ID As String = Data.Input.Item2
                 Try
                     If ID.Count < 2 Then
                         Data.Output = PathImage & "Skins/Steve.png"
@@ -453,16 +453,16 @@ UseDefault:
                     Data.Output = ""
                     Return
                 Catch ex As Exception
-                    If ex.GetBrief.Contains("(429)") Then
+                    If ex.GetDisplay(False).Contains("(429)") Then
                         Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(ID)) & ".png"
-                        Log("获取离线登录使用的正版皮肤失败（" & ID & "）：获取皮肤太过频繁，请 5 分钟后再试！")
+                        Logger.Info($"获取离线登录使用的正版皮肤失败（{ID}）：获取皮肤太过频繁，请 5 分钟后再试！")
                     Else
                         Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(ID)) & ".png"
-                        Log(ex, "获取离线登录使用的正版皮肤失败（" & ID & "）")
+                        Logger.Warn(ex, $"获取离线登录使用的正版皮肤失败（{ID}）")
                     End If
                 End Try
             Case 4 '自定义
-                If Not File.Exists(PathAppdata & "CustomSkin.png") Then
+                If Not FileUtils.Exists(PathAppdata & "CustomSkin.png") Then
                     Hint("未找到离线皮肤自定义文件，可能它已被删除。PCL 将使用默认的 Steve 皮肤！")
                     Settings.Set("LaunchSkinType", 1)
                     GoTo UseDefault
@@ -478,21 +478,21 @@ UseDefault:
     End Sub
 
     '统一通行证皮肤
-    Public Shared SkinNide As New LoaderTask(Of EqualableList(Of String), String)("Loader Skin Nide", AddressOf SkinNideLoad, AddressOf SkinNideInput, ThreadPriority.AboveNormal)
-    Private Shared Function SkinNideInput() As EqualableList(Of String)
+    Public Shared SkinNide As New LoaderTask(Of (String, String), String)("Loader Skin Nide", AddressOf SkinNideLoad, AddressOf SkinNideInput, ThreadPriority.AboveNormal)
+    Private Shared Function SkinNideInput() As (String, String)
         '获取名称
-        Return New EqualableList(Of String) From {Settings.Get("CacheNideName"), Settings.Get("CacheNideUuid")}
+        Return (Settings.Get(Of String)("CacheNideName"), Settings.Get(Of String)("CacheNideUuid"))
     End Function
-    Private Shared Sub SkinNideLoad(Data As LoaderTask(Of EqualableList(Of String), String))
+    Private Shared Sub SkinNideLoad(Data As LoaderTask(Of (String, String), String))
         '清空已有皮肤
         '如果在输入时清空皮肤，若输入内容一样则不会执行 Load 方法，导致皮肤不被加载
         RunInUi(Sub() If FrmLoginNideSkin IsNot Nothing AndAlso FrmLoginNideSkin.Skin IsNot Nothing Then FrmLoginNideSkin.Skin.Clear())
         '获取 Url
-        Dim UserName As String = Data.Input(0)
-        Dim Uuid As String = Data.Input(1)
+        Dim UserName As String = Data.Input.Item1
+        Dim Uuid As String = Data.Input.Item2
         If UserName = "" Then
             Data.Output = PathImage & "Skins/" & McSkinSex(McLoginLegacyUuid(UserName)) & ".png"
-            Log("[Minecraft] 获取统一通行证皮肤失败，ID 为空")
+            Logger.Info("获取统一通行证皮肤失败，ID 为空")
             GoTo Finish
         End If
         Try
@@ -505,15 +505,15 @@ UseDefault:
             Data.Output = ""
             Return
         Catch ex As Exception
-            If ex.GetBrief.Contains("(429)") Then
+            If ex.GetDisplay(False).Contains("(429)") Then
                 Data.Output = PathImage & "Skins/Steve.png"
-                Log("[Minecraft] 获取统一通行证皮肤失败（" & UserName & "）：获取皮肤太过频繁，请 5 分钟后再试！", NotifyLevel.AllUsers)
-            ElseIf ex.GetBrief.Contains("未设置自定义皮肤") Then
+                Logger.Error($"获取统一通行证皮肤失败（{UserName}）：获取皮肤太过频繁，请 5 分钟后再试！", LogBehavior.Toast)
+            ElseIf ex.GetDisplay(False).Contains("未设置自定义皮肤") Then
                 Data.Output = PathImage & "Skins/Steve.png"
-                Log("[Minecraft] 用户未设置自定义皮肤，跳过皮肤加载")
+                Logger.Info("用户未设置自定义皮肤，跳过皮肤加载")
             Else
                 Data.Output = PathImage & "Skins/Steve.png"
-                Log(ex, "获取统一通行证皮肤失败（" & UserName & "）", NotifyLevel.AllUsers)
+                Logger.Error(ex, $"获取统一通行证皮肤失败（{UserName}）", LogBehavior.Toast)
             End If
         End Try
 Finish:
@@ -526,21 +526,21 @@ Finish:
     End Sub
 
     'Authlib-Injector 皮肤
-    Public Shared SkinAuth As New LoaderTask(Of EqualableList(Of String), String)("Loader Skin Auth", AddressOf SkinAuthLoad, AddressOf SkinAuthInput, ThreadPriority.AboveNormal)
-    Private Shared Function SkinAuthInput() As EqualableList(Of String)
+    Public Shared SkinAuth As New LoaderTask(Of (String, String), String)("Loader Skin Auth", AddressOf SkinAuthLoad, AddressOf SkinAuthInput, ThreadPriority.AboveNormal)
+    Private Shared Function SkinAuthInput() As (String, String)
         '获取名称
-        Return New EqualableList(Of String) From {Settings.Get("CacheAuthName"), Settings.Get("CacheAuthUuid")}
+        Return (Settings.Get(Of String)("CacheAuthName"), Settings.Get(Of String)("CacheAuthUuid"))
     End Function
-    Private Shared Sub SkinAuthLoad(Data As LoaderTask(Of EqualableList(Of String), String))
+    Private Shared Sub SkinAuthLoad(Data As LoaderTask(Of (String, String), String))
         '清空已有皮肤
         '如果在输入时清空皮肤，若输入内容一样则不会执行 Load 方法，导致皮肤不被加载
         RunInUi(Sub() If FrmLoginAuthSkin IsNot Nothing AndAlso FrmLoginAuthSkin.Skin IsNot Nothing Then FrmLoginAuthSkin.Skin.Clear())
         '获取 Url
-        Dim UserName As String = Data.Input(0)
-        Dim UUID As String = Data.Input(1)
+        Dim UserName As String = Data.Input.Item1
+        Dim UUID As String = Data.Input.Item2
         If UserName = "" Then
             Data.Output = PathImage & "Skins/Steve.png"
-            Log("[Minecraft] 获取 Authlib-Injector 皮肤失败，ID 为空")
+            Logger.Info("获取 Authlib-Injector 皮肤失败，ID 为空")
             GoTo Finish
         End If
         Try
@@ -553,15 +553,15 @@ Finish:
             Data.Output = ""
             Return
         Catch ex As Exception
-            If ex.GetBrief.Contains("(429)") Then
+            If ex.GetDisplay(False).Contains("(429)") Then
                 Data.Output = PathImage & "Skins/Steve.png"
-                Log("[Minecraft] 获取 Authlib-Injector 皮肤失败（" & UserName & "）：获取皮肤太过频繁，请 5 分钟后再试！", NotifyLevel.AllUsers)
-            ElseIf ex.GetBrief.Contains("未设置自定义皮肤") Then
+                Logger.Error($"获取 Authlib-Injector 皮肤失败（{UserName}）：获取皮肤太过频繁，请 5 分钟后再试！", LogBehavior.Toast)
+            ElseIf ex.GetDisplay(False).Contains("未设置自定义皮肤") Then
                 Data.Output = PathImage & "Skins/Steve.png"
-                Log("[Minecraft] 用户未设置自定义皮肤，跳过皮肤加载")
+                Logger.Info("用户未设置自定义皮肤，跳过皮肤加载")
             Else
                 Data.Output = PathImage & "Skins/Steve.png"
-                Log(ex, "获取 Authlib-Injector 皮肤失败（" & UserName & "）", NotifyLevel.AllUsers)
+                Logger.Error(ex, $"获取 Authlib-Injector 皮肤失败（{UserName}）", LogBehavior.Toast)
             End If
         End Try
 Finish:
@@ -575,7 +575,7 @@ Finish:
 
     '全部皮肤加载器
     '需要放在其中元素的后面，否则会因为它提前被加载而莫名其妙变成 Nothing
-    Public Shared SkinLoaders As New List(Of LoaderTask(Of EqualableList(Of String), String)) From {SkinMs, SkinLegacy, SkinNide, SkinAuth}
+    Public Shared SkinLoaders As New List(Of LoaderTask(Of (String, String), String)) From {SkinMs, SkinLegacy, SkinNide, SkinAuth}
 
 #End Region
 
@@ -616,7 +616,7 @@ Finish:
             CurrentState = 0
         Else
             If McInstanceSelected Is Nothing Then
-                If Settings.Get("UiHiddenPageDownload") AndAlso Not PageSetupUI.HiddenForceShow Then
+                If Settings.Get(Of Boolean)("UiHiddenPageDownload") AndAlso Not PageSetupUI.HiddenForceShow Then
                     CurrentState = 1
                 Else
                     CurrentState = 2
@@ -632,28 +632,28 @@ Finish:
         BtnLaunchState = CurrentState
         Select Case CurrentState
             Case 0
-                Log("[Minecraft] 启动按钮：正在加载 Minecraft 版本")
+                Logger.Info("启动按钮：正在加载 Minecraft 版本")
                 FrmLaunchLeft.BtnLaunch.Text = "正在加载"
                 FrmLaunchLeft.BtnLaunch.IsEnabled = False
                 FrmLaunchLeft.LabVersion.Text = "正在加载中，请稍候"
                 FrmLaunchLeft.BtnVersion.IsEnabled = False
                 FrmLaunchLeft.BtnMore.Visibility = Visibility.Collapsed
             Case 1
-                Log("[Minecraft] 启动按钮：无 Minecraft 版本，下载已禁用")
+                Logger.Info("启动按钮：无 Minecraft 版本，下载已禁用")
                 FrmLaunchLeft.BtnLaunch.Text = "启动游戏"
                 FrmLaunchLeft.BtnLaunch.IsEnabled = False
                 FrmLaunchLeft.LabVersion.Text = "未找到可用的游戏版本"
                 FrmLaunchLeft.BtnVersion.IsEnabled = True
                 FrmLaunchLeft.BtnMore.Visibility = Visibility.Collapsed
             Case 2
-                Log("[Minecraft] 启动按钮：无 Minecraft 版本，要求下载")
+                Logger.Info("启动按钮：无 Minecraft 版本，要求下载")
                 FrmLaunchLeft.BtnLaunch.Text = "下载游戏"
                 FrmLaunchLeft.BtnLaunch.IsEnabled = True
                 FrmLaunchLeft.LabVersion.Text = "未找到可用的游戏版本"
                 FrmLaunchLeft.BtnVersion.IsEnabled = True
                 FrmLaunchLeft.BtnMore.Visibility = Visibility.Collapsed
             Case 3
-                Log("[Minecraft] 启动按钮：Minecraft 版本：" & McInstanceSelected.PathVersion)
+                Logger.Info($"启动按钮：Minecraft 版本：{McInstanceSelected.PathVersion}")
                 FrmLaunchLeft.BtnLaunch.Text = "启动游戏"
                 FrmLaunchLeft.BtnVersion.IsEnabled = True
                 FrmLaunchLeft.BtnLaunch.IsEnabled = True
@@ -662,7 +662,7 @@ Finish:
         End Select
 ExitRefresh:
         '功能隐藏
-        FrmLaunchLeft.BtnVersion.Visibility = If(Not PageSetupUI.HiddenForceShow AndAlso Settings.Get("UiHiddenFunctionSelect"), Visibility.Collapsed, Visibility.Visible)
+        FrmLaunchLeft.BtnVersion.Visibility = If(Not PageSetupUI.HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenFunctionSelect"), Visibility.Collapsed, Visibility.Visible)
         If CurrentState = 3 Then
             FrmLaunchLeft.BtnMore.Visibility = FrmLaunchLeft.BtnVersion.Visibility
         End If
@@ -679,7 +679,7 @@ ExitRefresh:
                     If Not McLaunchProcess.HasExited Then McLaunchProcess.Kill()
                 End If
             Catch ex As Exception
-                Log(ex, "取消启动结束进程失败", NotifyLevel.AllUsers)
+                Logger.Error(ex, "取消启动结束进程失败", LogBehavior.Toast)
             End Try
         End If
     End Sub
@@ -708,7 +708,7 @@ ExitRefresh:
                 Next
                 LabLaunchingStage.Text = "已完成"
             Catch ex As Exception
-                Log(ex, "获取是否启动完成失败，可能是由于启动状态改变导致集合已修改")
+                Logger.Warn(ex, "获取是否启动完成失败，可能是由于启动状态改变导致集合已修改")
                 Return
             End Try
             LabLaunchingTitle.Text = If(IsLaunched OrElse McLaunchLoaderReal.State = LoadState.Finished,
@@ -733,7 +733,7 @@ ExitRefresh:
                     Next
                 End If
             Catch ex As Exception
-                Log(ex, "获取 Minecraft 启动下载器失败，可能是因为启动被取消")
+                Logger.Warn(ex, "获取 Minecraft 启动下载器失败，可能是因为启动被取消")
                 HasLaunchDownloader = False
             End Try
             LabLaunchingDownload.Text = FormatFileSize(NetManager.Speed) & "/s"
@@ -769,7 +769,7 @@ ExitRefresh:
             End If
             AniStart(AnimList, "Launching Progress")
         Catch ex As Exception
-            Log(ex, "刷新启动信息失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "刷新启动信息失败")
         End Try
     End Sub
     Private ShowProgress As Double = 0

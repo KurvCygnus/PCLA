@@ -133,11 +133,11 @@ Public Module ModMain
                 End If
                 '结束处理
 EndHint:
-                If CurrentHint.Log Then Log("[UI] 弹出提示：" & CurrentHint.Text)
+                If CurrentHint.Log Then Logger.Info($"弹出提示：{CurrentHint.Text}")
                 HintWaiting.RemoveAt(0)
             Loop
         Catch ex As Exception
-            Log(ex, "显示弹出提示失败", NotifyLevel.Silent)
+            Logger.Info(ex, "显示弹出提示失败")
         End Try
     End Sub
     Private Sub HideAllHint()
@@ -256,7 +256,7 @@ EndHint:
                     MsgBox(Caption, MsgBoxStyle.OkOnly + If(IsWarn, MsgBoxStyle.Critical, MsgBoxStyle.Question), Title)
                     Converter.Result = 1
                 End If
-                Log("[Control] 主窗体加载完成前出现意料外的等待弹窗：" & Button1 & "," & Button2 & "," & Button3, NotifyLevel.DebugModeOnly)
+                Logger.Warn($"主窗体加载完成前出现意料外的等待弹窗：{Button1},{Button2},{Button3}")
             Else
                 Try
                     FrmMain.DragStop()
@@ -267,7 +267,7 @@ EndHint:
                     ComponentDispatcher.PopModal()
                 End Try
             End If
-            Log("[Control] 普通弹框返回：" & If(Converter.Result, "null"))
+            Logger.Info($"普通弹框返回：{If(Converter.Result, "null")}")
             Return Converter.Result
         Else
             '不进行等待，直接返回
@@ -298,7 +298,7 @@ EndHint:
         Finally
             ComponentDispatcher.PopModal()
         End Try
-        Log("[Control] 输入弹框返回：" & If(Converter.Result, "null"))
+        Logger.Info($"输入弹框返回：{If(Converter.Result, "null")}")
         Return Converter.Result
     End Function
     ''' <summary>
@@ -321,7 +321,7 @@ EndHint:
         Finally
             ComponentDispatcher.PopModal()
         End Try
-        Log("[Control] 选择弹框返回：" & If(Converter.Result, "null"))
+        Logger.Info($"选择弹框返回：{If(Converter.Result, "null")}")
         Return Converter.Result
     End Function
 
@@ -354,7 +354,7 @@ EndHint:
                 If FrmMain.PanMsg.Visibility <> Visibility.Collapsed Then FrmMain.PanMsg.Visibility = Visibility.Collapsed
             End If
         Catch ex As Exception
-            Log(ex, "处理等待中的弹窗失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "处理等待中的弹窗失败")
         End Try
     End Sub
 
@@ -488,8 +488,8 @@ EndHint:
         ''' </summary>
         Public Sub New(FilePath As String)
             RawPath = FilePath
-            Dim JsonData As JObject = GetJson(ArgumentReplace(ReadFile(FilePath), AddressOf EscapeUtils.XmlEscape))
-            If JsonData Is Nothing Then Throw New FileNotFoundException("未找到帮助文件：" & FilePath, FilePath)
+            If Not FileUtils.Exists(FilePath) Then Throw New FileNotFoundException("未找到帮助文件：" & FilePath, FilePath)
+            Dim JsonData As JObject = GetJson(ArgumentReplace(FileUtils.ReadAsString(FilePath), AddressOf EscapeUtils.XmlEscape))
             '加载常规信息
             If JsonData("Title") IsNot Nothing Then
                 Title = JsonData("Title")
@@ -508,13 +508,13 @@ EndHint:
             Next
             '加载事件信息
             If If(JsonData("IsEvent"), False) Then
-                EventType = [Enum].Parse(GetType(CustomEvent.EventType), JsonData("EventType").ToString)
+                EventType = JsonData("EventType").ToObject(Of CustomEvent.EventType)
                 EventData = If(JsonData("EventData"), "")
                 IsEvent = True
             Else
                 Dim XamlAddress As String = FilePath.Lower.Replace(".json", ".xaml")
-                If File.Exists(XamlAddress) Then
-                    XamlContent = ReadFile(XamlAddress)
+                If FileUtils.Exists(XamlAddress) Then
+                    XamlContent = FileUtils.ReadAsString(XamlAddress)
                     IsEvent = False
                 Else
                     Throw New FileNotFoundException("未找到帮助条目 .json 对应的 .xaml 文件（" & XamlAddress & "）")
@@ -577,42 +577,42 @@ EndHint:
                 Try
                     Dim IgnoreList As New List(Of String)
                     '读取自定义文件
-                    If Directory.Exists(PathExeFolder & "PCL\Help\") Then
-                        For Each File In EnumerateFiles(PathExeFolder & "PCL\Help\")
-                            Select Case File.Extension.Lower
-                                Case ".helpignore"
+                    If DirectoryUtils.Exists(PathExeFolder & "PCL\Help\") Then
+                        For Each File In DirectoryUtils.GetFiles(PathExeFolder & "PCL\Help\")
+                            Select Case PathUtils.GetExtension(File)
+                                Case "helpignore"
                                     '加载忽略列表
-                                    Log("[Help] 发现 .helpignore 文件：" & File.FullName)
-                                    For Each Line In ReadFile(File.FullName).Split(vbCrLf.ToCharArray)
+                                    Logger.Info($"发现 .helpignore 文件：{File}")
+                                    For Each Line In FileUtils.ReadAsLines(File, True)
                                         Dim RealString As String = Line.BeforeFirst("#").Trim
                                         If String.IsNullOrWhiteSpace(RealString) Then Continue For
                                         IgnoreList.Add(RealString)
-                                        If ModeDebug Then Log("[Help]  > " & RealString)
+                                        Logger.Trace($"> {RealString}")
                                     Next
-                                Case ".json"
-                                    FileList.Add(File.FullName)
+                                Case "json"
+                                    FileList.Add(File)
                             End Select
                         Next
                     End If
-                    Log("[Help] 已扫描 PCL 文件夹下的帮助文件，目前总计 " & FileList.Count & " 条")
+                    Logger.Info($"已扫描 PCL 文件夹下的帮助文件，目前总计 {FileList.Count} 条")
                     '读取自带文件
-                    For Each File In EnumerateFiles(PathTemp & "Help")
+                    For Each File In DirectoryUtils.GetFiles(PathTemp & "Help")
                         '跳过非 json 文件与以 . 开头的文件夹
-                        If File.Extension.Lower <> ".json" OrElse File.Directory.FullName.Replace(PathTemp & "Help", "").Contains("\.") Then Continue For
+                        If PathUtils.RemoveLastPart(File).Replace(PathTemp & "Help", "").Contains("\.") OrElse PathUtils.GetExtension(File) <> "json" Then Continue For
                         '检查忽略列表
-                        Dim RealPath As String = File.FullName.Replace(PathTemp & "Help\", "")
+                        Dim RealPath As String = File.Replace(PathTemp & "Help\", "")
                         For Each Ignore In IgnoreList
-                            If RegexCheck(RealPath, Ignore) Then
-                                If ModeDebug Then Log("[Help] 已忽略 " & RealPath & "：" & Ignore)
+                            If RealPath.RegexCheck(Ignore) Then
+                                Logger.Trace($"已忽略 {RealPath}：{Ignore}")
                                 GoTo NextFile
                             End If
                         Next
-                        FileList.Add(File.FullName)
+                        FileList.Add(File)
 NextFile:
                     Next
-                    Log("[Help] 已扫描缓存文件夹下的帮助文件，目前总计 " & FileList.Count & " 条")
+                    Logger.Info($"已扫描缓存文件夹下的帮助文件，目前总计 {FileList.Count} 条")
                 Catch ex As Exception
-                    Log(ex, "检查帮助文件夹失败", NotifyLevel.MsgBox)
+                    Logger.Error(ex, "检查帮助文件夹失败", LogBehavior.Alert)
                 End Try
                 If Loader.IsInterrupted Then Return
 
@@ -622,9 +622,9 @@ NextFile:
                     Try
                         Dim Entry As New HelpEntry(FilePath)
                         Dict.Add(Entry)
-                        If ModeDebug Then Log("[Help] 已加载的帮助条目：" & Entry.Title & " ← " & FilePath)
+                        Logger.Trace($"已加载的帮助条目：{Entry.Title} ← {FilePath}")
                     Catch ex As Exception
-                        Log(ex, "初始化帮助条目失败（" & FilePath & "）", NotifyLevel.MsgBox)
+                        Logger.Error(ex, $"初始化帮助条目失败（{FilePath}）", LogBehavior.Alert)
                     End Try
                 Next
 
@@ -634,7 +634,7 @@ NextFile:
                 Loader.Output = Dict
 
             Catch ex As Exception
-                Log(ex, "帮助列表初始化失败")
+                Logger.Warn(ex, "帮助列表初始化失败")
                 Throw
             End Try
         End SyncLock
@@ -643,13 +643,12 @@ NextFile:
     ''' 尝试解压内置帮助文件。
     ''' </summary>
     Public Sub HelpTryExtract()
-        If Settings.Get("SystemHelpVersion") <> VersionCode OrElse Not File.Exists(PathTemp & "Help\启动器\备份设置.xaml") Then
-            DeleteDirectory(PathTemp & "Help")
-            DirectoryUtils.Create(PathTemp & "Help")
-            FileUtils.Write(PathTemp & "Cache\Help.zip", GetResources("Help"))
-            ExtractCompressedFile(PathTemp & "Cache\Help.zip", PathTemp & "Help")
+        If Settings.Get(Of Integer)("SystemHelpVersion") <> VersionCode OrElse Not FileUtils.Exists(PathTemp & "Help\启动器\备份设置.xaml") Then
+            DirectoryUtils.Delete(PathTemp & "Help")
+            ExtractResources(PathTemp & "Cache\Help.zip", "Help")
+            FileUtils.ExtractToDirectory(PathTemp & "Cache\Help.zip", PathTemp & "Help")
             Settings.Set("SystemHelpVersion", VersionCode)
-            Log("[Help] 已解压内置帮助文件，目前状态：" & File.Exists(PathTemp & "Help\启动器\备份设置.xaml"), NotifyLevel.DebugModeOnly)
+            Logger.Warn($"已解压内置帮助文件，目前状态：{FileUtils.Exists(PathTemp & "Help\启动器\备份设置.xaml")}")
         End If
     End Sub
 
@@ -663,7 +662,7 @@ NextFile:
             If _IsAprilEnabled Is Nothing Then
                 _IsAprilEnabled =
                     Date.Now.Month = 4 AndAlso Date.Now.Day = 1 AndAlso
-                    Settings.Get("AprilDoneYear") <> Date.Now.Year '成功后同年内则不再触发
+                    Settings.Get(Of Integer)("AprilDoneYear") <> Date.Now.Year '成功后同年内则不再触发
             End If
             Return _IsAprilEnabled.Value
         End Get
@@ -774,7 +773,7 @@ NextFile:
             End If
 
         Catch ex As Exception
-            Log(ex, "愚人节移动出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "愚人节移动出错")
         End Try
     End Sub
 
@@ -790,7 +789,7 @@ NextFile:
             PostMessage(Handle, 400 * 16 + 2, 0, 0)
             SetForegroundWindow(Handle) '不在这里放不行，神秘 WinAPI，建议别动
         Catch ex As Exception
-            Log(ex, "设置窗口置顶失败", NotifyLevel.AllUsers)
+            Logger.Error(ex, "设置窗口置顶失败", LogBehavior.Toast)
         End Try
     End Sub
     Public Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ClassName As String, WindowName As String) As IntPtr
@@ -808,19 +807,19 @@ NextFile:
         Using ReadOnlyKey = My.Computer.Registry.CurrentUser.OpenSubKey(REG_KEY, False)
             If ReadOnlyKey IsNot Nothing Then
                 If REG_VALUE = ReadOnlyKey.GetValue(Executeable)?.ToString() Then
-                    Log($"[System] 无需调整显卡设置：{Executeable}")
+                    Logger.Info($"无需调整显卡设置：{Executeable}")
                     Return
                 End If
             Else
                 '创建父级键
-                Log($"[System] 需要创建显卡设置的父级键")
+                Logger.Info($"需要创建显卡设置的父级键")
                 My.Computer.Registry.CurrentUser.CreateSubKey(REG_KEY)
             End If
         End Using
         '写入新设置
         Using WriteKey = My.Computer.Registry.CurrentUser.OpenSubKey(REG_KEY, True)
             WriteKey.SetValue(Executeable, REG_VALUE)
-            Log($"[System] 已调整显卡设置：{Executeable}")
+            Logger.Info($"已调整显卡设置：{Executeable}")
         End Using
     End Sub
 
@@ -829,12 +828,16 @@ NextFile:
     ''' </summary>
     Public Function ArgumentReplace(Text As String, Optional EscapeHandler As Func(Of String, String) = Nothing, Optional ReplaceTime As Boolean = True) As String
         If Text Is Nothing OrElse Not Text.Contains("{") Then Return Text
-        '预处理
+        '预处理（注意，文件夹必须以 \ 结尾）
         Static Replacer As Func(Of String, String) =
         Function(s As String) As String
             If s Is Nothing Then Return ""
             If EscapeHandler Is Nothing Then Return s
-            If s.Contains(":\") Then s = FileUtils.ShortenPath(s)
+            If s.Contains(":\") Then
+                Dim IsFolder = s.EndsWithF("\") OrElse s.EndsWithF("/")
+                s = PathUtils.ToShortPath(s)
+                If IsFolder Then s = PathUtils.AddSlashSuffix(s)
+            End If
             Return EscapeHandler(s)
         End Function
         '基础
@@ -844,10 +847,10 @@ NextFile:
         Text = Text.Replace("{pcl_build_type}", Replacer(BuildType.ToString))
         Text = Text.Replace("{pcl_branch}", Replacer(VersionBranchMain))
         Text = Text.Replace("{identify}", Replacer(Identify))
-        Text = Text.Replace("{path}", Replacer(PathExeFolder))
+        Text = Text.Replace("{path}", Replacer(PathUtils.CurrentFolder))
         Text = Text.Replace("{path_with_name}", Replacer(PathExe))
         Text = Text.Replace("{path_temp}", Replacer(PathTemp))
-        Text = Text.ReplaceOnDemand("{pcl_md5}", Function() Replacer(GetFileMD5(PathExe)))
+        Text = Text.Replace("{pcl_md5}", Function() Replacer(HashUtils.ComputeFromFile(PathExe, HashUtils.HashMethod.Md5)))
         '时间
         If ReplaceTime Then '在窗口标题中，时间会被后续动态替换，所以此时不应该替换
             Text = Text.Replace("{date}", Replacer(Date.Now.ToString("yyyy'/'M'/'d")))
@@ -915,12 +918,12 @@ NextFile:
             IsTaskTempCleared = True
             IsTaskTempClearing = True
             Try
-                Log("[System] 开始清理任务缓存文件夹")
-                DeleteDirectory($"{OsDrive}ProgramData\PCL\TaskTemp\")
-                DeleteDirectory($"{PathTemp}TaskTemp\")
-                Log("[System] 已清理任务缓存文件夹")
+                Logger.Info("开始清理任务缓存文件夹")
+                DirectoryUtils.Delete($"{OsDrive}ProgramData\PCL\TaskTemp\")
+                DirectoryUtils.Delete($"{PathTemp}TaskTemp\")
+                Logger.Info("已清理任务缓存文件夹")
             Catch ex As Exception
-                Log(ex, "清理任务缓存文件夹失败")
+                Logger.Warn(ex, "清理任务缓存文件夹失败")
             Finally
                 IsTaskTempClearing = False
             End Try
@@ -957,6 +960,52 @@ NextFile:
 
 #End Region
 
+#Region "反馈与遥测"
+
+    '反馈
+    Public Sub Feedback(Optional ShowMsgbox As Boolean = True, Optional ForceOpenLog As Boolean = False)
+        On Error Resume Next
+        FeedbackInfo()
+        If ForceOpenLog OrElse (ShowMsgbox AndAlso MyMsgBox("若你在汇报一个 Bug，请点击 打开文件夹 按钮，并上传 Log(1~5).txt 中包含错误信息的文件。" & vbCrLf & "游戏崩溃一般与启动器无关，请不要因为游戏崩溃而提交反馈。", "反馈提交提醒", "打开文件夹", "不需要") = 1) Then
+            OpenExplorer(PathExeFolder & "PCL\Log1.txt")
+        End If
+        OpenWebsite("https://github.com/Meloong-Git/PCL/issues/")
+    End Sub
+    ''' <summary>
+    ''' 在日志中输出系统诊断信息。
+    ''' </summary>
+    Public Sub FeedbackInfo()
+        On Error Resume Next
+        Logger.Info($"诊断信息：{vbCrLf}" &
+            "操作系统：" & My.Computer.Info.OSFullName & "（32 位：" & Is32BitSystem & "）" & vbCrLf &
+            "剩余内存：" & Int(My.Computer.Info.AvailablePhysicalMemory / 1024 / 1024) & " M / " & Int(My.Computer.Info.TotalPhysicalMemory / 1024 / 1024) & " M" & vbCrLf &
+            "DPI：" & DPI & "（" & Math.Round(DPI / 96, 2) * 100 & "%）" & vbCrLf &
+            "MC 文件夹：" & If(McFolderSelected, "Nothing") & vbCrLf &
+            "文件位置：" & PathExeFolder)
+    End Sub
+
+    '遥测
+    Public Sub Telemetry([Event] As String, ParamArray Datas As String())
+        If BuildType = BuildTypes.Debug Then Return '开发版不上传遥测
+        If Not Settings.Get(Of Boolean)("SystemSystemTelemetry") Then Return '用户关闭了遥测
+        If Not ClsBaseUrl.StartsWithF("http") Then Return '开源版没有设置遥测地址
+        RunInNewThread(
+        Sub()
+            Try
+                Logger.Info($"匿名数据上报：{[Event]}")
+                Dim Url As String = $"{ClsBaseUrl}&Event={EscapeUtils.UrlEscape([Event])}"
+                For i = 0 To Datas.Length - 1 Step 2
+                    Url &= "&" & EscapeUtils.UrlEscape(Datas(i)) & "=" & EscapeUtils.UrlEscape(Datas(i + 1).ReplaceLineEndings(vbLf, mergeMultiple:=True))
+                Next
+                NetRequestByClient(Url, MakeLog:=False)
+            Catch ex As Exception
+                Logger.Warn(ex, "匿名数据上报失败")
+            End Try
+        End Sub, "Telemetry", ThreadPriority.Lowest)
+    End Sub
+
+#End Region
+
     Public DragControl = Nothing
     Private Timer4Count As Integer = 0
     Private Timer150Count As Integer = 0
@@ -970,7 +1019,7 @@ NextFile:
             If ThemeDontClick = 2 Then ThemeRefresh()
 #End Region
         Catch ex As Exception
-            Log(ex, "短程主时钟执行异常", NotifyLevel.Critical)
+            Logger.Error(ex, "短程主时钟执行异常", LogBehavior.AlertThenCrash)
         End Try
         Timer4Count += 1
         If Timer4Count = 4 Then
@@ -980,7 +1029,7 @@ NextFile:
                 If ThemeNow = 12 Then ThemeRefresh()
 #End Region
             Catch ex As Exception
-                Log(ex, "中程主时钟执行异常", NotifyLevel.DebugModeOnly)
+                Logger.Warn(ex, "中程主时钟执行异常")
             End Try
         End If
         Timer150Count += 1
@@ -999,7 +1048,7 @@ NextFile:
                 End Sub)
 #End Region
             Catch ex As Exception
-                Log(ex, "长程主时钟执行异常", NotifyLevel.Critical)
+                Logger.Error(ex, "长程主时钟执行异常", LogBehavior.AlertThenCrash)
             End Try
         End If
     End Sub
@@ -1012,7 +1061,7 @@ NextFile:
                     Thread.Sleep(50 * 0.98)
                 Loop
             Catch ex As Exception
-                Log(ex, "程序主时钟出错", NotifyLevel.MsgBoxAndFeedback)
+                Logger.Error(ex, "程序主时钟出错")
             End Try
         End Sub, "Timer Main")
         If Not IsAprilEnabled Then Return
@@ -1028,7 +1077,7 @@ NextFile:
                     Thread.Sleep(1)
                 Loop
             Catch ex As Exception
-                Log(ex, "愚人节主时钟出错", NotifyLevel.MsgBoxAndFeedback)
+                Logger.Error(ex, "愚人节主时钟出错")
             End Try
         End Sub, "Timer Main Fool")
     End Sub

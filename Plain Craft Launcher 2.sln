@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PCLCS", "PCLCS\PCLCS.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeloongCore", "MeloongCore\Shared\MeloongCore.csproj", "{D22BBF3C-2177-0208-4E29-8466AA41AC6F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeloongCoreWpf", "MeloongCore\Wpf\MeloongCoreWpf.csproj", "{2DFFE2A0-1101-816B-D240-F644B2D74A68}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeloongCore.Wpf", "MeloongCore\Wpf\MeloongCore.Wpf.csproj", "{2DFFE2A0-1101-816B-D240-F644B2D74A68}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

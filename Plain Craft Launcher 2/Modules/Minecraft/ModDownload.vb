@@ -13,7 +13,7 @@
                 Instance = New McInstance(Instance.InheritName)
             Loop
         Catch ex As Exception
-            Log(ex, "获取底层继承版本失败")
+            Logger.Warn(ex, "获取底层继承版本失败")
         End Try
         '检查 Json 是否标准
         If Instance.JsonObject("downloads") Is Nothing OrElse Instance.JsonObject("downloads")("client") Is Nothing OrElse Instance.JsonObject("downloads")("client")("url") Is Nothing Then
@@ -39,7 +39,7 @@
         '获取信息
         Dim IndexInfo = McAssetsGetIndex(Instance, True, True)
         Dim IndexAddress As String = McFolderSelected & "assets\indexes\" & IndexInfo("id").ToString & ".json"
-        Log("[Download] 版本 " & Instance.Name & " 对应的资源文件索引为 " & IndexInfo("id").ToString)
+        Logger.Info($"版本 {Instance.Name} 对应的资源文件索引为 {IndexInfo("id")}")
         Dim IndexUrl As String = If(IndexInfo("url"), "")
         If IndexUrl = "" Then
             Return Nothing
@@ -65,7 +65,7 @@
 
 #Region "下载资源文件"
         If ShouldIgnoreFileCheck(Instance) Then
-            Log("[Download] 已跳过所有 Assets 检查")
+            Logger.Info("已跳过所有 Assets 检查")
         Else
             Dim LoadersAssets As New List(Of LoaderBase)
             '获取资源文件索引地址
@@ -75,7 +75,7 @@
                     Dim IndexFile = DlClientAssetIndexGet(Instance)
                     If IndexFile Is Nothing Then
                         Task.Output = New List(Of NetFile)
-                        Log("[Download] 未找到版本 " & Instance.Name & " 的合适的资源索引下载地址，游戏 assets 可能缺失", NotifyLevel.DebugModeOnly)
+                        Logger.Warn($"未找到版本 {Instance.Name} 的合适的资源索引下载地址，游戏 assets 可能缺失")
                     ElseIf AssetsIndexBehaviour <> AssetsIndexExistsBehaviour.AlwaysDownload AndAlso IndexFile.Check.Check(IndexFile.LocalPath) Is Nothing Then
                         Task.Output = New List(Of NetFile)
                     Else
@@ -96,7 +96,7 @@
                 Sub(Task As LoaderTask(Of String, List(Of NetFile)))
                     Dim BackAssetsFile As NetFile = DlClientAssetIndexGet(Instance)
                     If BackAssetsFile Is Nothing Then
-                        Log("[Download] 未找到版本 " & Instance.Name & " 的合适的资源索引下载地址，游戏 assets 可能缺失", NotifyLevel.DebugModeOnly)
+                        Logger.Warn($"未找到版本 {Instance.Name} 的合适的资源索引下载地址，游戏 assets 可能缺失")
                         Task.Interrupt()
                         Throw New ThreadInterruptedException
                     End If
@@ -105,19 +105,19 @@
                     BackAssetsFile.LocalPath = TempAddress
                     Task.Output = New List(Of NetFile) From {BackAssetsFile}
                     '检查是否需要更新：每天只更新一次
-                    If File.Exists(RealAddress) AndAlso Math.Abs((File.GetLastWriteTime(RealAddress).Date - Now.Date).TotalDays) < 1 Then
-                        Log("[Download] 无需更新资源文件索引，取消")
+                    If FileUtils.Exists(RealAddress) AndAlso Math.Abs((FileUtils.GetInfo(RealAddress).LastWriteTime.Date - Now.Date).TotalDays) < 1 Then
+                        Logger.Info("无需更新资源文件索引，取消")
                         Task.Interrupt()
                     End If
                 End Sub))
                 LoadersAssetsUpdate.Add(New LoaderDownload("后台下载资源文件索引", New List(Of NetFile)))
                 LoadersAssetsUpdate.Add(New LoaderTask(Of List(Of NetFile), String)("后台复制资源文件索引",
                 Sub(Task As LoaderTask(Of List(Of NetFile), String))
-                    CopyFile(TempAddress, RealAddress)
+                    FileUtils.Copy(TempAddress, RealAddress)
                     McLaunchLog("后台更新资源文件索引成功：" & TempAddress)
                 End Sub))
                 Dim Updater As New LoaderCombo(Of String)("后台更新资源文件索引", LoadersAssetsUpdate)
-                Log("[Download] 开始后台检查资源文件索引")
+                Logger.Info("开始后台检查资源文件索引")
                 Updater.Start()
             End If
             '获取资源文件地址
@@ -158,8 +158,8 @@
     Public Property AllDrops As List(Of Integer)
         Get
             If _AllDrops Is Nothing Then
-                _AllDrops = Settings.Get("CacheDrops").ToString.
-                    Split(",".ToCharArray, StringSplitOptions.RemoveEmptyEntries).Select(Function(d) CInt(Val(d))).ToList()
+                _AllDrops = Settings.Get(Of String)("CacheDrops").ToString.
+                    Split(",", True).Select(Function(d) CInt(Val(d))).ToList()
             End If
             Return If(_AllDrops.Any, _AllDrops, Nothing) '不要将 _AllDrops 再设为 Nothing，以防止反复获取设置尝试初始化
         End Get
@@ -191,7 +191,7 @@
     ''' </summary>
     Public DlClientListLoader As New LoaderTask(Of String, DlClientListResult)("DlClientList Main", AddressOf DlClientListMain)
     Private Sub DlClientListMain(Loader As LoaderTask(Of String, DlClientListResult))
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListBmclapiLoader, 30),
@@ -211,7 +211,9 @@
         '提取所有 Drop 序数
         Dim Drops As New List(Of Integer)
         For Each Version As JObject In Loader.Output.Value("versions")
-            Dim Drop As Integer = McVersion.VersionToDrop(Version("id"))
+            Dim Id As String = Version("id").ToString
+            If Id.Contains("-") Then Continue For
+            Dim Drop As Integer = McVersion.VersionToDrop(Id)
             If Drop = 209 Then Continue For
             Drops.Add(Drop)
         Next
@@ -233,10 +235,10 @@
             If Not DlPreferMojang Then
                 Dim DeltaTime = GetTimeMs() - StartTime
                 DlPreferMojang = DeltaTime < 4000
-                Log($"[Download] Mojang 官方源加载耗时：{DeltaTime}ms，{If(DlPreferMojang, "可优先使用官方源", "不优先使用官方源")}")
+                Logger.Info($"Mojang 官方源加载耗时：{DeltaTime}ms，{If(DlPreferMojang, "可优先使用官方源", "不优先使用官方源")}")
             End If
             '添加 PCL 特供项
-            If File.Exists(PathTemp & "Cache\download.json") Then Versions.Merge(GetJson(ReadFile(PathTemp & "Cache\download.json")))
+            If FileUtils.Exists(PathTemp & "Cache\download.json") Then Versions.Merge(GetJson(FileUtils.ReadAsString(PathTemp & "Cache\download.json")))
             '返回
             Loader.Output = New DlClientListResult With {.IsOfficial = True, .SourceName = "Mojang 官方源", .Value = Json}
             'MC 更新提示
@@ -244,16 +246,16 @@
             Dim Version As String
             '快照版
             Version = Json("latest")("snapshot")
-            If Settings.Get("ToolUpdateSnapshot") AndAlso Not Settings.Get("ToolUpdateSnapshotLast") = "" AndAlso
-               Settings.Get("ToolUpdateSnapshotLast") <> Version AndAlso Not IsHinted Then
+            If Settings.Get(Of Boolean)("ToolUpdateSnapshot") AndAlso Not Settings.Get(Of String)("ToolUpdateSnapshotLast") = "" AndAlso
+               Settings.Get(Of String)("ToolUpdateSnapshotLast") <> Version AndAlso Not IsHinted Then
                 IsHinted = True
                 McDownloadClientUpdateHint(Version, Json)
             End If
             Settings.Set("ToolUpdateSnapshotLast", If(Version, "Nothing"))
             '正式版
             Version = Json("latest")("release")
-            If Settings.Get("ToolUpdateRelease") AndAlso Not Settings.Get("ToolUpdateReleaseLast") = "" AndAlso
-               Settings.Get("ToolUpdateReleaseLast") <> Version AndAlso Not IsHinted Then
+            If Settings.Get(Of Boolean)("ToolUpdateRelease") AndAlso Not Settings.Get(Of String)("ToolUpdateReleaseLast") = "" AndAlso
+               Settings.Get(Of String)("ToolUpdateReleaseLast") <> Version AndAlso Not IsHinted Then
                 IsHinted = True
                 McDownloadClientUpdateHint(Version, Json)
             End If
@@ -272,7 +274,7 @@
             Dim Versions As JArray = Json("versions")
             If Versions.Count < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Json.ToString & "）")
             '添加 PCL 特供项
-            If File.Exists(PathTemp & "Cache\download.json") Then Versions.Merge(GetJson(ReadFile(PathTemp & "Cache\download.json")))
+            If FileUtils.Exists(PathTemp & "Cache\download.json") Then Versions.Merge(GetJson(FileUtils.ReadAsString(PathTemp & "Cache\download.json")))
             '检查是否有要求的版本（#5195）
             If Not String.IsNullOrEmpty(Loader.Input) Then
                 Dim Id = Loader.Input
@@ -313,10 +315,10 @@
             For Each Version As JObject In DlClientListLoader.Output.Value("versions")
                 If Version("id") = Id Then Return Version("url").ToString
             Next
-            Log($"未发现版本 {Id} 的 json 下载地址，版本列表返回为：{vbCrLf}{DlClientListLoader.Output.Value.ToString}", NotifyLevel.DebugModeOnly)
+            Logger.Warn($"未发现版本 {Id} 的 json 下载地址，版本列表返回为：{vbCrLf}{DlClientListLoader.Output.Value}")
             Return Nothing
         Catch ex As Exception
-            Log(ex, $"获取版本 {Id} 的 json 下载地址失败")
+            Logger.Warn(ex, $"获取版本 {Id} 的 json 下载地址失败")
             Return Nothing
         End Try
     End Function
@@ -385,7 +387,7 @@
     ''' </summary>
     Public DlOptiFineListLoader As New LoaderTask(Of Integer, DlOptiFineListResult)("DlOptiFineList Main", AddressOf DlOptiFineListMain)
     Private Sub DlOptiFineListMain(Loader As LoaderTask(Of Integer, DlOptiFineListResult))
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListBmclapiLoader, 30),
@@ -413,9 +415,9 @@
         If Result.Length < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Result & "）")
         Try
             '获取所有版本信息
-            Dim Forge As List(Of String) = RegexSearch(Result, "(?<=colForge'>)[^<]*")
-            Dim ReleaseTime As List(Of String) = RegexSearch(Result, "(?<=colDate'>)[^<]+")
-            Dim Name As List(Of String) = RegexSearch(Result, "(?<=OptiFine_)[0-9A-Za-z_.]+(?=.jar"")")
+            Dim Forge As List(Of String) = Result.RegexSearch("(?<=colForge'>)[^<]*").ToList
+            Dim ReleaseTime As List(Of String) = Result.RegexSearch("(?<=colDate'>)[^<]+").ToList
+            Dim Name As List(Of String) = Result.RegexSearch("(?<=OptiFine_)[0-9A-Za-z_.]+(?=.jar"")").ToList
             If Not ReleaseTime.Count = Name.Count Then Throw New Exception("版本与发布时间数据无法对应")
             If Not Forge.Count = Name.Count Then Throw New Exception("版本与 Forge 兼容数据无法对应")
             If ReleaseTime.Count < 10 Then Throw New Exception("获取到的版本数量不足（" & Result & "）")
@@ -491,7 +493,7 @@
     ''' </summary>
     Public DlForgeListLoader As New LoaderTask(Of Integer, DlForgeListResult)("DlForgeList Main", AddressOf DlForgeListMain)
     Private Sub DlForgeListMain(Loader As LoaderTask(Of Integer, DlForgeListResult))
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListBmclapiLoader, 30),
@@ -518,7 +520,7 @@
         Dim Result As String = NetRequestByClientRetry("https://files.minecraftforge.net/maven/net/minecraftforge/forge/index_1.2.4.html", Encoding:=Encoding.Default, Accept:="text/html", SimulateBrowserHeaders:=True)
         If Result.Length < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Result & "）")
         '获取所有版本信息
-        Dim Names As List(Of String) = RegexSearch(Result, "(?<=a href=""index_)[0-9.]+((_pre|[_-]snapshot[_-]?)[0-9]?)?(?=.html)")
+        Dim Names As List(Of String) = Result.RegexSearch("(?<=a href=""index_)[0-9.]+((_pre|[_-]snapshot[_-]?)[0-9]?)?(?=.html)").ToList
         Names.Add("1.2.4") '1.2.4 不会被匹配上
         If Names.Count < 10 Then Throw New Exception("获取到的版本数量不足（" & Result & "）")
         Loader.Output = New DlForgeListResult With {.IsOfficial = True, .SourceName = "Forge 官方源", .Value = Names}
@@ -640,7 +642,7 @@
     Public Sub DlForgeVersionMain(Loader As LoaderTask(Of String, List(Of DlForgeVersionEntry)))
         Dim DlForgeVersionOfficialLoader As New LoaderTask(Of String, List(Of DlForgeVersionEntry))("DlForgeVersion Official", AddressOf DlForgeVersionOfficialMain)
         Dim DlForgeVersionBmclapiLoader As New LoaderTask(Of String, List(Of DlForgeVersionEntry))("DlForgeVersion Bmclapi", AddressOf DlForgeVersionBmclapiMain)
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionBmclapiLoader, 30),
@@ -669,7 +671,7 @@
                                           Loader.Input.Replace("-", "_") & '兼容 Forge 1.7.10-pre4，#4057
                                           ".html", SimulateBrowserHeaders:=True)
         Catch ex As Exception
-            If ex.GetBrief().Contains("(404)") Then
+            If ex.GetDisplay(False).Contains("(404)") Then
                 Throw New Exception("无")
             Else
                 Throw
@@ -685,14 +687,14 @@
                 Dim VersionCode = VersionCodes(i)
                 Try
                     '基础信息获取
-                    Dim Name As String = RegexSeek(VersionCode, "(?<=[^(0-9)]+)[0-9\.]+")
+                    Dim Name As String = VersionCode.RegexSeek("(?<=[^(0-9)]+)[0-9\.]+")
                     Dim IsRecommended As Boolean = VersionCode.Contains("fa promo-recommended")
                     Dim Inherit As String = Loader.Input
                     '分支获取
-                    Dim Branch As String = RegexSeek(VersionCode, $"(?<=-{Name}-)[^-""]+(?=-[a-z]+.[a-z]{{3}})")
+                    Dim Branch As String = VersionCode.RegexSeek($"(?<=-{Name}-)[^-""]+(?=-[a-z]+.[a-z]{{3}})")
                     If String.IsNullOrWhiteSpace(Branch) Then Branch = Nothing
                     '发布时间获取
-                    Dim ReleaseTimeOriginal = RegexSeek(VersionCode, "(?<=""download-time"" title="")[^""]+")
+                    Dim ReleaseTimeOriginal = VersionCode.RegexSeek("(?<=""download-time"" title="")[^""]+")
                     Dim ReleaseTimeSplit = ReleaseTimeOriginal.Split(" -:".ToCharArray) '原格式："2021-02-15 03:24:02"
                     Dim ReleaseDate As New Date(ReleaseTimeSplit(0), ReleaseTimeSplit(1), ReleaseTimeSplit(2), '年月日
                                                 ReleaseTimeSplit(3), ReleaseTimeSplit(4), ReleaseTimeSplit(5), '时分秒
@@ -703,17 +705,17 @@
                     If VersionCode.Contains("classifier-installer""") Then
                         '类型为 installer.jar，支持范围 ~753 (~ 1.6.1 部分), 738~684 (1.5.2 全部)
                         VersionCode = VersionCode.Substring(VersionCode.IndexOfF("installer.jar"))
-                        MD5 = RegexSeek(VersionCode, "(?<=MD5:</strong> )[^<]+")
+                        MD5 = VersionCode.RegexSeek("(?<=MD5:</strong> )[^<]+")
                         Category = "installer"
                     ElseIf VersionCode.Contains("classifier-universal""") Then
                         '类型为 universal.zip，支持范围 751~449 (1.6.1 部分), 682~183 (1.5.1 ~ 1.3.2 部分)
                         VersionCode = VersionCode.Substring(VersionCode.IndexOfF("universal.zip"))
-                        MD5 = RegexSeek(VersionCode, "(?<=MD5:</strong> )[^<]+")
+                        MD5 = VersionCode.RegexSeek("(?<=MD5:</strong> )[^<]+")
                         Category = "universal"
                     ElseIf VersionCode.Contains("client.zip") Then
                         '类型为 client.zip，支持范围 182~ (1.3.2 部分 ~)
                         VersionCode = VersionCode.Substring(VersionCode.IndexOfF("client.zip"))
-                        MD5 = RegexSeek(VersionCode, "(?<=MD5:</strong> )[^<]+")
+                        MD5 = VersionCode.RegexSeek("(?<=MD5:</strong> )[^<]+")
                         Category = "client"
                     Else
                         '没有任何下载（1.6.4 有一部分这种情况）
@@ -875,7 +877,7 @@
     ''' </summary>
     Public DlNeoForgeListLoader As New LoaderTask(Of Integer, DlNeoForgeListResult)("DlNeoForgeList Main", AddressOf DlNeoForgeListMain)
     Private Sub DlNeoForgeListMain(Loader As LoaderTask(Of Integer, DlNeoForgeListResult))
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListBmclapiLoader, 30),
@@ -931,7 +933,7 @@
     End Sub
 
     Private Function GetNeoForgeEntries(LatestJson As String, LatestLegacyJson As String) As List(Of DlNeoForgeListEntry)
-        Dim VersionNames = RegexSearch(LatestLegacyJson & LatestJson,
+        Dim VersionNames = (LatestLegacyJson & LatestJson).RegexSearch(
             "(?<="")(1\.20\.1-)?\d+\.[^\.]+\.\d+(\.\d+)?(-(beta|alpha)(\.\d+)?)?(\+snapshot-\d+)?(?="")")
         Dim Versions = VersionNames.
             Where(Function(name) name <> "47.1.82"). '这个版本虽然在版本列表中，但不能下载
@@ -1000,7 +1002,7 @@
     ''' </summary>
     Public DlLiteLoaderListLoader As New LoaderTask(Of Integer, DlLiteLoaderListResult)("DlLiteLoaderList Main", AddressOf DlLiteLoaderListMain)
     Private Sub DlLiteLoaderListMain(Loader As LoaderTask(Of Integer, DlLiteLoaderListResult))
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListBmclapiLoader, 30),
@@ -1099,7 +1101,7 @@
     ''' </summary>
     Public DlFabricListLoader As New LoaderTask(Of Integer, DlFabricListResult)("DlFabricList Main", AddressOf DlFabricListMain)
     Private Sub DlFabricListMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
-        Select Case Settings.Get("ToolDownloadVersion")
+        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
             Case 0
                 DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)) From {
                     New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListBmclapiLoader, 30),
@@ -1170,32 +1172,32 @@
     ''' </summary>
     Public Function DlModRequest(Url As String, Optional Method As HttpMethod = Nothing,
                                  Optional Content As String = Nothing, Optional ContentType As String = Nothing) As JToken
-        Dim Urls As New List(Of KeyValuePair(Of String, Integer))
+        Dim Urls As New List(Of (Url As String, Timeout As Integer))
         Dim McimUrl As String = DlSourceModGet(Url)
         If McimUrl <> Url Then
-            Select Case Settings.Get("ToolDownloadMod")
+            Select Case Settings.Get(Of Integer)("ToolDownloadMod")
                 Case 0
-                    Urls.Add(New KeyValuePair(Of String, Integer)(McimUrl, 10))
-                    Urls.Add(New KeyValuePair(Of String, Integer)(McimUrl, 10))
-                    Urls.Add(New KeyValuePair(Of String, Integer)(Url, 30))
+                    Urls.Add((McimUrl, 10))
+                    Urls.Add((McimUrl, 10))
+                    Urls.Add((Url, 30))
                 Case 1
-                    Urls.Add(New KeyValuePair(Of String, Integer)(Url, If(Url.Contains("modrinth"), 20, 10))) '至少 20s，要不然 Modrinth 返回不过来
-                    Urls.Add(New KeyValuePair(Of String, Integer)(McimUrl, 10))
-                    Urls.Add(New KeyValuePair(Of String, Integer)(Url, 30))
-                    Urls.Add(New KeyValuePair(Of String, Integer)(McimUrl, 30))
+                    Urls.Add((Url, If(Url.Contains("modrinth"), 20, 10))) '至少 20s，要不然 Modrinth 返回不过来
+                    Urls.Add((McimUrl, 10))
+                    Urls.Add((Url, 30))
+                    Urls.Add((McimUrl, 30))
                 Case Else
-                    Urls.Add(New KeyValuePair(Of String, Integer)(Url, If(Url.Contains("modrinth"), 20, 10)))
-                    Urls.Add(New KeyValuePair(Of String, Integer)(Url, 30))
-                    Urls.Add(New KeyValuePair(Of String, Integer)(McimUrl, 30))
+                    Urls.Add((Url, If(Url.Contains("modrinth"), 20, 10)))
+                    Urls.Add((Url, 30))
+                    Urls.Add((McimUrl, 30))
             End Select
         Else
-            Urls.Add(New KeyValuePair(Of String, Integer)(Url, If(Url.Contains("modrinth"), 20, 10)))
-            Urls.Add(New KeyValuePair(Of String, Integer)(Url, 30))
+            Urls.Add((Url, If(Url.Contains("modrinth"), 20, 10)))
+            Urls.Add((Url, 30))
         End If
         Dim Exs As String = ""
         For Each Source In Urls
             Try
-                Return GetJson(NetRequestByClient(Source.Key, Method, Content, ContentType, Timeout:=Source.Value * 1000, Encoding:=Encoding.UTF8, RequireJson:=True))
+                Return GetJson(NetRequestByClient(Source.Url, Method, Content, ContentType, Timeout:=Source.Timeout * 1000, Encoding:=Encoding.UTF8, RequireJson:=True))
             Catch ex As Exception
                 Exs += ex.Message + vbCrLf
             End Try
@@ -1213,7 +1215,7 @@
     ''' </summary>
     Public ReadOnly Property DlSourcePreferMojang As Boolean
         Get
-            Return Settings.Get("ToolDownloadSource") = 2 OrElse (Settings.Get("ToolDownloadSource") = 1 AndAlso DlPreferMojang)
+            Return Settings.Get(Of Integer)("ToolDownloadSource") = 2 OrElse (Settings.Get(Of Integer)("ToolDownloadSource") = 1 AndAlso DlPreferMojang)
         End Get
     End Property
     ''' <summary>
@@ -1227,7 +1229,7 @@
     ''' </summary>
     Public ReadOnly Property DlVersionListPreferMojang As Boolean
         Get
-            Return Settings.Get("ToolDownloadVersion") = 2 OrElse (Settings.Get("ToolDownloadVersion") = 1 AndAlso DlPreferMojang)
+            Return Settings.Get(Of Integer)("ToolDownloadVersion") = 2 OrElse (Settings.Get(Of Integer)("ToolDownloadVersion") = 1 AndAlso DlPreferMojang)
         End Get
     End Property
     ''' <summary>

@@ -3,6 +3,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:behaviors="clr-namespace:PCL.Controls.Behaviors"
     xmlns:local="clr-namespace:PCL"
+    xmlns:core="clr-namespace:MeloongCore;assembly=MeloongCore"
+    xmlns:corewpf="clr-namespace:MeloongCore.Wpf;assembly=MeloongCore.Wpf"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
     StartupUri="FormMain.xaml"
     ShutdownMode="OnExplicitShutdown">
@@ -10,10 +12,10 @@
         <ResourceDictionary>
             
             <!-- Converter -->
-            <local:AdditionConverter x:Key="AdditionConverter"/>
-            <local:MultiplicationConverter x:Key="MultiplicationConverter"/>
-            <local:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
-            <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <corewpf:AdditionConverter x:Key="AdditionConverter"/>
+            <corewpf:MultiplicationConverter x:Key="MultiplicationConverter"/>
+            <corewpf:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+            <corewpf:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
             <!-- 颜色表 -->
@@ -366,6 +368,7 @@
                 <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Setter Property="FontSize" Value="13" />
                 <Setter Property="MaxDropDownHeight" Value="320" />
+                <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ComboBox">

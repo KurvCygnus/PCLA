@@ -28,17 +28,17 @@
 
             '启动参数
             Dim _unused = PageInstanceLeft.Instance.PathIndie '触发自动判定
-            ComboArgumentIndieV2.SelectedIndex = If(Settings.Get("VersionArgumentIndieV2", Instance:=PageInstanceLeft.Instance), 0, 1)
+            ComboArgumentIndieV2.SelectedIndex = If(Settings.Get(Of Boolean)("VersionArgumentIndieV2", Instance:=PageInstanceLeft.Instance), 0, 1)
             RefreshJavaComboBox()
 
             '服务器
-            ComboServerLogin.SelectedIndex = Settings.Get("VersionServerLogin", Instance:=PageInstanceLeft.Instance)
+            ComboServerLogin.SelectedIndex = Settings.Get(Of Integer)("VersionServerLogin", Instance:=PageInstanceLeft.Instance)
             ComboServerLoginLast = ComboServerLogin.SelectedIndex
             UpdateServerLoginUI()
 
             '高级设置
-            If Settings.Get("VersionAdvanceAssets", Instance:=PageInstanceLeft.Instance) = 2 Then
-                Log("[Setup] 已迁移老版本的关闭文件校验设置")
+            If Settings.Get(Of Integer)("VersionAdvanceAssets", Instance:=PageInstanceLeft.Instance) = 2 Then
+                Logger.Info("已迁移老版本的关闭文件校验设置")
                 Settings.Reset("VersionAdvanceAssets", Instance:=PageInstanceLeft.Instance)
                 Settings.Set("VersionAdvanceAssetsV2", True, Instance:=PageInstanceLeft.Instance)
             End If
@@ -46,10 +46,10 @@
             SettingService.RefreshSettings(Me)
 
             '游戏内存
-            OnVersionRamTypeChanged(Settings.Get("VersionRamType", Instance:=PageInstanceLeft.Instance))
+            OnVersionRamTypeChanged(Settings.Get(Of Integer)("VersionRamType", Instance:=PageInstanceLeft.Instance))
 
         Catch ex As Exception
-            Log(ex, "重载版本独立设置时出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "重载版本独立设置时出错")
         End Try
     End Sub
 
@@ -65,10 +65,10 @@
             Settings.Reset("VersionArgumentJavaSelect", Instance:=PageInstanceLeft.Instance)
             JavaSearchLoader.Start(IsForceRestart:=True)
 
-            Log("[Setup] 已初始化版本独立设置")
+            Logger.Info("已初始化版本独立设置")
             Hint("已初始化版本独立设置！", HintType.Green, False)
         Catch ex As Exception
-            Log(ex, "初始化版本独立设置失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "初始化版本独立设置失败", LogBehavior.Alert)
         End Try
 
         Reload()
@@ -219,7 +219,7 @@
     ''' </summary>
     Public Shared Function GetRam(Instance As McInstance, Optional Is32BitJava As Boolean? = Nothing) As Double
         '跟随全局设置
-        If Settings.Get("VersionRamType", Instance:=Instance) = 2 Then
+        If Settings.Get(Of Integer)("VersionRamType", Instance:=Instance) = 2 Then
             Return PageSetupLaunch.GetRam(Instance, True, Is32BitJava)
         End If
 
@@ -229,7 +229,7 @@
 
         '使用当前版本的设置
         Dim RamGive As Double
-        If Settings.Get("VersionRamType", Instance:=Instance) = 0 Then
+        If Settings.Get(Of Integer)("VersionRamType", Instance:=Instance) = 0 Then
             '自动配置
             Dim RamAvailable As Double = Math.Round(My.Computer.Info.AvailablePhysicalMemory / 1024 / 1024 / 1024 * 10) / 10
             '确定需求的内存值
@@ -240,7 +240,7 @@
             If Instance IsNot Nothing AndAlso Not Instance.IsLoaded Then Instance.Load()
             If Instance IsNot Nothing AndAlso Instance.Modable Then
                 '可安装 Mod 的版本
-                Dim ModDir As New DirectoryInfo(Instance.PathIndie & "mods\")
+                Dim ModDir = DirectoryUtils.GetInfo(Instance.PathIndie & "mods\")
                 Dim ModCount As Integer = If(ModDir.Exists, ModDir.GetFiles.Count(Function(f) {".jar", ".zip", ".litemod"}.Contains(f.Extension.Lower)), 0)
                 RamMininum = 0.5 + ModCount / 150
                 RamTarget1 = 1.5 + ModCount / 90
@@ -285,7 +285,7 @@ PreFin:
             RamGive = Math.Round(Math.Max(RamGive, RamMininum), 1)
         Else
             '手动配置
-            Dim Value As Integer = Settings.Get("VersionRamCustom", Instance:=Instance)
+            Dim Value As Integer = Settings.Get(Of Integer)("VersionRamCustom", Instance:=Instance)
             If Value <= 12 Then
                 RamGive = Value * 0.1 + 0.3
             ElseIf Value <= 25 Then
@@ -374,10 +374,10 @@ PreFin:
         '初始化列表
         ComboArgumentJava.Items.Clear()
         ComboArgumentJava.Items.Add(New MyComboBoxItem With {.Content = "跟随全局设置", .Tag = "使用全局设置"})
-        ComboArgumentJava.Items.Add(New MyComboBoxItem With {.Content = "自动选择合适的 Java", .Tag = "自动选择"})
+        ComboArgumentJava.Items.Add(New MyComboBoxItem With {.Content = "自动选择（推荐）", .Tag = "自动选择"})
         '更新列表
         Dim SelectedItem As MyComboBoxItem = Nothing
-        Dim SelectedBySetup As String = Settings.Get("VersionArgumentJavaSelect", Instance:=PageInstanceLeft.Instance)
+        Dim SelectedBySetup As String = Settings.Get(Of String)("VersionArgumentJavaSelect", Instance:=PageInstanceLeft.Instance)
         Try
             For Each Java In JavaList.ToList().OrderByDescending(Function(v) v.MajorVersion)
                 Dim ListItem = New MyComboBoxItem With {.Content = Java.ToString, .ToolTip = Java.PathFolder, .Tag = Java}
@@ -389,7 +389,7 @@ PreFin:
             Next
         Catch ex As Exception
             Settings.Set("VersionArgumentJavaSelect", "使用全局设置", Instance:=PageInstanceLeft.Instance)
-            Log(ex, "更新版本设置 Java 下拉框失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "更新版本设置 Java 下拉框失败")
         End Try
         '更新选择项
         If SelectedItem Is Nothing AndAlso JavaList.Any Then
@@ -424,15 +424,15 @@ PreFin:
         If "使用全局设置".Equals(SelectedJava) Then
             '选择 “自动”
             Settings.Set("VersionArgumentJavaSelect", "使用全局设置", Instance:=PageInstanceLeft.Instance)
-            Log("[Java] 修改版本 Java 选择设置：跟随全局设置")
+            Logger.Info("修改版本 Java 选择设置：跟随全局设置")
         ElseIf "自动选择".Equals(SelectedJava) Then
             '选择 “自动”
             Settings.Set("VersionArgumentJavaSelect", "", Instance:=PageInstanceLeft.Instance)
-            Log("[Java] 修改版本 Java 选择设置：自动选择")
+            Logger.Info("修改版本 Java 选择设置：自动选择")
         Else
             '选择指定项
             Settings.Set("VersionArgumentJavaSelect", CType(SelectedJava.ToJson(), JObject).ToString(Newtonsoft.Json.Formatting.None), Instance:=PageInstanceLeft.Instance)
-            Log("[Java] 修改版本 Java 选择设置：" & SelectedJava.ToString)
+            Logger.Info($"修改版本 Java 选择设置：{SelectedJava}")
         End If
         RefreshRam(True)
     End Sub

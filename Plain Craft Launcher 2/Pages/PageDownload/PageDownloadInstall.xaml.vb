@@ -525,7 +525,7 @@
             Next
             '自动选择版本
             If VersionWaitingSelect Is Nothing Then Exit Try
-            Log("[Download] 自动选择 MC 版本：" & VersionWaitingSelect)
+            Logger.Info($"自动选择 MC 版本：{VersionWaitingSelect}")
             For Each Version As JObject In Versions
                 If Version("id").ToString <> VersionWaitingSelect Then Continue For
                 Dim Item = McDownloadListItem(Version, Sub()
@@ -535,7 +535,7 @@
                 Return
             Next
         Catch ex As Exception
-            Log(ex, "可视化安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化安装版本列表出错")
         End Try
     End Sub
     ''' <summary>
@@ -627,7 +627,7 @@
                 PanOptiFine.Children.Add(OptiFineDownloadListItem(Version, AddressOf OptiFine_Selected, False))
             Next
         Catch ex As Exception
-            Log(ex, "可视化 OptiFine 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 OptiFine 安装版本列表出错")
         End Try
     End Sub
 
@@ -689,7 +689,7 @@
                 PanLiteLoader.Children.Add(LiteLoaderDownloadListItem(Version, AddressOf LiteLoader_Selected, False))
             Next
         Catch ex As Exception
-            Log(ex, "可视化 LiteLoader 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 LiteLoader 安装版本列表出错")
         End Try
     End Sub
 
@@ -763,7 +763,7 @@
                 PanForge.Children.Add(ForgeDownloadListItem(Version, AddressOf Forge_Selected, False))
             Next
         Catch ex As Exception
-            Log(ex, "可视化 Forge 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 Forge 安装版本列表出错")
         End Try
     End Sub
 
@@ -821,7 +821,7 @@
                 PanNeoForge.Children.Add(NeoForgeDownloadListItem(Version, AddressOf NeoForge_Selected, False))
             Next
         Catch ex As Exception
-            Log(ex, "可视化 NeoForge 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 NeoForge 安装版本列表出错")
         End Try
     End Sub
 
@@ -883,7 +883,7 @@
             CardFabric.SwapControl = PanFabric
             CardFabric.SwapType = 12
         Catch ex As Exception
-            Log(ex, "可视化 Fabric 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 Fabric 安装版本列表出错")
         End Try
     End Sub
 
@@ -926,8 +926,8 @@
                 If Part = TargetName Then Return True
             Next
             '将版本名分割语素（例如 1.16.4/5）
-            Dim Lefts = RegexSearch(FabricApiName.BeforeFirst("]"), "[a-z/]+|[0-9/]+")
-            Dim Rights = RegexSearch(TargetName.BeforeFirst("]"), "[a-z/]+|[0-9/]+")
+            Dim Lefts = FabricApiName.BeforeFirst("]").RegexSearch("[a-z/]+|[0-9/]+").ToList
+            Dim Rights = TargetName.BeforeFirst("]").RegexSearch("[a-z/]+|[0-9/]+").ToList
             '对每段进行判断
             Dim i As Integer = 0
             While True
@@ -946,7 +946,7 @@
             End While
             Return True
         Catch ex As Exception
-            Log(ex, "判断 Fabric API 版本适配性出错（" & FabricApiName & ", " & VanillaName & "）")
+            Logger.Warn(ex, $"判断 Fabric API 版本适配性出错（{FabricApiName}, {VanillaName}）")
             Return False
         End Try
     End Function
@@ -984,7 +984,7 @@
             For Each Version In DlFabricApiLoader.Output
                 If IsFabricApiCompatible(Version) Then
                     If Not Version.Display.StartsWithF("[") Then
-                        Log("[Download] 已特判修改 Fabric API 显示名：" & Version.Display, NotifyLevel.DebugModeOnly)
+                        Logger.Warn($"已特判修改 Fabric API 显示名：{Version.Display}")
                         Version.Display = "[" & VanillaName & "] " & Version.Display
                     End If
                     Versions.Add(Version)
@@ -1002,11 +1002,11 @@
             If Not AutoSelectedFabricApi Then
                 AutoSelectedFabricApi = True
                 Dim Item As MyListItem = MyVirtualizingElement.TryInit(PanFabricApi.Children(0))
-                Log($"[Download] 已自动选择 Fabric API：{Item.Title}")
+                Logger.Info($"已自动选择 Fabric API：{Item.Title}")
                 FabricApi_Selected(Item, Nothing)
             End If
         Catch ex As Exception
-            Log(ex, "可视化 Fabric API 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 Fabric API 安装版本列表出错")
         End Try
     End Sub
 
@@ -1035,7 +1035,7 @@
             If VanillaName Is Nothing Then Return False
             Return ModFile.GameVersions.Contains(VanillaName)
         Catch ex As Exception
-            Log(ex, "判断 OptiFabric 版本适配性出错（" & VanillaName & "）")
+            Logger.Warn(ex, $"判断 OptiFabric 版本适配性出错（{VanillaName}）")
             Return False
         End Try
     End Function
@@ -1095,10 +1095,10 @@
             If AutoSelectedOptiFabric OrElse VanillaDrop >= 140 AndAlso VanillaDrop <= 150 Then Return '1.14~15 不自动选择
             AutoSelectedOptiFabric = True
             Dim Item As MyListItem = MyVirtualizingElement.TryInit(PanOptiFabric.Children(0))
-            Log($"[Download] 已自动选择 OptiFabric：{Item.Title}")
+            Logger.Info($"已自动选择 OptiFabric：{Item.Title}")
             OptiFabric_Selected(Item, Nothing)
         Catch ex As Exception
-            Log(ex, "可视化 OptiFabric 安装版本列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "可视化 OptiFabric 安装版本列表出错")
         End Try
     End Sub
 
@@ -1125,7 +1125,7 @@
     Private Sub BtnStart_Click() Handles BtnStart.Click
         '确认版本隔离
         If (SelectedForge IsNot Nothing OrElse SelectedNeoForge IsNot Nothing OrElse SelectedFabric IsNot Nothing) AndAlso
-           (Settings.Get("LaunchArgumentIndieV2") = 0 OrElse Settings.Get("LaunchArgumentIndieV2") = 2) Then
+           (Settings.Get(Of Integer)("LaunchArgumentIndieV2") = 0 OrElse Settings.Get(Of Integer)("LaunchArgumentIndieV2") = 2) Then
             If MyMsgBox("你尚未开启版本隔离，多个 MC 版本会共用同一个 Mod 文件夹。" & vbCrLf &
                         "因此，游戏可能会因为读取到与当前版本不符的 Mod 而崩溃。" & vbCrLf &
                         "推荐先在 设置 → 启动选项 → 默认版本隔离 中开启版本隔离！", "版本隔离提示", "取消下载", "继续") = 1 Then

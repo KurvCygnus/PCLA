@@ -42,33 +42,32 @@ Public Class WikiEntry
             If Cache IsNot Nothing Then Return Cache
             '实际加载
             Cache = New List(Of WikiEntry)
-            Dim Data As String
-            Using Archive As New ZipArchive(New MemoryStream(GetResources("ModData")), ZipArchiveMode.Read)
-                Data = ReadFile(Archive.GetEntry("moddata.txt").Open(), Encoding.UTF8)
-            End Using
             Dim i As Integer = 0
-            For Each Line In Data.ReplaceLineEndings(vbLf).Split(vbLf)
+            Dim DataLines As List(Of String) = DirectCast(My.Resources.ResourceManager.GetObject("ModData"), String).SplitLines().ToList()
+            Dim Ranks = DataLines.Last.Split("|")
+            DataLines.RemoveAt(DataLines.Count - 1)
+            For Each Line In DataLines
                 i += 1
                 If Line = "" Then Continue For
                 For Each EntryData As String In Line.Split("¨")
                     Dim Entry = New WikiEntry
                     Dim Splited = EntryData.Split("|")
-                    Entry.Popularity = Val(Splited(0))
-                    If Splited(1).StartsWithF("@") Then
+                    If Splited(0).StartsWithF("@") Then
                         Entry.CurseForgeSlug = Nothing
-                        Entry.ModrinthSlug = Splited(1).Replace("@", "")
-                    ElseIf Splited(1).EndsWithF("@") Then
-                        Entry.CurseForgeSlug = Splited(1).TrimEnd("@")
+                        Entry.ModrinthSlug = Splited(0).Replace("@", "")
+                    ElseIf Splited(0).EndsWithF("@") Then
+                        Entry.CurseForgeSlug = Splited(0).TrimEnd("@")
                         Entry.ModrinthSlug = Entry.CurseForgeSlug
-                    ElseIf Splited(1).Contains("@") Then
-                        Entry.CurseForgeSlug = Splited(1).Split("@")(0)
-                        Entry.ModrinthSlug = Splited(1).Split("@")(1)
+                    ElseIf Splited(0).Contains("@") Then
+                        Entry.CurseForgeSlug = Splited(0).Split("@")(0)
+                        Entry.ModrinthSlug = Splited(0).Split("@")(1)
                     Else
-                        Entry.CurseForgeSlug = Splited(1)
+                        Entry.CurseForgeSlug = Splited(0)
                         Entry.ModrinthSlug = Nothing
                     End If
                     Entry.Id = i
-                    If Splited.Count >= 3 Then
+                    Entry.Popularity = Val(Ranks(i - 1))
+                    If Splited.Count >= 2 Then
                         Entry.ChineseName = Splited.Last
                         If Entry.ChineseName.Contains("*") Then '处理 *
                             Entry.ChineseName = Entry.ChineseName.Replace("*",

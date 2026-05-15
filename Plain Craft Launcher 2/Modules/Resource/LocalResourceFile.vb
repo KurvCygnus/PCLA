@@ -1,7 +1,7 @@
 ﻿''' <summary>
 ''' 本地的社区资源文件。
 ''' </summary>
-Public Class ResourceFile
+Public Class LocalResourceFile
 
 #Region "文件信息"
 
@@ -13,7 +13,7 @@ Public Class ResourceFile
         Me.File = FileInfo
     End Sub
     Public Sub New(FullName As String)
-        Me.New(New FileInfo(FullName))
+        Me.New(FileUtils.GetInfo(FullName))
     End Sub
 
     ''' <summary>
@@ -48,7 +48,7 @@ Public Class ResourceFile
     ''' <summary>
     ''' 在初始化结束之后，任何信息被后续更新时触发此事件。
     ''' </summary>
-    Public Event OnUpdate(sender As ResourceFile)
+    Public Event OnUpdate(sender As LocalResourceFile)
 
     ''' <summary>
     ''' 可读名称。
@@ -57,7 +57,7 @@ Public Class ResourceFile
     Public Property Display As String
         Get
             If _Display Is Nothing Then _Display = ProjectVersion?.Display
-            If _Display Is Nothing Then _Display = Path.GetFileNameWithoutExtension(File.FullName)
+            If _Display Is Nothing Then _Display = PathUtils.GetFileNameWithoutExtension(File.FullName)
             Return _Display
         End Get
         Set(value As String)
@@ -97,7 +97,7 @@ Public Class ResourceFile
             Return _Version
         End Get
         Set(value As String)
-            If _Version IsNot Nothing AndAlso RegexCheck(_Version, "[0-9.\-]+") Then Return
+            If _Version IsNot Nothing AndAlso _Version.RegexCheck("[0-9.\-]+") Then Return
             If value IsNot Nothing AndAlso value.ContainsIgnoreCase("version") Then value = "version" '需要修改的标识
             _Version = value
         End Set
@@ -118,16 +118,15 @@ Public Class ResourceFile
         Dim Jar As ZipArchive = Nothing
         Try
             '基础可用性检查
-            If File.FullName.Length < 2 Then Throw New FileNotFoundException("错误的 Mod 文件路径（" & If(File.FullName, "null") & "）")
-            If Not IO.File.Exists(File.FullName) Then Throw New FileNotFoundException("未找到 Mod 文件（" & File.FullName & "）")
+            If Not FileUtils.Exists(File.FullName) Then Throw New FileNotFoundException("未找到 Mod 文件（" & File.FullName & "）")
             '打开 Jar 文件
-            Jar = New ZipArchive(New FileStream(File.FullName, FileMode.Open, FileAccess.Read, FileShare.Read))
+            Jar = FileUtils.OpenZip(File.FullName)
             '信息获取
             LoadMetadataFromJar(Jar)
         Catch ex As UnauthorizedAccessException
-            Log(ex, $"Mod 文件由于无权限无法打开（{File.FullName}）", NotifyLevel.DevelopOnly)
+            Logger.Warn(ex, $"Mod 文件由于无权限无法打开（{File.FullName}）")
         Catch ex As Exception
-            Log(ex, $"Mod 文件无法打开（{File.FullName}）", NotifyLevel.DevelopOnly)
+            Logger.Warn(ex, $"Mod 文件无法打开（{File.FullName}）")
         Finally
             If Jar IsNot Nothing Then Jar.Dispose()
         End Try
@@ -140,7 +139,7 @@ Public Class ResourceFile
             Dim InfoEntry As ZipArchiveEntry = Jar.GetEntry("mcmod.info")
             Dim InfoString As String = Nothing
             If InfoEntry IsNot Nothing Then
-                InfoString = ReadFile(InfoEntry.Open())
+                InfoString = InfoEntry.Open().ReadString()
                 If InfoString.Length < 15 Then InfoString = Nothing
             End If
             If InfoString Is Nothing Then Exit Try
@@ -157,7 +156,7 @@ Public Class ResourceFile
             Description = InfoObject("description")
             Version = InfoObject("version")
         Catch ex As Exception
-            Log(ex, $"读取 mcmod.info 时出现未知错误（{File.FullName}）", NotifyLevel.DevelopOnly)
+            Logger.Warn(ex, $"读取 mcmod.info 时出现未知错误（{File.FullName}）")
         End Try
 #End Region
 #Region "尝试使用 fabric.mod.json"
@@ -166,7 +165,7 @@ Public Class ResourceFile
             Dim FabricEntry As ZipArchiveEntry = Jar.GetEntry("fabric.mod.json")
             Dim FabricText As String = Nothing
             If FabricEntry IsNot Nothing Then
-                FabricText = ReadFile(FabricEntry.Open(), Encoding.UTF8)
+                FabricText = FabricEntry.Open().ReadString(Encoding.UTF8)
                 If Not FabricText.Contains("schemaVersion") Then FabricText = Nothing
             End If
             If FabricText Is Nothing Then Exit Try
@@ -179,7 +178,7 @@ GotFabric:
             '加载成功
             GoTo Finished
         Catch ex As Exception
-            Log(ex, "读取 fabric.mod.json 时出现未知错误（" & File.FullName & "）", NotifyLevel.DevelopOnly)
+            Logger.Warn(ex, $"读取 fabric.mod.json 时出现未知错误（{File.FullName}）")
         End Try
 #End Region
 #Region "尝试使用 mods.toml"
@@ -188,13 +187,13 @@ GotFabric:
             Dim TomlEntry As ZipArchiveEntry = Jar.GetEntry("META-INF/mods.toml")
             Dim TomlText As String = Nothing
             If TomlEntry IsNot Nothing Then
-                TomlText = ReadFile(TomlEntry.Open())
+                TomlText = TomlEntry.Open().ReadString()
                 If TomlText.Length < 15 Then TomlText = Nothing
             End If
             If TomlText Is Nothing Then Exit Try
             '文件标准化：统一换行符为 vbLf，去除注释、头尾的空格、空行
             Dim Lines As New List(Of String)
-            For Each Line In TomlText.ReplaceLineEndings(vbLf).Split(vbLf) '统一换行符
+            For Each Line In TomlText.SplitLines(True)
                 If Line.StartsWithF("#") Then '去除注释
                     Continue For
                 ElseIf Line.Contains("#") Then
@@ -268,7 +267,7 @@ GotFabric:
             '加载成功
             GoTo Finished
         Catch ex As Exception
-            Log(ex, $"读取 mods.toml 时出现未知错误（{File.FullName}）", NotifyLevel.DevelopOnly)
+            Logger.Warn(ex, $"读取 mods.toml 时出现未知错误（{File.FullName}）")
         End Try
 #End Region
 #Region "尝试使用 fml_cache_annotation.json"
@@ -277,7 +276,7 @@ GotFabric:
             Dim FmlEntry As ZipArchiveEntry = Jar.GetEntry("META-INF/fml_cache_annotation.json")
             Dim FmlText As String = Nothing
             If FmlEntry IsNot Nothing Then
-                FmlText = ReadFile(FmlEntry.Open(), Encoding.UTF8)
+                FmlText = FmlEntry.Open().ReadString(Encoding.UTF8)
                 If Not FmlText.Contains("Lnet/minecraftforge/fml/common/Mod;") Then FmlText = Nothing
             End If
             If FmlText Is Nothing Then Exit Try
@@ -305,7 +304,7 @@ Got:
             '加载成功
             GoTo Finished
         Catch ex As Exception
-            Log(ex, $"读取 fml_cache_annotation.json 时出现未知错误（{File.FullName}）", NotifyLevel.DevelopOnly)
+            Logger.Warn(ex, $"读取 fml_cache_annotation.json 时出现未知错误（{File.FullName}）")
         End Try
 #End Region
         Return '没能成功获取任何信息
@@ -316,7 +315,7 @@ Finished:
             Try
                 Dim MetaEntry As ZipArchiveEntry = Jar.GetEntry("META-INF/MANIFEST.MF")
                 If MetaEntry IsNot Nothing Then
-                    Dim MetaString As String = ReadFile(MetaEntry.Open()).Replace(" :", ":").Replace(": ", ":")
+                    Dim MetaString As String = MetaEntry.Open().ReadString().Replace(" :", ":").Replace(": ", ":")
                     If MetaString.Contains("Implementation-Version:") Then
                         MetaString = MetaString.Substring(MetaString.IndexOfF("Implementation-Version:") + "Implementation-Version:".Count)
                         MetaString = MetaString.Substring(0, MetaString.IndexOfAny(vbCrLf.ToCharArray)).Trim
@@ -324,7 +323,7 @@ Finished:
                     End If
                 End If
             Catch ex As Exception
-                Log($"获取 META-INF 中的版本信息失败（{File.FullName}）", NotifyLevel.DevelopOnly)
+                Logger.Warn($"获取 META-INF 中的版本信息失败（{File.FullName}）")
                 Version = Nothing
             End Try
         End If
@@ -408,7 +407,7 @@ Finished:
     ''' </summary>
     Public ReadOnly Property HasUpdate As Boolean
         Get
-            Return Not Settings.Get("UiHiddenFunctionModUpdate") AndAlso Not Settings.Get("VersionAdvanceDisableModUpdate", Instance:=PageInstanceLeft.Instance) AndAlso UpdateFile IsNot Nothing
+            Return Not Settings.Get(Of Boolean)("UiHiddenFunctionModUpdate") AndAlso Not Settings.Get(Of Boolean)("VersionAdvanceDisableModUpdate", Instance:=PageInstanceLeft.Instance) AndAlso UpdateFile IsNot Nothing
         End Get
     End Property
 
@@ -421,13 +420,13 @@ Finished:
                 '读取缓存
                 Dim CacheKey As String = GetHash($"{EnabledFullName}-{File.LastWriteTime.ToLongTimeString}-{File.Length}-C")
                 Dim Cached As String = ReadIni(PathTemp & "Cache\ModHash.ini", CacheKey)
-                If Cached <> "" AndAlso RegexCheck(Cached, "^\d+$") Then '#5062
+                If Cached <> "" AndAlso Cached.RegexCheck("^\d+$") Then '#5062
                     _CurseForgeHash = Cached
                     Return _CurseForgeHash
                 End If
                 '读取文件
                 Dim data As New List(Of Byte)
-                For Each b As Byte In ReadFileBytes(File.FullName)
+                For Each b As Byte In FileUtils.ReadAsBytes(File.FullName)
                     If b = 9 OrElse b = 10 OrElse b = 13 OrElse b = 32 Then Continue For
                     data.Add(b)
                 Next
@@ -481,7 +480,7 @@ Finished:
                     Return _ModrinthHash
                 End If
                 '计算 SHA1
-                _ModrinthHash = GetFileSHA1(File.FullName)
+                _ModrinthHash = HashUtils.ComputeFromFile(File.FullName, HashUtils.HashMethod.Sha1)
                 '写入缓存
                 WriteIni(PathTemp & "Cache\ModHash.ini", CacheKey, _ModrinthHash)
             End If
@@ -498,7 +497,7 @@ Finished:
         Return File.FullName
     End Function
     Public Overrides Function Equals(obj As Object) As Boolean
-        Dim Target = TryCast(obj, ResourceFile)
+        Dim Target = TryCast(obj, LocalResourceFile)
         Return Target IsNot Nothing AndAlso File.FullName = Target.File.FullName
     End Function
 

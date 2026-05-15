@@ -12,7 +12,7 @@ Public Module ModAnimation
     ''' </summary>
     Public ReadOnly Property AniSpeed As Double
         Get
-            Dim Setting As Integer = Settings.Get("SystemDebugAnim")
+            Dim Setting As Integer = Settings.Get(Of Integer)("SystemDebugAnim")
             Return If(Setting >= 30, 200, (Setting * 0.1 + 0.1).Clamp(0.1, 3))
         End Get
     End Property
@@ -114,7 +114,7 @@ Public Module ModAnimation
         Public ValueLast As Object
 
         Public Overrides Function ToString() As String
-            Return GetStringFromEnum(TypeMain) & " | " & TimeFinished & "/" & TimeTotal & "(" & Math.Round(TimePercent * 100) & "%)" & If(Obj Is Nothing, "", " | " & Obj.ToString & "(" & Obj.GetType.Name & ")")
+            Return TypeMain.ToString() & " | " & TimeFinished & "/" & TimeTotal & "(" & Math.Round(TimePercent * 100) & "%)" & If(Obj Is Nothing, "", " | " & Obj.ToString & "(" & Obj.GetType.Name & ")")
         End Function
 
     End Structure
@@ -521,13 +521,14 @@ Public Module ModAnimation
     ''' </summary>
     ''' <remarks></remarks>
     Public Function AaStack(Stack As StackPanel, Optional Time As Integer = 100, Optional Delay As Integer = 25) As List(Of AniData)
-        AaStack = New List(Of AniData)
+        Dim Result = New List(Of AniData)
         Dim AniDelay As Integer = 0
         For Each Item In Stack.Children
             Item.Opacity = 0
-            AaStack.Add(AaOpacity(Item, 1, Time, AniDelay))
+            Result.Add(AaOpacity(Item, 1, Time, AniDelay))
             AniDelay += Delay
         Next
+        Return Result
     End Function
 
 #End Region
@@ -810,7 +811,7 @@ Public Module ModAnimation
         RunInNewThread(
         Sub()
             Try
-                Log("[Animation] 动画线程开始")
+                Logger.Info("动画线程开始")
                 Do While True
                     '两帧之间的间隔时间
                     Dim DeltaTime As Long = (GetTimeMs() - AniLastTick).Clamp(0, 100000)
@@ -831,7 +832,7 @@ Public Module ModAnimation
                         AniCount = 0
                         AniTimer(DeltaTime * AniSpeed)
                         If RandomInteger(0, 64 * If(ModeDebug, 5, 30)) = 0 AndAlso ((AniFPS < 62 AndAlso AniFPS > 0) OrElse AniCount > 4 OrElse NetManager.FileRemain <> 0) Then
-                            Log("[Report] FPS " & AniFPS & ", 动画 " & AniCount & ", 下载中 " & NetManager.FileRemain & "（" & FormatFileSize(NetManager.Speed) & "/s）")
+                            Logger.Info($"FPS {AniFPS}, 动画 {AniCount}, 下载中 {NetManager.FileRemain}（{FormatFileSize(NetManager.Speed)}/s）")
                         End If
                     End Sub)
 Sleeper:
@@ -839,7 +840,7 @@ Sleeper:
                     Thread.Sleep(1)
                 Loop
             Catch ex As Exception
-                Log(ex, "动画帧执行失败", NotifyLevel.Critical)
+                Logger.Error(ex, "动画帧执行失败", LogBehavior.AlertThenCrash)
             End Try
         End Sub, "Animation", ThreadPriority.AboveNormal)
     End Sub
@@ -850,7 +851,7 @@ Sleeper:
     Public Sub AniTimer(DeltaTick As Integer)
         Try
 
-            If DeltaTick / AniSpeed > 100 Then Log("[Animation] 两个动画帧间隔 " & DeltaTick & " ms", NotifyLevel.DevelopOnly)
+            If DeltaTick / AniSpeed > 100 Then Logger.Info($"两个动画帧间隔 {DeltaTick} ms")
             Dim i As Integer = -1
             '循环每个动画组
             Do While i + 1 < AniGroups.Count
@@ -915,7 +916,7 @@ NextAni:
             Loop
 
         Catch ex As Exception
-            Log(ex, "动画刻执行失败", NotifyLevel.AllUsers)
+            Logger.Error(ex, "动画刻执行失败", LogBehavior.Toast)
         End Try
     End Sub
 
@@ -1052,7 +1053,7 @@ NextAni:
             End Select
             Ani.TimePercent = Ani.TimeFinished / Ani.TimeTotal '修改执行百分比
         Catch ex As Exception
-            Log(ex, "执行动画失败：" & Ani.ToString, NotifyLevel.AllUsers)
+            Logger.Error(ex, $"执行动画失败：{Ani}", LogBehavior.Toast)
         End Try
         Return Ani
     End Function

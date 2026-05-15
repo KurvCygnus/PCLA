@@ -269,11 +269,11 @@
                             <local:MyComboBoxItem local:SettingService.Value="0" Content="你知道吗？" />
                             <local:MyComboBoxItem local:SettingService.Value="1" Content="回声洞" />
                             <local:MyComboBoxItem local:SettingService.Value="2" Content="Minecraft 新闻（作者：最亮的信标）" />
-                            <local:MyComboBoxItem local:SettingService.Value="3" Content="简单主页（作者：MFn233）" />
+                            <!--<local:MyComboBoxItem local:SettingService.Value="3" Content="简单主页（作者：MFn233）" />-->
                             <local:MyComboBoxItem local:SettingService.Value="4" Content="每日整合包推荐（作者：wkea）" />
                             <local:MyComboBoxItem local:SettingService.Value="5" Content="Minecraft 皮肤推荐（作者：wkea）" />
                             <local:MyComboBoxItem local:SettingService.Value="6" Content="OpenBMCLAPI 仪表盘 Lite（作者：Silverteal、Mxmilu666）" />
-                            <local:MyComboBoxItem local:SettingService.Value="7" Content="PCL 主页市场（作者：凌云）" />
+                            <!--<local:MyComboBoxItem local:SettingService.Value="7" Content="PCL 主页市场（作者：凌云）" />-->
                             <!--<local:MyComboBoxItem local:SettingService.Value="8" Content="PCL 新闻速报（作者：Joker2184）" />-->
                             <local:MyComboBoxItem local:SettingService.Value="9" Content="PCL 新功能说明书（作者：WForst-Breeze）" />
                             <!--<local:MyComboBoxItem local:SettingService.Value="10" Content="OpenMCIM 仪表盘（作者：SALTWOOD）" />-->
@@ -282,6 +282,7 @@
                             <local:MyComboBoxItem local:SettingService.Value="13" Content="Minecraft 更新摘要（作者：pynickle）" />
                             <local:MyComboBoxItem local:SettingService.Value="14" Content="今日新闻热点（作者：EYicheng）" />
                             <local:MyComboBoxItem local:SettingService.Value="15" Content="Minecraft 芝士站（作者：awaEric233）" />
+                            <local:MyComboBoxItem local:SettingService.Value="16" Content="整合包推荐引擎（作者：CHMYGZ）" />
                         </local:MyComboBox>
                     </Grid>
                 </StackPanel>

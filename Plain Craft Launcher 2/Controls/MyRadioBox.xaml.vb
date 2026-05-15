@@ -49,12 +49,12 @@ Public Class MyRadioBox
             '自定义属性基础
             Dim IsChanged As Boolean = False
             If IsLoaded AndAlso Not value = Checked Then RaiseEvent PreviewChange(Me, New RouteEventArgs(user))
-            If Not value = Checked Then
+            If value <> Checked Then
                 SetValue(CheckedProperty, value)
                 IsChanged = True
             End If
 
-            '保证只有一个单选框选中
+            '保证最多只有一个单选框选中
             If Parent Is Nothing Then Return
             Dim RadioboxList As New List(Of MyRadioBox)
             Dim CheckedCount As Integer = 0
@@ -64,31 +64,26 @@ Public Class MyRadioBox
                     If Control.Checked Then CheckedCount += 1
                 End If
             Next
-            Select Case CheckedCount '判断选中情况
-                Case 0
-                    '没有任何单选框被选中，选择第一个
-                    RadioboxList(0).Checked = True
-                Case Is > 1
-                    '选中项目多于 1 个
-                    If Checked Then
-                        '如果本控件选中，则取消其他所有控件的选中
-                        For Each Control As MyRadioBox In RadioboxList
-                            If Control.Checked AndAlso Not Control.Equals(Me) Then Control.Checked = False
-                        Next
-                    Else
-                        '如果本控件未选中，则只保留第一个选中的控件
-                        Dim FirstChecked = False
-                        For Each Control As MyRadioBox In RadioboxList
-                            If Control.Checked Then
-                                If FirstChecked Then
-                                    Control.Checked = False '修改 Checked 会自动触发 Change 事件，所以不用额外触发
-                                Else
-                                    FirstChecked = True
-                                End If
+            If CheckedCount > 1 Then
+                If Checked Then
+                    '如果本控件选中，则取消其他所有控件的选中
+                    For Each Control As MyRadioBox In RadioboxList
+                        If Control.Checked AndAlso Not Control.Equals(Me) Then Control.Checked = False
+                    Next
+                Else
+                    '如果本控件未选中，则只保留第一个选中的控件
+                    Dim FirstChecked = False
+                    For Each Control As MyRadioBox In RadioboxList
+                        If Control.Checked Then
+                            If FirstChecked Then
+                                Control.Checked = False '修改 Checked 会自动触发 Change 事件，所以不用额外触发
+                            Else
+                                FirstChecked = True
                             End If
-                        Next
-                    End If
-            End Select
+                        End If
+                    Next
+                End If
+            End If
 
             If IsChanged Then
                 '触发事件
@@ -100,10 +95,11 @@ Public Class MyRadioBox
             End If
 
         Catch ex As Exception
-            Log(ex, "单选框勾选改变错误", NotifyLevel.AllUsers)
+            Logger.Error(ex, "单选框勾选改变错误", LogBehavior.Toast)
         End Try
     End Sub
     Private Sub SyncUI()
+        Cursor = If(Checked, Nothing, Cursors.Hand)
         If AniControlEnabled = 0 AndAlso IsLoaded Then '防止默认属性变更触发动画
             If Checked Then
                 '由无变有
@@ -175,7 +171,7 @@ Public Class MyRadioBox
     Private AllowMouseDown As Boolean = True
     Private Sub Radiobox_MouseUp() Handles Me.MouseLeftButtonUp
         If Not MouseDowned Then Return
-        Log("[Control] 按下单选框：" & Text)
+        Logger.Info($"按下单选框：{Text}")
         SetChecked(True, True)
         MouseDowned = False
         AniStart(AaColor(ShapeBorder, Ellipse.FillProperty, "ColorBrushHalfWhite", 100), "MyRadioBox Background " & Uuid)
@@ -202,6 +198,9 @@ Public Class MyRadioBox
     Private Const AnimationTimeOfMouseIn As Integer = 100 '鼠标指向动画长度
     Private Const AnimationTimeOfMouseOut As Integer = 200 '鼠标指向动画长度
     Private Const AnimationTimeOfCheck As Integer = 150 '勾选状态变更动画长度
+    Private Sub MyRadioBox_Loaded() Handles Me.Loaded
+        Cursor = If(Checked, Nothing, Cursors.Hand)
+    End Sub
     Private Sub Radiobox_IsEnabledChanged() Handles Me.IsEnabledChanged
         If Me.IsLoaded AndAlso AniControlEnabled = 0 Then '防止默认属性变更触发动画
             '有动画

@@ -49,9 +49,10 @@
                     <local:MyComboBox x:Name="ComboSearchLoader" Visibility="Collapsed" Grid.Row="2" Grid.Column="2" Margin="10,0,0,0">
                         <local:MyComboBoxItem Content="任意 Mod 加载器" IsSelected="True" Tag="0" />
                         <local:MyComboBoxItem Content="Forge" Tag="1" />
-                        <local:MyComboBoxItem Content="NeoForge" Tag="6" />
+                        <local:MyComboBoxItem Content="NeoForge" Tag="16" />
                         <local:MyComboBoxItem Content="Fabric" Tag="4" />
-                        <local:MyComboBoxItem Content="Quilt" Tag="5" />
+                        <local:MyComboBoxItem Content="Quilt" Tag="8" />
+                        <local:MyComboBoxItem Content="LiteLoader" Tag="2" />
                     </local:MyComboBox>
                     <TextBlock VerticalAlignment="Center" Grid.Column="4" Grid.Row="2" HorizontalAlignment="Left" Text="类型" Margin="0,0,18,0" />
                     <local:MyComboBox x:Name="ComboSearchTag" Grid.Column="5" Grid.Row="2" />

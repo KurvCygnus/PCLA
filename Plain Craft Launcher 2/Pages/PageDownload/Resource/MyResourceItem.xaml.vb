@@ -79,7 +79,7 @@
         If IsMouseDown Then
             RaiseEvent Click(sender, e)
             If e.Handled Then Return
-            Log("[Control] 按下资源工程列表项：" & LabTitle.Text)
+            Logger.Info($"按下资源工程列表项：{LabTitle.Text}")
         End If
     End Sub
     Private Sub MyResourceItem_Click(sender As MyResourceItem, e As EventArgs) Handles Me.Click
@@ -89,20 +89,20 @@
             For Each Card As MyCard In FrmDownloadResourceDetail.PanResults.Children
                 If Card.Title <> "" AndAlso Not Card.IsSwapped Then Titles.Add(Card.Title)
             Next
-            Log("[Resource] 记录当前已展开的卡片：" & String.Join("、", Titles))
+            Logger.Info($"记录当前已展开的卡片：{String.Join("、", Titles)}")
             FrmMain.PageCurrent.Additional(1) = Titles
         End If
         '打开详情页
         Dim TargetType As ResourceTypes
         Dim TargetInstance As String = Nothing
-        Dim TargetLoader As ModLoaderTypes = ModLoaderTypes.Any
+        Dim TargetLoader As ModLoaders = ModLoaders.None
         If FrmMain.PageCurrent.Page = FormMain.PageType.Download Then
             '从下载页进入
             Select Case FrmMain.PageCurrentSub
                 Case FormMain.PageSubType.DownloadMod
                     TargetType = ResourceTypes.Mod
                     TargetInstance = FrmDownloadMod.Content.Loader.Input.GameVersion
-                    TargetLoader = FrmDownloadMod.Content.Loader.Input.ModLoader
+                    TargetLoader = FrmDownloadMod.Content.Loader.Input.ModLoaders
                 Case FormMain.PageSubType.DownloadPack
                     TargetType = ResourceTypes.ModPack
                     TargetInstance = FrmDownloadPack.Content.Loader.Input.GameVersion

@@ -53,7 +53,7 @@
             PageChangeRun(PageGet(ID))
             PageID = ID
         Catch ex As Exception
-            Log(ex, "切换分页面失败（ID " & ID & "）", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"切换分页面失败（ID {ID}）")
         Finally
             AniControlEnabled -= 1
         End Try

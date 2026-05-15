@@ -80,7 +80,7 @@ Public Class ValidateRegex
         Me.ErrorDescription = ErrorDescription
     End Sub
     Public Overrides Function Validate(Str As String) As String
-        If Not RegexCheck(Str, Regex) Then Return ErrorDescription
+        If Not Str.RegexCheck(Regex) Then Return ErrorDescription
         Return ""
     End Function
 End Class
@@ -94,7 +94,7 @@ Public Class ValidateHttp
     End Sub '用于 XAML 初始化
     Public Overrides Function Validate(Str As String) As String
         If Str.EndsWithF("/") Then Str = Str.Substring(0, Str.Length - 1)
-        If Not RegexCheck(Str, "^(http[s]?)\://") Then Return "输入的网址无效！"
+        If Not Str.RegexCheck("^(http[s]?)\://") Then Return "输入的网址无效！"
         Return ""
     End Function
 End Class
@@ -247,7 +247,7 @@ Public Class ValidateFolderName
     Public Property Folder As String
     Public Property UseMinecraftCharCheck As Boolean = True
     Public Property IgnoreCase As Boolean = True
-    Private ReadOnly PathIgnore As IEnumerable(Of DirectoryInfo)
+    Private ReadOnly PathIgnore As IEnumerable(Of String)
     Public Sub New()
     End Sub
     Public Sub New(Folder As String, Optional UseMinecraftCharCheck As Boolean = True, Optional IgnoreCase As Boolean = True)
@@ -255,7 +255,7 @@ Public Class ValidateFolderName
         Me.IgnoreCase = IgnoreCase
         Me.UseMinecraftCharCheck = UseMinecraftCharCheck
         On Error Resume Next
-        PathIgnore = New DirectoryInfo(Folder).EnumerateDirectories
+        PathIgnore = DirectoryUtils.GetDirectories(Folder, True)
     End Sub
     Public Overrides Function Validate(Str As String) As String
         Try
@@ -277,19 +277,19 @@ Public Class ValidateFolderName
             Dim InvalidStrCheck As String = New ValidateExceptSame({"CON", "PRN", "AUX", "CLOCK$", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}, "文件夹名不可为 %！", True).Validate(Str)
             If InvalidStrCheck <> "" Then Return InvalidStrCheck
             '检查 NTFS 8.3 文件名（#4505）
-            If RegexCheck(Str, ".{2,}~\d") Then Return "文件夹名不能包含这一特殊格式！"
+            If Str.RegexCheck(".{2,}~\d") Then Return "文件夹名不能包含这一特殊格式！"
             '检查文件夹重名
             Dim Arr As New List(Of String)
             If PathIgnore IsNot Nothing Then
-                For Each Folder As DirectoryInfo In PathIgnore
-                    Arr.Add(Folder.Name)
+                For Each FolderPath In PathIgnore
+                    Arr.Add(PathUtils.GetLastPart(FolderPath))
                 Next
             End If
             Dim SameNameCheck = New ValidateExceptSame(Arr, "不可与现有文件夹重名！", IgnoreCase).Validate(Str)
             If Not SameNameCheck = "" Then Return SameNameCheck
             Return ""
         Catch ex As Exception
-            Log(ex, "检查文件夹名出错")
+            Logger.Warn(ex, "检查文件夹名出错")
             Return "错误：" & ex.Message
         End Try
     End Function
@@ -332,10 +332,10 @@ Public Class ValidateFileName
             Dim InvalidStrCheck As String = New ValidateExceptSame({"CON", "PRN", "AUX", "CLOCK$", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}, "文件名不可为 %！", True).Validate(Str)
             If InvalidStrCheck <> "" Then Return InvalidStrCheck
             '检查 NTFS 8.3 文件名（#4505）
-            If RegexCheck(Str, ".{2,}~\d") Then Return "文件名不能包含这一特殊格式！"
+            If Str.RegexCheck(".{2,}~\d") Then Return "文件名不能包含这一特殊格式！"
             '检查文件重名
             If ParentFolder IsNot Nothing Then
-                Dim DirInfo As New DirectoryInfo(ParentFolder)
+                Dim DirInfo = DirectoryUtils.GetInfo(ParentFolder)
                 If DirInfo.Exists Then
                     Dim SameNameCheck = New ValidateExceptSame(DirInfo.EnumerateFiles("*").Select(Function(f) f.Name),
                                                                "不可与现有文件重名！", IgnoreCase).Validate(Str)
@@ -346,7 +346,7 @@ Public Class ValidateFileName
             End If
             Return ""
         Catch ex As Exception
-            Log(ex, "检查文件名出错")
+            Logger.Warn(ex, "检查文件名出错")
             Return "错误：" & ex.Message
         End Try
     End Function
@@ -375,9 +375,10 @@ Public Class ValidateFolderPath
         If LengthCheck <> "" Then Return LengthCheck
         '检查开头
         If Str.StartsWithF("\\Mac\") Then GoTo Fin
-        For Each Drive As DriveInfo In My.Computer.FileSystem.Drives
-            If Str.Upper = Drive.Name Then Return ""
-            If Str.StartsWithF(Drive.Name, True) Then GoTo Fin
+        For Each Drive In Environment.GetLogicalDrives().Where(Function(p) DirectoryUtils.Exists(p))
+            Dim DriveName As String = Drive.Upper.First & ":\"
+            If Str.Upper = DriveName Then Return ""
+            If Str.StartsWithF(DriveName, True) Then GoTo Fin
         Next
         Return "文件夹路径头存在错误！"
 Fin:
@@ -399,7 +400,7 @@ Fin:
             Dim InvalidStrCheck As String = New ValidateExceptSame({"CON", "PRN", "AUX", "CLOCK$", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}, "文件夹名不可为 %！").Validate(SubStr)
             If Not InvalidStrCheck = "" Then Return InvalidStrCheck
             '检查 NTFS 8.3 文件名（#4505）
-            If RegexCheck(Str, ".{2,}~\d") Then Return "文件夹名不能包含这一特殊格式！"
+            If Str.RegexCheck(".{2,}~\d") Then Return "文件夹名不能包含这一特殊格式！"
         Next
         Return ""
     End Function

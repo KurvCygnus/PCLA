@@ -81,14 +81,14 @@
                                                 End Sub
                 NewItem.Buttons = {NewIconButton}
                 FrmSelectLeft.PanList.Children.Add(NewItem)
-                Log("[Minecraft] 有效的 Minecraft 文件夹：" & Folder.Name & " > " & Folder.Location)
+                Logger.Info($"有效的 Minecraft 文件夹：{Folder.Name} > {Folder.Location}")
             Next
 
             '标题文本
             FrmSelectLeft.PanList.Children.Add(New TextBlock With {.Text = "添加或导入", .Margin = New Thickness(13, 18, 5, 4), .Opacity = 0.6, .FontSize = 12})
 
             '确认创建按钮状态
-            If Not Directory.Exists(PathExeFolder & ".minecraft\") Then
+            If Not DirectoryUtils.Exists(PathExeFolder & ".minecraft\") Then
                 Dim ItemCreate As New MyListItem With {.IsScaleAnimationEnabled = False, .Type = MyListItem.CheckType.Clickable, .Title = "新建 .minecraft 文件夹", .Height = 34,
                     .ToolTip = "在 PCL 当前所在文件夹下创建新的 .minecraft 文件夹",
                     .LogoScale = 0.9,
@@ -138,7 +138,7 @@
             End If
 
         Catch ex As Exception
-            Log(ex, "构建 Minecraft 文件夹列表 UI 出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "构建 Minecraft 文件夹列表 UI 出错")
         Finally
             LoaderFolderRun(McInstanceListLoader, McFolderSelected, LoaderFolderRunType.RunOnUpdated, MaxDepth:=1, ExtraPath:="versions\") '刷新版本列表
         End Try
@@ -155,8 +155,8 @@
         End If
         Try
             '获取输入
-            NewFolder = SelectFolder()
-            If NewFolder = "" Then Return
+            NewFolder = Dialogs.SelectFolder("选择 Minecraft 文件夹", False).FirstOrDefault
+            If NewFolder Is Nothing Then Return
             If NewFolder.Contains("!") OrElse NewFolder.Contains(";") Then Hint("Minecraft 文件夹路径中不能含有感叹号或分号！", HintType.Red) : Return
             '要求输入显示名称
             Dim SplitedNames As String() = NewFolder.TrimEnd("\").Split("\")
@@ -168,7 +168,7 @@
             '添加文件夹
             AddFolder(NewFolder, NewName, True)
         Catch ex As Exception
-            Log(ex, "添加文件夹失败（" & NewFolder & "）", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"添加文件夹失败（{NewFolder}）")
         End Try
     End Sub
     ''' <summary>
@@ -190,15 +190,15 @@
                 End If
                 '检查实际的 Minecraft 文件夹位置（没有问题，或是在子文件夹中）
                 If Not CheckPermission(FolderPath & "versions\") Then
-                    For Each Folder As DirectoryInfo In New DirectoryInfo(FolderPath).GetDirectories
-                        If CheckPermission(Folder.FullName & "\versions\") Then
-                            FolderPath = Folder.FullName & "\"
+                    For Each Folder In DirectoryUtils.GetDirectories(FolderPath)
+                        If CheckPermission(Folder & "\versions\") Then
+                            FolderPath = Folder & "\"
                             Exit For
                         End If
                     Next
                 End If
                 '判断是否已经添加过，若添加过则直接修改自定义名
-                Dim Folders As New List(Of String)(Settings.Get("LaunchFolders").ToString.Split("|"))
+                Dim Folders As New List(Of String)(Settings.Get(Of String)("LaunchFolders").Split("|"))
                 Dim IsAdded As Boolean = False
                 Dim IsReplace As Boolean = False
                 For i = 0 To Folders.Count - 1
@@ -229,10 +229,10 @@
                 If ShowHint Then Hint("文件夹 " & DisplayName & " 已添加！", HintType.Green)
                 '检查是否为根目录整合包，自动关闭版本隔离
                 '1. 根目录中存在数个 Mod
-                Dim ModFolder As New DirectoryInfo(FolderPath & "mods\")
+                Dim ModFolder = DirectoryUtils.GetInfo(FolderPath & "mods\")
                 If Not (ModFolder.Exists AndAlso ModFolder.EnumerateFiles.Count >= 3) Then Return
                 '2. 版本数较少，可能为整合包
-                Dim VersionFolderInfo As New DirectoryInfo(FolderPath & "versions\")
+                Dim VersionFolderInfo = DirectoryUtils.GetInfo(FolderPath & "versions\")
                 If Not (VersionFolderInfo.Exists AndAlso VersionFolderInfo.EnumerateDirectories.Count <= 3) Then Return
                 '3. 能够找到可安装 Mod 的版本
                 For Each VersionFolder In VersionFolderInfo.EnumerateDirectories
@@ -240,15 +240,15 @@
                     Instance.Load()
                     If Not Instance.Modable Then Continue For
                     '4. 该版本的隔离文件夹下不存在 mods
-                    Dim ModIndieFolder As New DirectoryInfo(Instance.PathVersion & "mods\")
+                    Dim ModIndieFolder = DirectoryUtils.GetInfo(Instance.PathVersion & "mods\")
                     If ModIndieFolder.Exists AndAlso ModIndieFolder.EnumerateFiles.Any Then Return
                     '满足以上全部条件则视为根目录整合包
                     Settings.Set("VersionArgumentIndie", 2, Instance:=Instance)
                     Settings.Set("VersionArgumentIndieV2", False, Instance:=Instance)
-                    Log("[Setup] 已自动关闭单版本隔离：" & Instance.Name, NotifyLevel.DebugModeOnly)
+                    Logger.Warn($"已自动关闭单版本隔离：{Instance.Name}")
                 Next
             Catch ex As Exception
-                Log(ex, "向文件夹列表中添加新文件夹失败", NotifyLevel.MsgBoxAndFeedback)
+                Logger.Error(ex, "向文件夹列表中添加新文件夹失败")
             End Try
         End Sub)
     End Sub
@@ -265,11 +265,11 @@
     End Sub
     Public Shared Sub CreateMcFolderInCurrentPath()
         McFolderSelected = PathExeFolder & ".minecraft\"
-        If Not Directory.Exists(McFolderSelected) Then
+        If Not DirectoryUtils.Exists(McFolderSelected) Then
             DirectoryUtils.Create(McFolderSelected & "versions\")
             McFolderLauncherProfilesJsonCreate(McFolderSelected)
         End If
-        AddFolder(McFolderSelected, GetFolderNameFromPath(PathExeFolder), False)
+        AddFolder(McFolderSelected, PathUtils.GetLastPart(PathExeFolder), False)
     End Sub
 
     '右键菜单
@@ -282,12 +282,10 @@
                 Select Case MyMsgBox("是否需要清理 PCL 在该文件夹中的配置文件？" & vbCrLf & "这包括各个版本的独立设置（如自定义图标、第三方登录配置）等，对游戏本身没有影响。", "配置文件清理", "删除", "保留", "取消")
                     Case 1
                         '删除配置文件
-                        If File.Exists(Target.Location & "PCL.ini") Then File.Delete(Target.Location & "PCL.ini")
-                        If Directory.Exists(Target.Location & "versions\") Then
-                            For Each InstanceInfo In New DirectoryInfo(Target.Location & "versions\").EnumerateDirectories
-                                If Directory.Exists(InstanceInfo.FullName & "\PCL\") Then DeleteDirectory(InstanceInfo.FullName & "\PCL\", True)
-                            Next
-                        End If
+                        FileUtils.Delete(Target.Location & "PCL.ini")
+                        For Each Instance In DirectoryUtils.GetDirectories(Target.Location & "versions\", True)
+                            DirectoryUtils.Delete(Path.Combine(Instance, "PCL"), True)
+                        Next
                     Case 2
                         '不删除
                     Case 3
@@ -299,7 +297,7 @@
             Hint(If(Target.Type = McFolder.Types.Custom, "文件夹 " & DeletedName & " 已从列表中移除！", "文件夹名称已复原！"), HintType.Green)
             McFolderListLoader.Start(IsForceRestart:=True)
         Catch ex As Exception
-            Log(ex, "从列表中移除游戏文件夹失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "从列表中移除游戏文件夹失败")
         End Try
     End Sub
     Public Sub Delete_Click(sender As Object, e As RoutedEventArgs)
@@ -320,11 +318,11 @@
             '删除文件夹
             Try
                 Hint("正在" & DeleteText & "文件夹 " & Target.Name & "！", HintType.Blue)
-                DeleteDirectory(Target.Location)
+                DirectoryUtils.Delete(Target.Location)
                 If DeleteText = "清空" Then DirectoryUtils.Create(Target.Location)
                 Hint("已" & DeleteText & "文件夹 " & Target.Name & "！", HintType.Green)
             Catch ex As Exception
-                Log(ex, DeleteText & "文件夹 " & Target.Name & " 失败", NotifyLevel.AllUsers)
+                Logger.Error(ex, $"{DeleteText}文件夹 {Target.Name} 失败", LogBehavior.Toast)
             Finally
                 '刷新列表
                 McFolderListLoader.Start(IsForceRestart:=True)
@@ -337,7 +335,7 @@
     ''' </summary>
     Private Shared Function RemoveFolderFromSetup(Target As McFolder) As String
         Dim DeletedName As String = Nothing
-        Dim Folders = Settings.Get("LaunchFolders").ToString.Split({"|"c}, StringSplitOptions.RemoveEmptyEntries).ToList
+        Dim Folders = Settings.Get(Of String)("LaunchFolders").Split("|"c, True).ToList
         For Each Folder In Folders.ToList
             If Not Folder.EndsWithF(Target.Location) Then Continue For
             DeletedName = Folder.BeforeFirst(">")
@@ -371,7 +369,7 @@
                               New ObjectModel.Collection(Of Validate) From {New ValidateNullOrWhiteSpace, New ValidateLength(1, 30), New ValidateExcept({">", "|"})})
             If String.IsNullOrWhiteSpace(NewName) Then Return
             '修改自定义名
-            Dim Folders As New List(Of String)(Settings.Get("LaunchFolders").ToString.Split("|"))
+            Dim Folders As New List(Of String)(Settings.Get(Of String)("LaunchFolders").Split("|"))
             Dim IsAdded As Boolean = False
             For i = 0 To Folders.Count - 1
                 Dim FolderCurrent As String = Folders(i)
@@ -394,7 +392,7 @@
             Settings.Set("LaunchFolders", Folders.Join("|"))
             McFolderListLoader.Start(IsForceRestart:=True)
         Catch ex As Exception
-            Log(ex, "重命名文件夹失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "重命名文件夹失败")
         End Try
     End Sub
 

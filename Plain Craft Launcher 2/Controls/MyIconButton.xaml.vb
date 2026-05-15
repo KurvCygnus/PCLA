@@ -54,7 +54,7 @@ Public Class MyIconButton
     Private IsMouseDown As Boolean = False
     Private Sub Button_MouseUp(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonUp
         If Not IsMouseDown Then Return
-        Log("[Control] 按下图标按钮" & If(String.IsNullOrEmpty(Name), "", "：" & Name))
+        Logger.Info($"按下图标按钮{If(String.IsNullOrEmpty(Name), "", "：" & Name)}")
         RaiseEvent Click(sender, e)
         e.Handled = True
         Button_MouseUp()
@@ -160,7 +160,7 @@ Public Class MyIconButton
 
             End If
         Catch ex As Exception
-            Log(ex, "刷新图标按钮动画状态出错")
+            Logger.Warn(ex, "刷新图标按钮动画状态出错")
         End Try
     End Sub
 

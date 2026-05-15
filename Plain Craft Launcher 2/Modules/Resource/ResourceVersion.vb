@@ -36,10 +36,9 @@ Public Class ResourceVersion
     ''' </summary>
     Public Version As String
     ''' <summary>
-    ''' 支持的 Mod 加载器列表。
-    ''' 可能为空列表，不为 Nothing。
+    ''' 所有支持的 Mod 加载器列表。可能为 <see cref="ModLoaders.None"/>。
     ''' </summary>
-    Public Loaders As List(Of ModLoaderTypes)
+    Public ModLoaders As ModLoaders = ModLoaders.None
     ''' <summary>
     ''' 支持的游戏版本列表。类型包括："26.1.5"，"26.1"，"26.1 预览版"，"1.18.5"，"1.18"，"1.18 预览版"，"21w15a"，"未知版本"。
     ''' </summary>
@@ -158,11 +157,10 @@ Public Class ResourceVersion
                     .GameVersions = New List(Of String) From {"未知版本"}
                 End If
                 'ModLoaders
-                .Loaders = New List(Of ModLoaderTypes)
-                If RawVersions.Contains("forge") Then .Loaders.Add(ModLoaderTypes.Forge)
-                If RawVersions.Contains("fabric") Then .Loaders.Add(ModLoaderTypes.Fabric)
-                If RawVersions.Contains("quilt") Then .Loaders.Add(ModLoaderTypes.Quilt)
-                If RawVersions.Contains("neoforge") Then .Loaders.Add(ModLoaderTypes.NeoForge)
+                .ModLoaders = ModLoaders.None
+                For Each Loader In EnumUtils.GetAllFlags(Of ModLoaders)()
+                    If RawVersions.Contains(Loader.ToString.Lower) Then .ModLoaders = .ModLoaders Or Loader
+                Next
 #End Region
             Else
 #Region "Modrinth"
@@ -183,14 +181,13 @@ Public Class ResourceVersion
                 'Loaders
                 '结果可能混杂着 Mod、数据包和服务端插件
                 Dim RawLoaders As List(Of String) = Data("loaders").Select(Function(v) v.ToString).ToList
-                .Loaders = New List(Of ModLoaderTypes)
+                .ModLoaders = ModLoaders.None
                 If .ResourceType.HasFlag(ResourceTypes.Mod) OrElse .ResourceType.HasFlag(ResourceTypes.DataPack) Then
                     If RawLoaders.Intersect({"bukkit", "folia", "paper", "purpur", "spigot"}).Any() Then .ResourceType = ResourceTypes.Plugin 'Veinminer Enchantment 同时支持服务端与 Fabric
                     If RawLoaders.Contains("datapack") Then .ResourceType = ResourceTypes.DataPack
-                    If RawLoaders.Contains("forge") Then .Loaders.Add(ModLoaderTypes.Forge) : .ResourceType = ResourceTypes.Mod
-                    If RawLoaders.Contains("neoforge") Then .Loaders.Add(ModLoaderTypes.NeoForge) : .ResourceType = ResourceTypes.Mod
-                    If RawLoaders.Contains("fabric") Then .Loaders.Add(ModLoaderTypes.Fabric) : .ResourceType = ResourceTypes.Mod
-                    If RawLoaders.Contains("quilt") Then .Loaders.Add(ModLoaderTypes.Quilt) : .ResourceType = ResourceTypes.Mod
+                    For Each Loader As ModLoaders In EnumUtils.GetAllFlags(Of ModLoaders)()
+                        If RawLoaders.Contains(Loader.ToString.Lower) Then .ModLoaders = .ModLoaders Or Loader : .ResourceType = ResourceTypes.Mod
+                    Next
                 Else
                     '使用传入的类别，不作修改（#8377）
                 End If
@@ -212,8 +209,8 @@ Public Class ResourceVersion
                 ElseIf .GameVersions.Count > 1 Then
                     .GameVersions = .GameVersions.SortByComparison(AddressOf CompareVersionGE).ToList
                     If .ResourceType = ResourceTypes.ModPack Then .GameVersions = New List(Of String) From { .GameVersions(0)} '整合包理应只 “支持” 一个版本
-                ElseIf RawVersions.Any(Function(v) RegexCheck(v, "[0-9]{2}w[0-9]{2}[a-z]")) Then
-                    .GameVersions = RawVersions.Where(Function(v) RegexCheck(v, "[0-9]{2}w[0-9]{2}[a-z]")).ToList
+                ElseIf RawVersions.Any(Function(v) v.RegexCheck("[0-9]{2}w[0-9]{2}[a-z]")) Then
+                    .GameVersions = RawVersions.Where(Function(v) v.RegexCheck("[0-9]{2}w[0-9]{2}[a-z]")).ToList
                 Else
                     .GameVersions = New List(Of String) From {"未知版本"}
                 End If
@@ -230,7 +227,7 @@ Public Class ResourceVersion
         Dim TargetProject = ResourceProject.FromProjectId(ProjectId, Platform)
         '获取项目对象的文件列表
         If Not ProjectFilesCache.ContainsKey(ProjectId) Then
-            Log("[Resource] 开始获取项目版本列表：" & ProjectId)
+            Logger.Info($"开始获取项目版本列表：{ProjectId}")
             Dim ResultJsonArray As JArray = Nothing
             If Platform = ResourcePlatforms.CurseForge Then
                 For RetryCount As Integer = 0 To 2
@@ -247,10 +244,10 @@ Public Class ResourceVersion
                         ResultJsonArray = ResultJson("data")
                         Exit For
                     ElseIf RetryCount < 2 Then
-                        Log($"[Resource] CurseForge 返回的资源版本列表存在缺失，即将进行第 {RetryCount + 1} 次重试", NotifyLevel.DebugModeOnly) '#6224
-                        Log($"[Resource] 返回的原始内容如下：{vbCrLf}{ResultJson}")
+                        Logger.Warn($"CurseForge 返回的资源版本列表存在缺失，即将进行第 {RetryCount + 1} 次重试") '#6224
+                        Logger.Info($"返回的原始内容如下：{vbCrLf}{ResultJson}")
                     Else
-                        Log($"[Resource] CurseForge 返回的资源版本列表存在缺失，返回的原始内容如下：{vbCrLf}{ResultJson}")
+                        Logger.Info($"CurseForge 返回的资源版本列表存在缺失，返回的原始内容如下：{vbCrLf}{ResultJson}")
                         Throw New Exception("CurseForge 返回的资源版本列表存在缺失")
                     End If
                 Next
@@ -266,7 +263,7 @@ Public Class ResourceVersion
         '加载前置信息
         Dim Dependencies As List(Of String) = Result.SelectMany(Function(f) f.RawDependencies).Distinct().ToList
         If Dependencies.Any Then
-            Log($"[Resource] 项目 {ProjectId} 中需要加载的前置：{Dependencies.Join("，")}")
+            Logger.Info($"项目 {ProjectId} 中需要加载的前置：{Dependencies.Join("，")}")
             For Each DependencyProject In ResourceProject.FromProjectIds(Dependencies, TargetProject.Platform)
                 For Each File In Result
                     If File.RawDependencies.Contains(DependencyProject.Id) AndAlso DependencyProject.Id <> ProjectId AndAlso Not File.Dependencies.Contains(DependencyProject.Id) Then
@@ -290,16 +287,16 @@ Public Class ResourceVersion
     Public Shared Function FromCacheJson(Data As JObject) As ResourceVersion
         Dim Result As New ResourceVersion
         With Result
-            .ResourceType = CType(Data("ResourceType").ToObject(Of Integer), ResourceTypes)
+            .ResourceType = Data("ResourceType").ToObject(Of ResourceTypes)
             .Id = Data("Id").ToString
             .Display = Data("DisplayName").ToString
             If Data.ContainsKey("Version") Then .Version = Data("Version").ToString
             .ReleaseDate = Data("ReleaseDate").ToObject(Of Date)
             .DownloadCount = Data("DownloadCount").ToObject(Of Integer)
-            .ReleaseType = CType(Data("ReleaseType").ToObject(Of Integer), ReleaseTypes)
+            .ReleaseType = Data("ReleaseType").ToObject(Of ReleaseTypes)
             If Data.ContainsKey("FileName") Then .FileName = Data("FileName").ToString
             If Data.ContainsKey("DownloadUrls") Then .DownloadUrls = Data("DownloadUrls").ToObject(Of List(Of String))
-            If Data.ContainsKey("ModLoaders") Then .Loaders = Data("ModLoaders").ToObject(Of List(Of ModLoaderTypes))
+            If Data.ContainsKey("ModLoaders") Then .ModLoaders = Data("ModLoaders").ToObject(Of ModLoaders)
             If Data.ContainsKey("Size") Then .Size = Data("Size").ToObject(Of Integer)
             If Data.ContainsKey("Hash") Then .Hash = Data("Hash").ToString
             If Data.ContainsKey("GameVersions") Then .GameVersions = Data("GameVersions").ToObject(Of List(Of String))
@@ -320,7 +317,7 @@ Public Class ResourceVersion
             .Add("DisplayName", Display)
             .Add("ReleaseDate", ReleaseDate)
             .Add("DownloadCount", DownloadCount)
-            .Add("ModLoaders", New JArray(Loaders.Select(Function(m) CInt(m))))
+            .Add("ModLoaders", ModLoaders)
             .Add("GameVersions", New JArray(GameVersions))
             .Add("ReleaseType", CInt(ReleaseType))
             If FileName IsNot Nothing Then .Add("FileName", FileName)
@@ -383,9 +380,34 @@ Public Class ResourceVersion
     ''' 获取下载信息。
     ''' </summary>
     ''' <param name="LocalFileOrFolder">目标本地文件夹，或完整的文件路径。会自动判断类型。</param>
-    Public Function ToNetFile(LocalFileOrFolder As String) As NetFile
-        Return New NetFile(DownloadUrls, LocalFileOrFolder & If(LocalFileOrFolder.EndsWithF("\"), FileName, ""), New FileChecker(Hash:=Hash, ActualSize:=Size), SimulateBrowserHeaders:=True)
+    Public Function ToNetFile(LocalFileOrFolder As String,
+        Optional TrackDownloadReason As DownloadReason? = Nothing, Optional TrackGameVersion As String = Nothing, Optional TrackLoader As ModLoaders = ModLoaders.None) As NetFile
+        Return New NetFile(
+            ParseModrinthTrackArguments(DownloadUrls, TrackDownloadReason, TrackGameVersion, TrackLoader),
+            LocalFileOrFolder & If(LocalFileOrFolder.EndsWithF("\"), FileName, ""),
+            New FileChecker(Hash:=Hash, ActualSize:=Size),
+            SimulateBrowserHeaders:=True)
     End Function
+    ''' <summary>
+    ''' 添加 Modrinth 追踪参数。
+    ''' </summary>
+    Public Shared Iterator Function ParseModrinthTrackArguments(Urls As List(Of String), Optional TrackDownloadReason As DownloadReason? = Nothing, Optional TrackGameVersion As String = Nothing, Optional TrackLoader As ModLoaders = ModLoaders.None) As IEnumerable(Of String)
+        Dim Arguments As New Dictionary(Of String, String)
+        If TrackDownloadReason IsNot Nothing Then Arguments.Add("mr_download_reason", TrackDownloadReason.ToString.Lower)
+        If TrackGameVersion IsNot Nothing Then Arguments.Add("mr_game_version", TrackGameVersion)
+        If TrackLoader.Flags.Any Then Arguments.Add("mr_loader", TrackLoader.Flags.First.ToString.Lower)
+        Dim Argument = Arguments.Select(Function(a) $"{a.Key}={a.Value}").Join("&")
+        For Each Url In Urls
+            If Not Url.ContainsIgnoreCase("cdn.modrinth.com/") Then Yield Url
+            Yield $"{Url}{If(Url.Contains("?"), "&", "?")}{Argument}"
+        Next
+    End Function
+    Public Enum DownloadReason
+        Standalone
+        Dependency
+        ModPack
+        Update
+    End Enum
     ''' <summary>
     ''' 重新整理 CurseForge 的下载地址。
     ''' </summary>

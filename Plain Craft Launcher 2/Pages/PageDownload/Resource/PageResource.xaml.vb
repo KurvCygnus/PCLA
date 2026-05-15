@@ -74,7 +74,7 @@ Public Class PageResource
     Public Shared TargetName As String = Nothing
 
     '在点击 MyResourceItem 时会获取 Loader 的输入，以使资源详情页面可以应用相同的筛选项
-    Public Loader = ResourceSearcher.GetLoader(AddressOf LoaderInput)
+    Public Loader As LoaderTask(Of ResourceSearcher.SearchRequest, Integer) = ResourceSearcher.GetLoader(AddressOf LoaderInput)
 
     Private Sub PageResource_Loaded(sender As Object, e As EventArgs) Handles Me.Loaded
         Static IsFirstLoaded As Boolean = False
@@ -126,7 +126,7 @@ Public Class PageResource
             .SearchText = TextSearchName.Text
             .GameVersion = GameVersion
             .Tag = ComboSearchTag.SelectedItem.Tag
-            .ModLoader = If(PageType = ResourceTypes.Mod, Val(ComboSearchLoader.SelectedItem.Tag), ModLoaderTypes.Any)
+            .ModLoaders = If(PageType = ResourceTypes.Mod, Val(ComboSearchLoader.SelectedItem.Tag), ModLoaders.None)
             .Sources = CType(Val(ComboSearchSource.SelectedItem.Tag), ResourcePlatforms)
         End With
         Return Request
@@ -144,14 +144,14 @@ Public Class PageResource
     '结果 UI 化
     Private Sub Load_OnFinish()
         Try
-            Log($"[Resource] 开始可视化{TypeNameSpaced}列表，已储藏 {Storage.Results.Count} 个结果，当前在第 {Page + 1} 页")
+            Logger.Info($"开始可视化{TypeNameSpaced}列表，已储藏 {Storage.Results.Count} 个结果，当前在第 {Page + 1} 页")
             '列表项
             PanProjects.Children.Clear()
             Dim Index As Integer = Math.Min(Page * PAGE_SIZE, Storage.Results.Count - 1)
             For Each Result In Storage.Results.GetRange(Index, Math.Min(Storage.Results.Count - Index, PAGE_SIZE))
                 PanProjects.Children.Add(Result.ToResourceItem(
                     ShowMcVersionDesc:=Loader.Input.GameVersion Is Nothing,
-                    ShowLoaderDesc:=Loader.Input.ModLoader = ModLoaderTypes.Any AndAlso (PageType = ResourceTypes.Mod OrElse PageType = ResourceTypes.ModPack)))
+                    ShowLoaderDesc:=Loader.Input.ModLoaders = ModLoaders.None AndAlso (PageType = ResourceTypes.Mod OrElse PageType = ResourceTypes.ModPack)))
             Next
             '页码
             CardPages.Visibility = If(Storage.Results.Count > 40 OrElse
@@ -177,7 +177,7 @@ Public Class PageResource
             '强制返回顶部
             ScrollToTop()
         Catch ex As Exception
-            Log(ex, $"可视化{TypeNameSpaced}列表出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"可视化{TypeNameSpaced}列表出错")
         End Try
     End Sub
 
@@ -188,7 +188,7 @@ Public Class PageResource
                 Dim ErrorMessage As String = ""
                 If Loader.Error IsNot Nothing Then ErrorMessage = Loader.Error.Message
                 If ErrorMessage.Contains("不是有效的 json 文件") Then
-                    Log($"[Download] 下载的{TypeNameSpaced}列表 json 文件损坏，已自动重试", NotifyLevel.DebugModeOnly)
+                    Logger.Warn($"下载的{TypeNameSpaced}列表 json 文件损坏，已自动重试")
                     CType(Parent, MyPageRight).PageLoaderRestart()
                 End If
         End Select
@@ -208,7 +208,7 @@ Public Class PageResource
         CardPages.IsEnabled = False
         Page = NewPage
         FrmMain.BackToTop()
-        Log($"[Download] {TypeName}：切换到第 {Page + 1} 页")
+        Logger.Info($"{TypeName}：切换到第 {Page + 1} 页")
         RunInThread(
         Sub()
             Thread.Sleep(100) '等待向上滚的动画结束

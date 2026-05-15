@@ -27,10 +27,10 @@
             UpdateRamType()
             UpdateJavaComboBox()
         Catch ex As NullReferenceException
-            Log(ex, "启动设置项存在异常，已被自动重置", NotifyLevel.MsgBox)
+            Logger.Error(ex, "启动设置项存在异常，已被自动重置", LogBehavior.Alert)
             Reset()
         Catch ex As Exception
-            Log(ex, "重载启动设置时出错", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "重载启动设置时出错")
         End Try
     End Sub
     Public Sub Reset()
@@ -42,7 +42,7 @@
             JavaSearchLoader.Start(IsForceRestart:=True)
             Hint("已初始化启动设置！", HintType.Green)
         Catch ex As Exception
-            Log(ex, "初始化启动设置失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "初始化启动设置失败", LogBehavior.Alert)
         End Try
         Refresh()
     End Sub
@@ -57,7 +57,7 @@
     Private Sub RadioSkinType3_Check(sender As Object, e As RouteEventArgs) Handles RadioSkinType4.PreviewCheck
         If Not (AniControlEnabled = 0 AndAlso e.RaiseByMouse) Then Return
         '已有图片则不再选择
-        If File.Exists(PathAppdata & "CustomSkin.png") Then Return
+        If FileUtils.Exists(PathAppdata & "CustomSkin.png") Then Return
         '没有图片则要求选择
         Dim SkinInfo As McSkinInfo = McSkinSelect()
         If Not SkinInfo.IsVaild Then
@@ -70,9 +70,8 @@
     '返回是否成功改变
     Private Function ChangeSkin(SkinInfo As McSkinInfo) As Boolean
         Try
-            '拷贝文件
-            File.Delete(PathAppdata & "CustomSkin.png")
-            CopyFile(SkinInfo.LocalFile, PathAppdata & "CustomSkin.png")
+            '复制文件
+            FileUtils.Copy(SkinInfo.LocalFile, PathAppdata & "CustomSkin.png")
             '将单层皮肤扩展到双层
             Dim Bitmap As New MyBitmap(PathAppdata & "CustomSkin.png")
             If Bitmap.Pic.Width = 64 AndAlso Bitmap.Pic.Height = 32 Then
@@ -81,15 +80,15 @@
                 Using g As System.Drawing.Graphics = System.Drawing.Graphics.FromImage(NewBitmap)
                     g.DrawImageUnscaled(Img, New System.Drawing.Point(0, 0))
                 End Using
-                File.Delete(PathAppdata & "CustomSkin.png")
+                FileUtils.Delete(PathAppdata & "CustomSkin.png")
                 NewBitmap.Save(PathAppdata & "CustomSkin.png")
             End If
             '更新设置
             Settings.Set("LaunchSkinSlim", SkinInfo.IsSlim)
-            ChangeSkin = True
+            Return True
         Catch ex As Exception
-            Log(ex, "改变离线皮肤失败", NotifyLevel.MsgBox)
-            ChangeSkin = False
+            Logger.Error(ex, "改变离线皮肤失败", LogBehavior.Alert)
+            Return False
         Finally
             '设置当前显示
             PageLaunchLeft.SkinLegacy.Start(IsForceRestart:=True)
@@ -97,11 +96,11 @@
     End Function
     Private Sub BtnSkinDelete_Click(sender As Object, e As EventArgs) Handles BtnSkinDelete.Click
         Try
-            File.Delete(PathAppdata & "CustomSkin.png")
+            FileUtils.Delete(PathAppdata & "CustomSkin.png")
             RadioSkinType0.SetChecked(True, True)
             Hint("离线皮肤已清空！", HintType.Green)
         Catch ex As Exception
-            Log(ex, "清空离线皮肤失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "清空离线皮肤失败", LogBehavior.Alert)
         End Try
     End Sub
     Private Sub BtnSkinSave_Click(sender As Object, e As EventArgs) Handles BtnSkinSave.Click
@@ -115,7 +114,7 @@
         PageLaunchLeft.SkinLegacy.Start()
         '设置 UI 改变
         If FrmSetupLaunch Is Nothing Then Return
-        Select Case Settings.Get("LaunchSkinType")
+        Select Case Settings.Get(Of Integer)("LaunchSkinType")
             Case 0, 1, 2 '默认
                 FrmSetupLaunch.PanSkinID.Visibility = Visibility.Collapsed
                 FrmSetupLaunch.PanSkinChange.Visibility = Visibility.Collapsed
@@ -135,7 +134,7 @@
 
     Public Shared Sub UpdateRamType()
         If FrmSetupLaunch?.SliderRamCustom Is Nothing Then Return
-        FrmSetupLaunch.SliderRamCustom.IsEnabled = Settings.Get("LaunchRamType") = 1
+        FrmSetupLaunch.SliderRamCustom.IsEnabled = Settings.Get(Of Integer)("LaunchRamType") = 1
     End Sub
 
     ''' <summary>
@@ -278,7 +277,7 @@
         '------------------------------------------
 
         Dim RamGive As Double
-        If Settings.Get("LaunchRamType") = 0 Then
+        If Settings.Get(Of Integer)("LaunchRamType") = 0 Then
             '自动配置
             Dim RamAvailable As Double = Math.Round(My.Computer.Info.AvailablePhysicalMemory / 1024 / 1024 / 1024 * 10) / 10
             '确定需求的内存值
@@ -289,7 +288,7 @@
             If Instance IsNot Nothing AndAlso Not Instance.IsLoaded Then Instance.Load()
             If Instance IsNot Nothing AndAlso Instance.Modable Then
                 '可安装 Mod 的版本
-                Dim ModDir As New DirectoryInfo(Instance.PathIndie & "mods\")
+                Dim ModDir = DirectoryUtils.GetInfo(Instance.PathIndie & "mods\")
                 Dim ModCount As Integer = If(ModDir.Exists, ModDir.GetFiles.Count(Function(f) {".jar", ".zip", ".litemod"}.Contains(f.Extension.Lower)), 0)
                 RamMininum = 0.5 + ModCount / 150
                 RamTarget1 = 1.5 + ModCount / 90
@@ -334,7 +333,7 @@ PreFin:
             RamGive = Math.Round(Math.Max(RamGive, RamMininum), 1)
         Else
             '手动配置
-            Dim Value As Integer = Settings.Get("LaunchRamCustom")
+            Dim Value = Settings.Get(Of Integer)("LaunchRamCustom")
             If Value <= 12 Then
                 RamGive = Value * 0.1 + 0.3
             ElseIf Value <= 25 Then
@@ -359,10 +358,10 @@ PreFin:
         If ComboArgumentJava Is Nothing Then Return
         '初始化列表
         ComboArgumentJava.Items.Clear()
-        ComboArgumentJava.Items.Add(New MyComboBoxItem With {.Content = "自动选择合适的 Java", .Tag = "自动选择"})
+        ComboArgumentJava.Items.Add(New MyComboBoxItem With {.Content = "自动选择（推荐）", .Tag = "自动选择"})
         '更新列表
         Dim SelectedItem As MyComboBoxItem = Nothing
-        Dim SelectedBySetup As String = Settings.Get("LaunchArgumentJavaSelect")
+        Dim SelectedBySetup As String = Settings.Get(Of String)("LaunchArgumentJavaSelect")
         Try
             For Each Java In JavaList.ToList().OrderByDescending(Function(v) v.MajorVersion)
                 Dim ListItem = New MyComboBoxItem With {.Content = Java.ToString, .ToolTip = Java.PathFolder, .Tag = Java}
@@ -374,7 +373,7 @@ PreFin:
             Next
         Catch ex As Exception
             Settings.Set("LaunchArgumentJavaSelect", "")
-            Log(ex, "更新设置 Java 下拉框失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "更新设置 Java 下拉框失败")
         End Try
         '更新选择项
         If SelectedItem Is Nothing AndAlso JavaList.Any Then SelectedItem = ComboArgumentJava.Items(0) '选中 “自动选择”
@@ -403,11 +402,11 @@ PreFin:
         If "自动选择".Equals(SelectedJava) Then
             '选择 “自动”
             Settings.Set("LaunchArgumentJavaSelect", "")
-            Log("[Java] 修改 Java 选择设置：自动选择")
+            Logger.Info("修改 Java 选择设置：自动选择")
         Else
             '选择指定项
             Settings.Set("LaunchArgumentJavaSelect", CType(SelectedJava.ToJson(), JObject).ToString(Newtonsoft.Json.Formatting.None))
-            Log("[Java] 修改 Java 选择设置：" & SelectedJava.ToString)
+            Logger.Info($"修改 Java 选择设置：{SelectedJava}")
         End If
         RefreshRam(True)
     End Sub
@@ -419,16 +418,16 @@ PreFin:
             Return
         End If
         '选择 Java
-        Dim JavaSelected As String = SelectFile("javaw.exe|javaw.exe", "选择 bin 文件夹中的 javaw.exe 文件")
-        If JavaSelected = "" Then Return
-        JavaSelected = GetPathFromFullPath(JavaSelected)
+        Dim JavaSelected As String = Dialogs.SelectFile("选择 bin 文件夹中的 javaw.exe 文件", False, filter:={({"exe"}, "javaw.exe")}).FirstOrDefault()
+        If String.IsNullOrEmpty(JavaSelected) Then Return
+        JavaSelected = PathUtils.AddSlashSuffix(PathUtils.RemoveLastPart(JavaSelected))
         Try
             '验证 Java 可用
             Dim NewEntry As New JavaEntry(JavaSelected, True)
             NewEntry.Check()
             '加入列表
             Dim JavaNewList As New JArray From {NewEntry.ToJson}
-            For Each JsonEntry In GetJson(Settings.Get("LaunchArgumentJavaAll"))
+            For Each JsonEntry In GetJson(Settings.Get(Of String)("LaunchArgumentJavaAll"))
                 Dim Entry = JavaEntry.FromJson(JsonEntry)
                 If Entry.PathFolder = NewEntry.PathFolder Then Continue For
                 JavaNewList.Add(JsonEntry)
@@ -438,7 +437,7 @@ PreFin:
             JavaSearchLoader.Start(IsForceRestart:=True)
             Hint("已将该 Java 加入 Java 列表！", HintType.Green)
         Catch ex As Exception
-            Log(ex, "该 Java 存在异常，无法使用", NotifyLevel.MsgBox, "异常的 Java")
+            Logger.Error(ex, "该 Java 存在异常，无法使用", LogBehavior.Alert)
             Return
         End Try
     End Sub
@@ -488,7 +487,7 @@ PreFin:
         If Not CheckArgumentRam.Checked Then Return
         If MyMsgBox("内存优化会显著延长启动耗时，建议仅在内存不足时开启。" & vbCrLf &
                     "如果你在使用机械硬盘，这还可能导致一小段时间的严重卡顿。" &
-                    If(IsAdmin(), "", $"{vbCrLf}{vbCrLf}每次启动游戏，PCL 都需要申请管理员权限以进行内存优化。{vbCrLf}若想自动授予权限，可以右键 PCL，打开 属性 → 兼容性 → 以管理员身份运行此程序。"),
+                    If(SystemUtils.HasAdminRole(), "", $"{vbCrLf}{vbCrLf}每次启动游戏，PCL 都需要申请管理员权限以进行内存优化。{vbCrLf}若想自动授予权限，可以右键 PCL，打开 属性 → 兼容性 → 以管理员身份运行此程序。"),
                     "提醒", "确定", "取消") = 2 Then
             CheckArgumentRam.Checked = False
         End If

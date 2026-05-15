@@ -63,7 +63,7 @@ Public Class MySlider
                 If AniControlEnabled = 0 Then RaiseEvent Change(Me, False)
 
             Catch ex As Exception
-                Log(ex, "滑动条进度改变出错", NotifyLevel.AllUsers)
+                Logger.Error(ex, "滑动条进度改变出错", LogBehavior.Toast)
             End Try
         End Set
     End Property
@@ -156,7 +156,7 @@ Public Class MySlider
             End If
 
         Catch ex As Exception
-            Log(ex, "滑动条颜色改变出错")
+            Logger.Warn(ex, "滑动条颜色改变出错")
         End Try
     End Sub
 

@@ -8,7 +8,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>PCL</RootNamespace>
     <AssemblyName>Plain Craft Launcher 2</AssemblyName>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <MyType>Custom</MyType>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <TargetFrameworkProfile>
@@ -170,11 +170,6 @@
     <Reference Include="System.Numerics" />
     <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.ServiceModel" />
-    <Reference Include="System.ValueTuple, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>Resources\System.ValueTuple.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System" />
@@ -210,14 +205,14 @@
 
 
     <Compile Include="Controls\MyVirtualizingElement.vb" />
-    <Compile Include="Modules\Constants.vb" />
-    <Compile Include="Modules\Resource\ResourceFile.vb" />
+    <Compile Include="Modules\Base\PclLogger.vb" />
+    <Compile Include="Modules\Resource\LocalResourceFile.vb" />
     <Compile Include="Modules\Resource\ResourceProject.vb" />
     <Compile Include="Modules\Resource\ResourceVersion.vb" />
     <Compile Include="Modules\Resource\WikiEntry.vb" />
     <Compile Include="Modules\Resource\ResourceSearcher.vb" />
     <Compile Include="Modules\Minecraft\ModJava.vb" />
-    <Compile Include="Modules\Resource\ResourceFileLoader.vb" />
+    <Compile Include="Modules\Resource\LocalResourceLoaders.vb" />
     <Compile Include="Modules\Minecraft\ModModpack.vb" />
     <Compile Include="Modules\ThirdParty\DragHelper.vb" />
     <Compile Include="My Project\Resources.Designer.vb">
@@ -753,7 +748,6 @@
   <ItemGroup>
     <Resource Include="Resources\Font.ttf" />
     <None Include="Resources\Help.zip" />
-    <None Include="Resources\moddata.zip" />
     <None Include="Resources\NAudio.dll" />
   </ItemGroup>
   <ItemGroup>
@@ -906,9 +900,6 @@
     <Resource Include="Images\Heads\EasyTier.png" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\System.ValueTuple.dll" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="Resources\lwjgl-unsafe-agent.jar" />
   </ItemGroup>
   <ItemGroup>
@@ -916,7 +907,7 @@
       <Project>{d22bbf3c-2177-0208-4e29-8466aa41ac6f}</Project>
       <Name>MeloongCore</Name>
     </ProjectReference>
-    <ProjectReference Include="..\MeloongCore\Wpf\MeloongCoreWpf.csproj">
+    <ProjectReference Include="..\MeloongCore\Wpf\MeloongCore.Wpf.csproj">
       <Project>{2dffe2a0-1101-816b-d240-f644b2d74a68}</Project>
       <Name>MeloongCore.Wpf</Name>
     </ProjectReference>
@@ -942,6 +933,7 @@
   </ItemGroup>
   <ItemGroup>
 
+    <None Include="Resources\moddata.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
 </Project>

@@ -23,10 +23,10 @@
     Public Sub Reset()
         Try
             SettingService.ResetSettings(Me)
-            Log("[Setup] 已初始化联机页设置")
+            Logger.Info("已初始化联机页设置")
             Hint("已初始化联机页设置！", HintType.Green, False)
         Catch ex As Exception
-            Log(ex, "初始化联机页设置失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "初始化联机页设置失败", LogBehavior.Alert)
         End Try
         Reload()
     End Sub

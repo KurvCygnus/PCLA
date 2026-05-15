@@ -33,13 +33,13 @@
         HasRunningMinecraft = False
         FrmMain.BtnExtraShutdown.ShowRefresh()
         '音乐播放
-        If Settings.Get("UiMusicStop") Then
-            RunInUi(Sub() If MusicResume() Then Log("[Music] 已根据设置，在结束后开始音乐播放"))
-        ElseIf Settings.Get("UiMusicStart") Then
-            RunInUi(Sub() If MusicPause() Then Log("[Music] 已根据设置，在结束后暂停音乐播放"))
+        If Settings.Get(Of Boolean)("UiMusicStop") Then
+            RunInUi(Sub() If MusicResume() Then Logger.Info("已根据设置，在结束后开始音乐播放"))
+        ElseIf Settings.Get(Of Boolean)("UiMusicStart") Then
+            RunInUi(Sub() If MusicPause() Then Logger.Info("已根据设置，在结束后暂停音乐播放"))
         End If
         '启动器可见性
-        Select Case Settings.Get("LaunchArgumentVisible")
+        Select Case Settings.Get(Of Integer)("LaunchArgumentVisible")
             Case 2
                 '直接关闭
                 If TriggerLauncherShutdown Then
@@ -105,7 +105,7 @@
                     Loop
                     WatcherLog("Minecraft 日志监控已退出")
                 Catch ex As Exception
-                    Log(ex, "Minecraft 日志监控主循环出错", NotifyLevel.MsgBoxAndFeedback)
+                    Logger.Error(ex, "Minecraft 日志监控主循环出错")
                     State = MinecraftState.Ended
                 End Try
             End Sub, "Minecraft Watcher PID " & PID)
@@ -174,7 +174,7 @@
                     End If
                 End If
             Catch ex As Exception
-                Log(ex, "输出 Minecraft 日志失败", NotifyLevel.MsgBoxAndFeedback)
+                Logger.Error(ex, "输出 Minecraft 日志失败")
             End Try
         End Sub
         Public LatestLog As New Queue(Of String)
@@ -186,6 +186,7 @@
             '加入预存储
             LatestLog.Enqueue(Text)
             If LatestLog.Count >= 501 Then LatestLog.Dequeue()
+            Logger.Trace(Text)
             '进度处理
             If LogProgress < 1 Then
                 WatcherLog("日志 1/5：已出现日志输出")
@@ -265,7 +266,7 @@
                     MinecraftWindow = TryGetMinecraftWindow()
                 Catch ex As ComponentModel.Win32Exception
                     '拒绝访问（#1062）
-                    Log(ex, "由于反作弊或安全软件拦截，PCL 无法操作游戏窗口", NotifyLevel.AllUsers)
+                    Logger.Error(ex, "由于反作弊或安全软件拦截，PCL 无法操作游戏窗口", LogBehavior.Toast)
                     IsWindowFinished = True
                 End Try
                 If MinecraftWindow Is Nothing Then Return
@@ -277,7 +278,7 @@
                     WatcherLog($"Minecraft 窗口已加载：{MinecraftWindowName}（{MinecraftWindowHandle.ToInt64}）")
                     IsWindowFinished = True
                     '最大化
-                    If Settings.Get("LaunchArgumentWindowType") = 4 Then
+                    If Settings.Get(Of Integer)("LaunchArgumentWindowType") = 4 Then
                         RunInNewThread(
                         Sub()
                             Try
@@ -287,7 +288,7 @@
                                 ShowWindow(WindowHandle, 3)
                                 WatcherLog($"已最大化 Minecraft 窗口：{MinecraftWindowHandle.ToInt64}")
                             Catch ex As Exception
-                                Log(ex, "最大化 Minecraft 窗口时出现错误")
+                                Logger.Warn(ex, "最大化 Minecraft 窗口时出现错误")
                             End Try
                         End Sub, "MinecraftWindowMaximize")
                     End If
@@ -297,7 +298,7 @@
                 End If
                 IsWindowAppeared = True
             Catch ex As Exception
-                Log(ex, "检查 Minecraft 窗口失败", NotifyLevel.MsgBoxAndFeedback)
+                Logger.Error(ex, "检查 Minecraft 窗口失败")
             End Try
         End Sub
         ''' <summary>
@@ -305,10 +306,10 @@
         ''' Nothing 代表未找到。
         ''' </summary>
         Private Function TryGetMinecraftWindow() As KeyValuePair(Of IntPtr, String)?
-            TryGetMinecraftWindow = Nothing
+            Dim Result = Nothing
             EnumWindows(
                 Sub(hwnd As IntPtr, lParam As Integer)
-                    If TryGetMinecraftWindow IsNot Nothing Then Return
+                    If Result IsNot Nothing Then Return
                     '检查类名
                     Dim str As New StringBuilder(512)
                     GetClassName(hwnd, str, str.Capacity)
@@ -327,13 +328,13 @@
                     Try
                         If Process.GetProcessById(ProcessId).StartTime < GameProcess.StartTime Then Return '需要是此后启动的进程
                     Catch ex As Exception
-                        Log(ex, "枚举 Minecraft 窗口进程失败")
+                        Logger.Warn(ex, "枚举 Minecraft 窗口进程失败")
                         Return
                     End Try
                     '返回
-                    TryGetMinecraftWindow = New KeyValuePair(Of IntPtr, String)(hwnd, WindowText)
+                    Result = New KeyValuePair(Of IntPtr, String)(hwnd, WindowText)
                 End Sub, 0)
-            Return TryGetMinecraftWindow
+            Return Result
         End Function
         Private Delegate Sub EnumWindowsSub(hwnd As IntPtr, lParam As Integer)
         Private Declare Function EnumWindows Lib "user32" (hWnd As EnumWindowsSub, lParam As Integer) As Boolean
@@ -363,7 +364,7 @@
                     Analyzer.Output(False, New List(Of String) From
                         {Instance.PathVersion & Instance.Name & ".json", PathExeFolder & "PCL\Log1.txt", PathExeFolder & "PCL\LatestLaunch.bat"})
                 Catch ex As Exception
-                    Log(ex, "崩溃分析失败", NotifyLevel.MsgBoxAndFeedback)
+                    Logger.Error(ex, "崩溃分析失败")
                 End Try
             End Sub, "Crash Analyzer")
         End Sub
@@ -376,7 +377,7 @@
                 If Not GameProcess.HasExited Then GameProcess.Kill()
                 WatcherLog("已强制结束 Minecraft 进程")
             Catch ex As Exception
-                Log(ex, "强制结束 Minecraft 进程失败", NotifyLevel.AllUsers)
+                Logger.Error(ex, "强制结束 Minecraft 进程失败", LogBehavior.Toast)
             End Try
         End Sub
 

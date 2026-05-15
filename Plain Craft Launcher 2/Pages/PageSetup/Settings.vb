@@ -1,5 +1,5 @@
 ﻿Public Class Settings
-    Private Shared ReadOnly Entries As Dictionary(Of String, Setting) = (New List(Of Setting) From {
+    Public Shared ReadOnly Entries As Dictionary(Of String, Setting) = (New List(Of Setting) From {
         New Setting("Identify", "", Source:=Sources.Registry),
         New Setting("WindowHeight", 550),
         New Setting("WindowWidth", 900),
@@ -27,7 +27,7 @@
         New Setting("SystemHighestBetaVersionReg", 0, Source:=Sources.Registry, Encrypted:=True),
         New Setting("SystemHighestAlphaVersionReg", 0, Source:=Sources.Registry, Encrypted:=True),
         New Setting("SystemHelpVersion", 0, Source:=Sources.Registry),
-        New Setting("SystemDebugMode", False, Source:=Sources.Registry),
+        New Setting("SystemDebugMode", False, Source:=Sources.Registry, OnChanged:=Sub() Logger.Instance.MinLevel = If(ModeDebug, LogLevel.Trace, LogLevel.Info)),
         New Setting("SystemDebugAnim", 9, Source:=Sources.Registry),
         New Setting("SystemDebugDelay", False, Source:=Sources.Registry),
         New Setting("SystemDebugSkipCopy", False, Source:=Sources.Registry),
@@ -47,11 +47,11 @@
         New Setting("CacheMsName", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheMsV2Migrated", False, Source:=Sources.Registry),
         New Setting("CacheMsV2OAuthRefresh", "", Source:=Sources.Registry, Encrypted:=True),
-        New Setting("CacheMsV2OAuthExpires", 0, Source:=Sources.Registry),
         New Setting("CacheMsV2Access", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheMsV2ProfileJson", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheMsV2Uuid", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheMsV2Name", "", Source:=Sources.Registry, Encrypted:=True),
+        New Setting("CacheMsV2Expires", 0L, Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheNideAccess", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheNideClient", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("CacheNideUuid", "", Source:=Sources.Registry, Encrypted:=True),
@@ -193,12 +193,12 @@
         New Setting("VersionServerAuthServer", "", Source:=Sources.Instance)
     }).ToDictionary(Function(e) e.Key)
 
-    Private Enum Sources
+    Public Enum Sources
         Normal
         Registry
         Instance
     End Enum
-    Private Class Setting
+    Public Class Setting
         Public Key As String
         Public Encrypted As Boolean
         Public DefaultValue As Object
@@ -220,7 +220,7 @@
                 Me.Type = If(Value, "").GetType
                 Me.OnChanged = OnChanged
             Catch ex As Exception
-                Log(ex, "初始化设置项失败", NotifyLevel.MsgBoxAndFeedback) '#5095 的 fallback
+                Logger.Error(ex, "初始化设置项失败") '#5095 的 fallback
             End Try
         End Sub
 
@@ -228,10 +228,11 @@
         ''' 读取过的设置的缓存，若从未读取过则为 Nothing。
         ''' 若为版本独立设置，键为版本路径；否则，键为空字符串。
         ''' </summary>
-        Private ValueCache As New Dictionary(Of String, Object)
+        Public ValueCache As New ConcurrentDictionary(Of String, Object)
         Public Function GetCache(Instance As McInstance)
             Dim Key As String = If(Source = Sources.Instance, Instance.PathVersion, "")
-            Return If(ValueCache.ContainsKey(Key), ValueCache(Key), Nothing)
+            Dim Result = Nothing
+            Return If(ValueCache.TryGetValue(Key, Result), Result, Nothing)
         End Function
         Public Sub [Set](Value As Object, Instance As McInstance)
             Dim Key As String = If(Source = Sources.Instance, Instance.PathVersion, "")
@@ -243,12 +244,13 @@
         ''' </summary>
         Public Sub Save(Optional Instance As McInstance = Nothing)
             Dim Value As String = GetCache(Instance)
+            Logger.Trace($"保存设置：{Key} = {Value}{If(Instance Is Nothing, "", $"（实例：{Instance?.PathVersion}）")}")
             If Encrypted Then
                 Try
                     If Value Is Nothing Then Value = ""
                     Value = SecretEncrypt(Value, "PCL" & Identify)
                 Catch ex As Exception
-                    Log(ex, "加密设置失败：" & Key, NotifyLevel.DevelopOnly)
+                    Logger.Warn(ex, $"加密设置失败：{Key}")
                 End Try
             End If
             Select Case Source
@@ -281,7 +283,7 @@
             '触发改变事件（必须在保存之后，以保证 VersionServerLogin 之类的在事件中读取到的是最新的值）
             If Entry.OnChanged IsNot Nothing Then Entry.OnChanged.Invoke(Value)
         Catch ex As Exception
-            Log(ex, "设置设置项时出错（" & Key & ", " & Value & "）", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"设置设置项时出错（{Key}, {Value}）")
         End Try
     End Sub
     ''' <summary>
@@ -336,7 +338,7 @@
                     Try
                         GotValue = SecretDecrypt(GotValue, "PCL" & Identify)
                     Catch ex As Exception
-                        Log(ex, "解密设置失败：" & Key, NotifyLevel.DevelopOnly)
+                        Logger.Warn(ex, $"解密设置失败：{Key}")
                         GotValue = Entry.DefaultValue
                         Entry.Set(Entry.DefaultValue, Instance)
                         Entry.Save(Instance)
@@ -345,10 +347,13 @@
             End If
             Entry.Set(CTypeDynamic(GotValue, Entry.Type), Instance)
         Catch ex As Exception
-            Log(ex, "读取设置失败：" & Key, NotifyLevel.AllUsers)
+            Logger.Error(ex, $"读取设置失败：{Key}", LogBehavior.Toast)
             Entry.Set(CTypeDynamic(Entry.DefaultValue, Entry.Type), Instance)
         End Try
         Return Entry.GetCache(Instance)
+    End Function
+    Public Shared Function [Get](Of T)(Key As String, Optional Instance As McInstance = Nothing) As T
+        Return [Get](Key, Instance)
     End Function
     ''' <summary>
     ''' 获取某个未经加密的设置项的值。
@@ -385,7 +390,7 @@
             '触发改变事件
             If Entry.OnChanged IsNot Nothing Then Entry.OnChanged.Invoke(Entry.DefaultValue)
         Catch ex As Exception
-            Log(ex, "重置设置项时出错（" & Key & "）", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, $"重置设置项时出错（{Key}）")
         End Try
     End Sub
 

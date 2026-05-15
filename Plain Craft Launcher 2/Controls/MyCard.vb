@@ -164,7 +164,7 @@
                 Case 13
                     Stack.Children.Add(NeoForgeDownloadListItem(Data, AddressOf NeoForgeSave_Click, True))
                 Case Else
-                    Log("未知的虚拟化种类：" & Type, NotifyLevel.MsgBoxAndFeedback)
+                    Logger.Error($"未知的虚拟化种类：{Type}")
             End Select
         Next
         Stack.Children.Add(New FrameworkElement With {.Height = 18}) '下边距，同时适应折叠
@@ -296,9 +296,10 @@
             If Not IsSwapped AndAlso TypeOf SwapControl Is StackPanel Then StackInstall(SwapControl, SwapType, Title)
             '若尚未加载，会在 Loaded 事件中触发无动画的折叠，不需要在这里进行
             If Not IsLoaded Then Return
-            '更新高度
+            '更新样式
             SwapControl.Visibility = Visibility.Visible
             TriggerForceResize()
+            UpdateCursorStyle()
             '改变箭头
             AniStart(AaRotateTransform(MainSwap, If(_IsSwapped, If(SwapLogoRight, 270, 0), 180) - CType(MainSwap.RenderTransform, RotateTransform).Angle, 250,, New AniEaseOutFluent(AniEasePower.ExtraStrong)), "MyCard Swap " & Uuid, True)
         End Set
@@ -351,11 +352,17 @@
         End If
 
         IsSwapped = Not IsSwapped
-        Log("[Control] " & If(IsSwapped, "折叠卡片", "展开卡片") & If(Title Is Nothing, "", "：" & Title))
+        Logger.Info($"{If(IsSwapped, "折叠卡片", "展开卡片")}{If(Title Is Nothing, "", "：" & Title)}")
         RaiseEvent Swap(Me, e)
     End Sub
     Private Sub MyCard_MouseLeave_Swap(sender As Object, e As MouseEventArgs) Handles Me.MouseLeave
         IsSwapMouseDown = False
+    End Sub
+    Private Sub UpdateCursorStyle() Handles Me.MouseMove
+        If _MainSwap Is Nothing Then Cursor = Nothing : Return
+        Dim Pos As Double = Mouse.GetPosition(Me).Y
+        Cursor = If(MainSwap.Visibility = Visibility.Visible AndAlso (IsSwapped OrElse (Pos <= SwapedHeight - 6 AndAlso Not (Pos = 0 AndAlso Not IsMouseDirectlyOver))),
+            Cursors.Hand, Nothing)
     End Sub
 
 #End Region

@@ -30,10 +30,10 @@
     Public Sub Reset()
         Try
             SettingService.ResetSettings(Me)
-            Log("[Setup] 已初始化启动器页设置")
+            Logger.Info("已初始化启动器页设置")
             Hint("已初始化启动器页设置！", HintType.Green, False)
         Catch ex As Exception
-            Log(ex, "初始化启动器页设置失败", NotifyLevel.MsgBox)
+            Logger.Error(ex, "初始化启动器页设置失败", LogBehavior.Alert)
         End Try
         Reload()
     End Sub
@@ -58,7 +58,7 @@
     End Sub
     Private Sub SliderDownloadThread_PreviewChange(sender As Object, e As RouteEventArgs) Handles SliderDownloadThread.PreviewChange
         If SliderDownloadThread.Value < 100 Then Return
-        If Not Settings.Get("HintDownloadThread") Then
+        If Not Settings.Get(Of Boolean)("HintDownloadThread") Then
             Settings.Set("HintDownloadThread", True)
             MyMsgBox("如果设置过多的下载线程，可能会导致下载时出现非常严重的卡顿。" & vbCrLf &
                      "一般设置 64 线程即可满足大多数下载需求，除非你知道你在干什么，否则不建议设置更多的线程数！", "警告", "我知道了", IsWarn:=True)
@@ -109,12 +109,12 @@
     Public Shared Function IsLauncherNewest() As Boolean?
         Try
             '确认服务器公告是否正常
-            Dim ServerContent As String = ReadFile(PathTemp & "Cache\Notice.cfg")
+            Dim ServerContent As String = If(FileUtils.TryReadAsString(PathTemp & "Cache\Notice.cfg"), "")
             If ServerContent.Split("|").Count < 3 Then Return Nothing
             '确认是否为最新
             Return ServerContent.Split("|")(If(BuildType = BuildTypes.Release, 2, 1)) <= VersionCode
         Catch ex As Exception
-            Log(ex, "确认启动器更新失败", NotifyLevel.MsgBoxAndFeedback)
+            Logger.Error(ex, "确认启动器更新失败")
             Return Nothing
         End Try
     End Function

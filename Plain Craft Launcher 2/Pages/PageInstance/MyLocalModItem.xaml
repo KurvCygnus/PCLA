@@ -3,7 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:local="clr-namespace:PCL;assembly="
       x:Name="PanBack" Height="44"
-      RenderTransformOrigin="0.5,0.5" Background="{StaticResource ColorBrushSemiTransparent}" SnapsToDevicePixels="True">
+      RenderTransformOrigin="0.5,0.5" Background="{StaticResource ColorBrushSemiTransparent}" SnapsToDevicePixels="True" Cursor="Hand">
     <Grid.ColumnDefinitions>
         <ColumnDefinition Width="6" />
         <ColumnDefinition Width="34" />
