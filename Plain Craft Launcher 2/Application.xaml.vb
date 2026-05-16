@@ -185,7 +185,7 @@ RetryCacheCheck:
     Private Function GetProgramLock(LockPath As String) As Boolean
         Try
             Dim IsLocked = False
-            KernelLock = New Mutex(True, "Plain Craft Launcher", IsLocked)
+            KernelLock = New Mutex(True, "Local\Plain Craft Launcher", IsLocked)
             If Not IsLocked Then Return False
             Logger.Info("获取单例锁成功")
             File.WriteAllText(LockPath, Process.GetCurrentProcess().Id.ToString())
