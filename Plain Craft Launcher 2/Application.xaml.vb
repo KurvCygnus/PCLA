@@ -201,11 +201,10 @@ RetryCacheCheck:
     ''' 从文件锁中尝试拖出进程
     ''' </summary>
     Public Sub DropToTopByLock(LockPath As String)
-        Dim Content = File.ReadAllBytes(LockPath)
         Dim Pid As Integer
-        If Not Integer.TryParse(Encoding.UTF8.GetString(Content), Pid) Then Return
-        ShowWindowToTop(Process.GetProcessById(Pid).MainWindowHandle)
-        
+        If Not Integer.TryParse(File.ReadAllText(LockPath), Pid) Then Return
+        Dim Handle = Process.GetProcessById(Pid)?.MainWindowHandle
+        If Handle <> Intptr.Zero ShowWindowToTop(Handle)
     End Sub
 
     '结束
