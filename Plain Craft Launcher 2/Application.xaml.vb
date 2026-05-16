@@ -91,6 +91,13 @@ RetryCacheCheck:
             End Try
             DirectoryUtils.Create(PathTemp & "Cache\")
             DirectoryUtils.Create(PathAppdata)
+
+#If DEBUG Then
+            Dim FileLockPath = Path.Combine(PathAppdata.TrimEnd("\"), "PCL.dev.Lock")
+#Else
+            Dim FileLockPath = Path.Combine(PathAppdata.TrimEnd("\"), "PCL.Lock")
+#End If
+
             '要求单例
             If BuildType <> BuildTypes.Debug Then
                 If Not GetProgramLock(FileLockPath) Then
