@@ -115,7 +115,12 @@ RetryCacheCheck:
                         End If
                         Thread.Sleep(500)
                     Next
-                    If Not IsLocked Then DropToTopByLock(FileLockPath)
+                    If Not IsLocked Then 
+                        DropToTopByLock(FileLockPath)
+                        DropToTopByLock(FileLockPath)
+                        Beep()
+                        Environment.Exit(ProcessReturnValues.Cancel)
+                    End If
                 End If
             End If
             '设置 ToolTipService 默认值
@@ -200,6 +205,7 @@ RetryCacheCheck:
         Dim Pid As Integer
         If Not Integer.TryParse(Encoding.UTF8.GetString(Content), Pid) Then Return
         ShowWindowToTop(Process.GetProcessById(Pid).MainWindowHandle)
+        
     End Sub
 
     '结束
