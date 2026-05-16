@@ -204,7 +204,7 @@ RetryCacheCheck:
         Dim Pid As Integer
         If Not Integer.TryParse(File.ReadAllText(LockPath), Pid) Then Return
         Dim Handle = Process.GetProcessById(Pid)?.MainWindowHandle
-        If Handle <> Intptr.Zero ShowWindowToTop(Handle)
+        If Handle <> Intptr.Zero Then ShowWindowToTop(Handle)
     End Sub
 
     '结束
