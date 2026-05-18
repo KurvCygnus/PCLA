@@ -117,7 +117,6 @@ RetryCacheCheck:
                     Next
                     If Not IsLocked Then 
                         DropToTopByLock(FileLockPath)
-                        DropToTopByLock(FileLockPath)
                         Beep()
                         Environment.Exit(ProcessReturnValues.Cancel)
                     End If
