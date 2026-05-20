@@ -18,8 +18,8 @@
     ''' <summary>
     ''' 获取当前页面的登录信息。
     ''' </summary>
-    Public Shared Function GetLoginData(Optional IgnoreState As Boolean = False) As McLoginMs
-        If IgnoreState OrElse McLoginMsLoader.State = LoadState.Finished Then
+    Public Shared Function GetLoginData() As McLoginMs
+        If McLoginMsLoader.State = LoadState.Finished Then
             Return New McLoginMs With {.OAuthRefreshToken = Settings.Get(Of String)("CacheMsV2OAuthRefresh"), .UserName = Settings.Get(Of String)("CacheMsV2Name"), .AccessToken = Settings.Get(Of String)("CacheMsV2Access"), .Uuid = Settings.Get(Of String)("CacheMsV2Uuid"), .ProfileJson = Settings.Get(Of String)("CacheMsV2ProfileJson")}
         Else
             Return New McLoginMs With {.OAuthRefreshToken = Settings.Get(Of String)("CacheMsV2OAuthRefresh"), .UserName = Settings.Get(Of String)("CacheMsV2Name")}
@@ -105,9 +105,6 @@ Retry:
                 Hint("正在重新登录，将在登录后自动更改皮肤……")
                 McLoginMsLoader.Start(GetLoginData(), IsForceRestart:=True)
                 GoTo Retry
-            ElseIf Result.Contains("""error""") Then
-                Hint("更改皮肤失败：" & GetJson(Result)("error").ToString, HintType.Red)
-                Return
             End If
             '获取新皮肤地址
             Logger.Info($"皮肤修改返回值：{vbCrLf}{Result}")
@@ -121,13 +118,26 @@ Retry:
             Next
             Throw New Exception("未知错误（" & Result & "）")
         Catch ex As Exception
-            If ex.IsBadNetwork Then
-                Hint("更改皮肤失败：连接皮肤服务器超时，请稍后再试，或使用 VPN 改善网络环境", HintType.Red)
-            ElseIf TypeOf ex Is HttpRequestCodeException AndAlso CType(ex, HttpRequestCodeException).StatusCode = HttpStatusCode.Unauthorized Then
-                Logger.Warn(ex, "更改皮肤时遭遇 401 错误")
-                Hint("正在重新登录，将在登录后自动更改皮肤……")
-                McLoginMsLoader.Start(GetLoginData(), IsForceRestart:=True)
-                GoTo Retry
+            If TypeOf ex Is HttpRequestCodeException Then
+                Dim requestException As HttpRequestCodeException = CType(ex, HttpRequestCodeException)
+                Select Case requestException.StatusCode
+                    Case HttpStatusCode.BadRequest
+                        Logger.Warn(ex, "更改皮肤时遭遇 400 错误")
+                        If requestException.Response?.Contains("""error""") Then
+                            Hint("更改皮肤失败：" & GetJson(requestException.Response)("error").ToString, HintType.Red)
+                            Return
+                        ElseIf requestException.Response?.Contains("""errorMessage""") Then
+                            Hint("更改皮肤失败：" & GetJson(requestException.Response)("errorMessage").ToString, HintType.Red)
+                            Return
+                        End If
+                    Case HttpStatusCode.Unauthorized
+                        Logger.Warn(ex, "更改皮肤时遭遇 401 错误")
+                        Hint("正在重新登录，将在登录后自动更改皮肤……")
+                        McLoginMsLoader.Start(GetLoginData(), IsForceRestart:=True)
+                        GoTo Retry
+                End Select
+            ElseIf ex.IsBadNetwork Then
+                Hint("更改皮肤失败：连接 Mojang 服务器超时，请稍后再试，或使用 VPN 改善网络环境", HintType.Red)
             Else
                 Logger.Error(ex, "更改皮肤失败", LogBehavior.Toast)
             End If
@@ -149,6 +159,24 @@ Retry:
     '修改披风
     Public Sub BtnSkinCape_Click(sender As Object, e As RoutedEventArgs)
         Skin.BtnSkinCape_Click()
+    End Sub
+
+    '刷新披风
+    Public Sub BtnSkinCapeRefresh_Click(sender As Object, e As RoutedEventArgs)
+        RunInThread(
+        Sub()
+            Try
+                Hint("正在刷新披风列表……")
+                If McLaunchLoader.State = LoadState.Loading Then
+                    McLoginMsLoader.WaitForExit()
+                Else
+                    McLoginMsLoader.WaitForExit(GetLoginData(), IsForceRestart:=True)
+                End If
+                Hint("已刷新披风列表！", HintType.Green)
+            Catch ex As Exception
+                Logger.Error(ex, "刷新披风列表失败", LogBehavior.Toast)
+            End Try
+        End Sub)
     End Sub
 
 #End Region

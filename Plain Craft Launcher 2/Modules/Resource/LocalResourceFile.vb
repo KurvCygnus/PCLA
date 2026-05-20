@@ -418,7 +418,7 @@ Finished:
         Get
             If _CurseForgeHash Is Nothing Then
                 '读取缓存
-                Dim CacheKey As String = GetHash($"{EnabledFullName}-{File.LastWriteTime.ToLongTimeString}-{File.Length}-C")
+                Dim CacheKey As String = $"{EnabledFullName}-{File.LastWriteTime.ToLongTimeString}-{File.Length}-C".GetStableHashCode()
                 Dim Cached As String = ReadIni(PathTemp & "Cache\ModHash.ini", CacheKey)
                 If Cached <> "" AndAlso Cached.RegexCheck("^\d+$") Then '#5062
                     _CurseForgeHash = Cached
@@ -473,14 +473,14 @@ Finished:
         Get
             If _ModrinthHash Is Nothing Then
                 '读取缓存
-                Dim CacheKey As String = GetHash($"{EnabledFullName}-{File.LastWriteTime.ToLongTimeString}-{File.Length}-M")
+                Dim CacheKey As String = $"{EnabledFullName}-{File.LastWriteTime.ToLongTimeString}-{File.Length}-M".GetStableHashCode()
                 Dim Cached As String = ReadIni(PathTemp & "Cache\ModHash.ini", CacheKey)
                 If Cached <> "" Then
                     _ModrinthHash = Cached
                     Return _ModrinthHash
                 End If
                 '计算 SHA1
-                _ModrinthHash = HashUtils.ComputeFromFile(File.FullName, HashUtils.HashMethod.Sha1)
+                _ModrinthHash = CryptographyUtils.ComputeFileHash(File.FullName, CryptographyUtils.HashMethod.Sha1)
                 '写入缓存
                 WriteIni(PathTemp & "Cache\ModHash.ini", CacheKey, _ModrinthHash)
             End If

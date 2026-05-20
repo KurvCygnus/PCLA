@@ -225,6 +225,15 @@
                         <local:MyCheckBox>
                             <local:MyCheckBox.Tag>
                                 <local:ExportOption 
+                                Title="协议"
+                                Description="Licence 文件"
+                                Rules="LICEN*"
+                                DefaultChecked="True" />
+                            </local:MyCheckBox.Tag>
+                        </local:MyCheckBox>
+                        <local:MyCheckBox>
+                            <local:MyCheckBox.Tag>
+                                <local:ExportOption 
                                 Title="多人游戏服务器列表"
                                 Rules="servers.dat"
                                 DefaultChecked="False" />

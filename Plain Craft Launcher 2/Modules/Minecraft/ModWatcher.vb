@@ -162,11 +162,11 @@
                     'Else
                     If State = MinecraftState.Loading Then
                         '窗口未出现
-                        WatcherLog("Minecraft 尚未加载完成，可能已崩溃")
+                        WatcherLog("Minecraft 尚未加载完成，可能已崩溃", LogLevel.Error)
                         Crashed()
                     ElseIf GameProcess.ExitCode <> 0 AndAlso State = MinecraftState.Running AndAlso Instance.ReleaseTime.Year >= 2012 Then
                         '返回值不为 0 且未结束
-                        WatcherLog("Minecraft 返回值异常，可能已崩溃")
+                        WatcherLog("Minecraft 返回值异常，可能已崩溃", LogLevel.Error)
                         Crashed()
                     ElseIf State <> MinecraftState.Crashed Then
                         '正常关闭
@@ -215,15 +215,15 @@
                 ElseIf Text.Contains("Crash report saved to") OrElse Text.Contains("This crash report has been saved to:") Then
                     ' Text.Contains("Minecraft ran into a problem! Report saved to:") Then
                     'Minecraft 崩溃，忽略 VanillaFix
-                    WatcherLog("识别为崩溃的 Log：" & Text)
+                    WatcherLog("识别为崩溃的 Log：" & Text, LogLevel.Error)
                     Crashed()
                 ElseIf Text.Contains("Could not save crash report to") Then
                     'Minecraft 崩溃，无法保存崩溃日志
-                    WatcherLog("识别为崩溃的 Log：" & Text)
+                    WatcherLog("识别为崩溃的 Log：" & Text, LogLevel.Error)
                     Crashed()
                 ElseIf Text.Contains("/ERROR]: Unable to launch") OrElse Text.Contains("An exception was thrown, the game will display an error screen and halt.") Then
                     'Forge 崩溃
-                    WatcherLog("识别为崩溃的 Log：" & Text)
+                    WatcherLog("识别为崩溃的 Log：" & Text, LogLevel.Error)
                     Crashed()
                     'ElseIf Text.Contains("Shutdown failure!") Then
                     '    'Minecraft 强行崩溃，由于点 X 强行关闭也会触发这句话，所以不可用
@@ -231,8 +231,8 @@
                 End If
             End If
         End Sub
-        Private Sub WatcherLog(Text As String)
-            McLaunchLog("[" & PID & "] " & Text)
+        Private Sub WatcherLog(Text As String, Optional Level As LogLevel = LogLevel.Info)
+            McLaunchLog("[" & PID & "] " & Text, Level)
         End Sub
 
         '进度更新
@@ -349,7 +349,7 @@
             If State = MinecraftState.Crashed OrElse State = MinecraftState.Ended Then Return
             State = MinecraftState.Crashed
             '崩溃分析
-            WatcherLog("Minecraft 已崩溃，将在 2 秒后开始崩溃分析")
+            WatcherLog("Minecraft 已崩溃，将在 2 秒后开始崩溃分析", LogLevel.Error)
             Hint("检测到 Minecraft 出现错误，错误分析已开始……", HintType.Red)
             FeedbackInfo()
             RunInNewThread(

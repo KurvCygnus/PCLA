@@ -8,7 +8,6 @@
         Implements ILoadingTrigger
 
         Public ReadOnly Property IsLoader As Boolean = True Implements ILoadingTrigger.IsLoader
-        Protected Shared LogBlackList As String() = {"EasyTier CLI"}
 
         '基础属性
         ''' <summary>
@@ -90,7 +89,7 @@
                 Dim OldState = _State
                 If value = LoadState.Finished AndAlso Settings.Get(Of Boolean)("SystemDebugDelay") Then Thread.Sleep(RandomInteger(100, 2000))
                 _State = value
-                If Not LogBlackList.Contains(Name) Then Logger.Info($"加载器 {Name} 状态改变：{value}")
+                Logger.Log($"加载器 {Name} 状态改变：{value}", If(value = LoadState.Failed, LogLevel.Error, LogLevel.Info))
                 '实现 ILoadingTrigger 接口与 OnStateChanged 回调
                 RunInUi(
                 Sub()
@@ -319,13 +318,13 @@
             Sub()
                 Try
                     IsForceRestarting = IsForceRestart
-                    If Not LogBlackList.Contains(Name) Then Logger.Trace(Function() $"加载线程 {Name} ({Thread.CurrentThread.ManagedThreadId}) 已{If(IsForceRestarting, "强制", "")}启动")
+                    Logger.Trace(Function() $"加载线程 {Name} ({Thread.CurrentThread.ManagedThreadId}) 已{If(IsForceRestarting, "强制", "")}启动")
                     LoadDelegate(Me)
                     If IsInterrupted Then
                         Logger.Warn($"加载线程 {Name} ({Thread.CurrentThread.ManagedThreadId}) 已中断但线程正常运行至结束，输出被弃用（最新线程：{If(LastRunningThread Is Nothing, -1, LastRunningThread.ManagedThreadId)}）")
                         Return
                     End If
-                    If Not LogBlackList.Contains(Name) Then Logger.Trace(Function() $"加载线程 {Name} ({Thread.CurrentThread.ManagedThreadId}) 已完成")
+                    Logger.Trace(Function() $"加载线程 {Name} ({Thread.CurrentThread.ManagedThreadId}) 已完成")
                     RaisePreviewFinish()
                     State = LoadState.Finished
                     LastFinishedTime = GetTimeMs() '未中断，本次输出有效

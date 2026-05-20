@@ -10,12 +10,12 @@ Public Module ModBase
 #Region "声明"
 
     '下列版本信息由更新器自动修改
-    Public Const VersionBaseName As String = "2.12.8.0" '显示用版本名
+    Public Const VersionBaseName As String = "2.12.8.1" '显示用版本名
     Public Const CommitHash As String = "" 'Commit Hash，由 GitHub Workflow 自动替换
 #If RELEASE Then
-    Public Const VersionCode As Integer = 400 '正式版
+    Public Const VersionCode As Integer = 402 '正式版
 #Else
-    Public Const VersionCode As Integer = 399 '快照版
+    Public Const VersionCode As Integer = 401 '快照版
 #End If
 
     '版本信息
@@ -710,13 +710,13 @@ Public Module ModBase
                 End If
                 If Not String.IsNullOrEmpty(Hash) Then
                     If Hash.Length < 35 Then 'MD5
-                        Dim md5 As String = HashUtils.ComputeFromFile(LocalPath, HashUtils.HashMethod.Md5)
+                        Dim md5 As String = CryptographyUtils.ComputeFileHash(LocalPath, CryptographyUtils.HashMethod.Md5)
                         If Hash.Lower <> md5 Then Return "文件 MD5 应为 " & Hash & "，实际为 " & md5
                     ElseIf Hash.Length = 64 Then 'SHA256
-                        Dim sha256 As String = HashUtils.ComputeFromFile(LocalPath, HashUtils.HashMethod.Sha256)
+                        Dim sha256 As String = CryptographyUtils.ComputeFileHash(LocalPath, CryptographyUtils.HashMethod.Sha256)
                         If Hash.Lower <> sha256 Then Return "文件 SHA256 应为 " & Hash & "，实际为 " & sha256
                     Else 'SHA1 (40)
-                        Dim sha1 As String = HashUtils.ComputeFromFile(LocalPath, HashUtils.HashMethod.Sha1)
+                        Dim sha1 As String = CryptographyUtils.ComputeFileHash(LocalPath, CryptographyUtils.HashMethod.Sha1)
                         If Hash.Lower <> sha1 Then Return "文件 SHA1 应为 " & Hash & "，实际为 " & sha1
                     End If
                 End If
@@ -791,30 +791,6 @@ Public Module ModBase
             Dim Length As Integer = If(Data, "").Length
             Throw New Exception("格式化 JSON 失败：" & If(Length > 2000, Data.Substring(0, 500) & $"...(全长 {Length} 个字符)..." & Right(Data, 500), Data), ex)
         End Try
-    End Function
-
-    ''' <summary>
-    ''' 获取字符串哈希值。
-    ''' </summary>
-    Public Function GetHash(Str As String) As ULong
-        Dim Result As ULong = 5381
-        For Each v In Str
-            Result = (Result << 5) Xor Result Xor CType(AscW(v), ULong)
-        Next
-        Return Result Xor &HA98F501BC684032FUL
-    End Function
-    ''' <summary>
-    ''' 获取字符串 MD5。
-    ''' </summary>
-    Public Function GetStringMD5(Str As String) As String
-        Using h = MD5Cng.Create()
-            Dim hashedDataBytes = h.ComputeHash(Encoding.UTF8.GetBytes(Str))
-            Dim tmp As New StringBuilder(hashedDataBytes.Length * 2)
-            For Each i As Byte In hashedDataBytes
-                tmp.Append(i.ToString("x2"))
-            Next
-            Return tmp.ToString()
-        End Using
     End Function
 
     ''' <summary>
@@ -1399,12 +1375,17 @@ Public Module ModBase
     ''' 将程序中的资源释放到文件。
     ''' </summary>
     Public Sub ExtractResources(FilePath As String, ResourceName As String)
-        Logger.Info($"将资源写入到文件：{ResourceName} → {FilePath}")
         Dim Resource = My.Resources.ResourceManager.GetObject(ResourceName)
         If TypeOf Resource Is Byte() Then
-            FileUtils.Write(FilePath, DirectCast(Resource, Byte()))
+            Dim Bytes = DirectCast(Resource, Byte())
+            If FileUtils.Exists(FilePath) AndAlso CryptographyUtils.ComputeFileHash(FilePath) = CryptographyUtils.ComputeHash(Bytes) Then Return
+            Logger.Info($"将资源写入到文件：{ResourceName} → {FilePath}")
+            FileUtils.Write(FilePath, Bytes)
         ElseIf TypeOf Resource Is String Then
-            FileUtils.Write(FilePath, DirectCast(Resource, String))
+            Dim Content = DirectCast(Resource, String)
+            If FileUtils.Exists(FilePath) AndAlso FileUtils.ReadAsString(FilePath) = Content Then Return
+            Logger.Info($"将资源写入到文件：{ResourceName} → {FilePath}")
+            FileUtils.Write(FilePath, Content)
         Else
             Throw New Exception($"资源 {ResourceName} 的类型不支持：{Resource.GetType.Name}")
         End If

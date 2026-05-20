@@ -170,7 +170,7 @@ Public Class PageLaunchRight
             Settings.Set("CacheSavedPageVersion", Version)
             FileUtils.Write(PathTemp & "Cache\Custom.xaml", FileContent)
             '若内容变更则要求刷新
-            If LoadedContentHash <> FileContent.GetHashCode() AndAlso ShouldRefresh Then Refresh()
+            If LoadedContentHash <> FileContent.GetStableHashCode() AndAlso ShouldRefresh Then Refresh()
         Catch ex As Exception
             Logger.Error(ex, $"下载主页失败（{Address}）", If(ModeDebug, LogBehavior.Alert, LogBehavior.Toast))
         End Try
@@ -196,7 +196,7 @@ Public Class PageLaunchRight
     ''' 清空主页缓存信息。
     ''' </summary>
     Private Sub ClearCache()
-        LoadedContentHash = -1
+        LoadedContentHash = Nothing
         OnlineLoader.Input = ("", True)
         Settings.Set("CacheSavedPageUrl", "")
         Settings.Set("CacheSavedPageVersion", "")
@@ -211,7 +211,7 @@ Public Class PageLaunchRight
         Try
             SyncLock LoadContentLock
                 '如果加载目标内容一致则不加载
-                Dim Hash = If(Content, "").GetHashCode()
+                Dim Hash = If(Content, "").GetStableHashCode()
                 If Hash = LoadedContentHash Then Return
                 LoadedContentHash = Hash
                 '实际加载内容
@@ -261,7 +261,7 @@ Public Class PageLaunchRight
         OnLoadContentFailed(e.Exception)
     End Sub
 
-    Private LoadedContentHash As Integer = -1
+    Private LoadedContentHash As ULong? = Nothing
     Private LoadContentLock As New Object
 
 #End Region

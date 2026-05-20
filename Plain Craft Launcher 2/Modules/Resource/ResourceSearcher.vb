@@ -189,6 +189,7 @@
 #Region "中文搜索"
 
         Dim RawSearchText As String = If(Request.SearchText, "").Trim
+        RawSearchText = StrConv(RawSearchText, VbStrConv.SimplifiedChinese) '繁体转简体
         RawSearchText = RawSearchText.Lower
         Logger.Info($"工程列表搜索原始文本：{RawSearchText}")
 

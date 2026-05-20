@@ -850,7 +850,8 @@ NextFile:
         Text = Text.Replace("{path}", Replacer(PathUtils.CurrentFolder))
         Text = Text.Replace("{path_with_name}", Replacer(PathExe))
         Text = Text.Replace("{path_temp}", Replacer(PathTemp))
-        Text = Text.Replace("{pcl_md5}", Function() Replacer(HashUtils.ComputeFromFile(PathExe, HashUtils.HashMethod.Md5)))
+        Text = Text.Replace("{pcl_md5}", Function() Replacer(CryptographyUtils.ComputeFileHash(PathExe, CryptographyUtils.HashMethod.Md5)))
+        Text = Text.Replace("{pcl_sha1}", Function() Replacer(CryptographyUtils.ComputeFileHash(PathExe, CryptographyUtils.HashMethod.Sha1)))
         '时间
         If ReplaceTime Then '在窗口标题中，时间会被后续动态替换，所以此时不应该替换
             Text = Text.Replace("{date}", Replacer(Date.Now.ToString("yyyy'/'M'/'d")))
@@ -976,7 +977,7 @@ NextFile:
     ''' </summary>
     Public Sub FeedbackInfo()
         On Error Resume Next
-        Logger.Info($"诊断信息：{vbCrLf}" &
+        Logger.Warn($"诊断信息：{vbCrLf}" &
             "操作系统：" & My.Computer.Info.OSFullName & "（32 位：" & Is32BitSystem & "）" & vbCrLf &
             "剩余内存：" & Int(My.Computer.Info.AvailablePhysicalMemory / 1024 / 1024) & " M / " & Int(My.Computer.Info.TotalPhysicalMemory / 1024 / 1024) & " M" & vbCrLf &
             "DPI：" & DPI & "（" & Math.Round(DPI / 96, 2) * 100 & "%）" & vbCrLf &

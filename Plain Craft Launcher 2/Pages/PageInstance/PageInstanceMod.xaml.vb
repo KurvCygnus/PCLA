@@ -483,7 +483,7 @@ Install:
                 If FileUtils.Exists(NewPath) Then
                     If FileUtils.Exists(ModEntity.File.FullName) Then
                         '同时存在两个名称的 Mod
-                        If HashUtils.ComputeFromFile(ModEntity.File.FullName, HashUtils.HashMethod.Md5) <> HashUtils.ComputeFromFile(NewPath, HashUtils.HashMethod.Md5) Then
+                        If CryptographyUtils.ComputeFileHash(ModEntity.File.FullName) <> CryptographyUtils.ComputeFileHash(NewPath) Then
                             MyMsgBox($"目前同时存在启用和禁用的两个 Mod 文件：{vbCrLf} - {PathUtils.GetLastPart(NewPath)}{vbCrLf} - {ModEntity.File.Name}{vbCrLf}{vbCrLf}注意，这两个文件的内容并不相同。{vbCrLf}在手动删除或重命名其中一个文件后，才能继续操作。", "存在文件冲突")
                             Continue For
                         End If
@@ -608,8 +608,8 @@ Install:
                     Next
                     For Each Entry As KeyValuePair(Of String, String) In FileCopyList
                         If FileUtils.Exists(Entry.Value) Then
-                            FileUtils.Delete(Entry.Value, True)
                             Logger.Warn($"更新后的 Mod 文件已存在，将会把它放入回收站：{Entry.Value}")
+                            FileUtils.Delete(Entry.Value, True)
                         End If
                         If DirectoryUtils.Exists(PathUtils.RemoveLastPart(Entry.Value)) Then
                             FileUtils.Move(Entry.Key, Entry.Value)
@@ -723,18 +723,10 @@ Install:
             End If
             '显示结果提示
             If Not IsSuccessful Then Return
-            If IsShiftPressed Then
-                If ModList.IsSingle Then
-                    Hint($"已彻底删除 {ModList.Single.File.Name}！", HintType.Green)
-                Else
-                    Hint($"已彻底删除 {ModList.Count} 个文件！", HintType.Green)
-                End If
+            If ModList.IsSingle Then
+                Hint($"已删除 {ModList.Single.File.Name}！", HintType.Green)
             Else
-                If ModList.IsSingle Then
-                    Hint($"已将 {ModList.Single.File.Name} 删除到回收站！", HintType.Green)
-                Else
-                    Hint($"已将 {ModList.Count} 个文件删除到回收站！", HintType.Green)
-                End If
+                Hint($"已删除 {ModList.Count} 个文件！", HintType.Green)
             End If
         Catch ex As OperationCanceledException
             Logger.Warn(ex, "删除 Mod 被主动取消")

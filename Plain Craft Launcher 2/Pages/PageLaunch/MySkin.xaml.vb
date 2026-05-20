@@ -149,7 +149,7 @@
             RunInThread(
             Sub()
                 Try
-                    Hint("正在刷新头像……")
+                    Hint("正在刷新皮肤……")
                     '清空缓存
                     Logger.Info("正在清空皮肤缓存")
                     If DirectoryUtils.Exists(PathTemp & "Cache\Skin") Then DirectoryUtils.Delete(PathTemp & "Cache\Skin")
@@ -162,7 +162,7 @@
                     For Each SkinLoader In If(sender IsNot Nothing, {sender}, {PageLaunchLeft.SkinLegacy, PageLaunchLeft.SkinMs})
                         SkinLoader.WaitForExit(IsForceRestart:=True)
                     Next
-                    Hint("已刷新头像！", HintType.Green)
+                    Hint("已刷新皮肤！", HintType.Green)
                 Catch ex As Exception
                     Logger.Error(ex, "刷新皮肤缓存失败", LogBehavior.Alert)
                 End Try
@@ -216,13 +216,13 @@
             Hint("登录失败，无法更改披风！", HintType.Red)
             Return
         End If
-        Hint("正在获取披风列表，请稍候……")
+        If McLoginMsLoader.State <> LoadState.Finished Then Hint("正在获取披风列表，请稍候……")
         IsChanging = True
         '开始实际获取
         RunInNewThread(
         Sub()
-            Try
 Retry:
+            Try
                 '获取登录信息
                 If McLoginMsLoader.State <> LoadState.Finished Then McLoginMsLoader.WaitForExit(PageLoginMsSkin.GetLoginData())
                 If McLoginMsLoader.State <> LoadState.Finished Then
@@ -256,7 +256,7 @@ Retry:
                         Next
                         SelectedIndex = MyMsgBoxSelect(SelectionControl, "选择披风", "确定", "取消")
                     Catch ex As Exception
-                        Logger.Error(ex, "获取玩家披风列表失败")
+                        Logger.Error(ex, "获取玩家皮肤列表失败")
                     End Try
                 End Sub)
                 If SelectedIndex Is Nothing Then Return
@@ -279,7 +279,29 @@ Retry:
                     McLoginMsLoader.Output.ProfileJson = SkinData.ToString()
                 End If
             Catch ex As Exception
-                Logger.Error(ex, "更改披风失败", LogBehavior.Toast)
+                If TypeOf ex Is HttpRequestCodeException Then
+                    Dim requestException As HttpRequestCodeException = CType(ex, HttpRequestCodeException)
+                    Select Case requestException.StatusCode
+                        Case HttpStatusCode.BadRequest
+                            Logger.Warn(ex, "更改披风时遭遇 400 错误")
+                            If requestException.Response?.Contains("""error""") Then
+                                Hint("更改披风失败：" & GetJson(requestException.Response)("error").ToString, HintType.Red)
+                                Return
+                            ElseIf requestException.Response?.Contains("""errorMessage""") Then
+                                Hint("更改披风失败：" & GetJson(requestException.Response)("errorMessage").ToString, HintType.Red)
+                                Return
+                            End If
+                        Case HttpStatusCode.Unauthorized
+                            Logger.Warn(ex, "更改披风时遭遇 401 错误")
+                            Hint("正在重新登录，将在登录后自动更改披风……")
+                            McLoginMsLoader.Start(PageLoginMsSkin.GetLoginData(), IsForceRestart:=True)
+                            GoTo Retry
+                    End Select
+                ElseIf ex.IsBadNetwork Then
+                    Hint("更改披风失败：连接 Mojang 服务器超时，请稍后再试，或使用 VPN 改善网络环境", HintType.Red)
+                Else
+                    Logger.Error(ex, "更改披风失败", LogBehavior.Toast)
+                End If
             Finally
                 IsChanging = False
             End Try

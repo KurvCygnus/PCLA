@@ -91,37 +91,8 @@ RetryCacheCheck:
             End Try
             DirectoryUtils.Create(PathTemp & "Cache\")
             DirectoryUtils.Create(PathAppdata)
-
-#If DEBUG Then
-            Dim FileLockPath = Path.Combine(PathAppdata.TrimEnd("\"), "PCL.dev.Lock")
-#Else
-            Dim FileLockPath = Path.Combine(PathAppdata.TrimEnd("\"), "PCL.Lock")
-#End If
-
             '要求单例
-            If BuildType <> BuildTypes.Debug Then
-                If Not GetProgramLock(FileLockPath) Then
-                    Dim IsLocked = False
-                    Dim ShouldWaitForExit As Boolean = e.Args.Length > 0 AndAlso e.Args(0) = "--wait" '要求等待已有的 PCL 退出
-                    If Not ShouldWaitForExit Then
-                        DropToTopByLock(FileLockPath)
-                        Beep()
-                        Environment.Exit(ProcessReturnValues.Cancel)
-                    End If
-                    For i = 0 To 10
-                        If GetProgramLock(FileLockPath) Then
-                            IsLocked = True
-                            Exit For
-                        End If
-                        Thread.Sleep(500)
-                    Next
-                    If Not IsLocked Then 
-                        DropToTopByLock(FileLockPath)
-                        Beep()
-                        Environment.Exit(ProcessReturnValues.Cancel)
-                    End If
-                End If
-            End If
+            WaitingMutex(e)
             '设置 ToolTipService 默认值
             ToolTipService.InitialShowDelayProperty.OverrideMetadata(GetType(DependencyObject), New FrameworkPropertyMetadata(300))
             ToolTipService.BetweenShowDelayProperty.OverrideMetadata(GetType(DependencyObject), New FrameworkPropertyMetadata(400))
@@ -173,38 +144,37 @@ RetryCacheCheck:
             FormMain.EndProgramForce(ProcessReturnValues.Exception)
         End Try
     End Sub
-    
-    Private Shared KernelLock As Mutex
-
     ''' <summary>
-    ''' 尝试获取单例锁
+    ''' 要求程序以单例运行。
+    ''' 如果已在运行，则将其窗口拖出来并播放提示音，然后结束当前进程。
     ''' </summary>
-    ''' <param name="LockPath">文件锁位置</param>
-    ''' <returns>一个值用于指示是否获得文件锁</returns>
-    Private Function GetProgramLock(LockPath As String) As Boolean
+    Private Shared Sub WaitingMutex(e As StartupEventArgs)
+        If BuildType = BuildTypes.Debug Then Return
         Try
-            Dim IsLocked = False
-            KernelLock = New Mutex(True, "Local\Plain Craft Launcher", IsLocked)
-            If Not IsLocked Then Return False
-            Logger.Info("获取单例锁成功")
-            File.WriteAllText(LockPath, Process.GetCurrentProcess().Id.ToString())
-            Return IsLocked
+            Dim MutexCreatedNew As Boolean
+            PclMutex = New Mutex(True, "PCL_SingletonMutex", MutexCreatedNew)
+            If MutexCreatedNew Then Return
+            Logger.Warn("已有一个 PCL 实例正在运行")
+            '等待已有的 PCL 退出
+            If e.Args.Length > 0 AndAlso e.Args(0) = "--wait" Then
+                Try
+                    If PclMutex.WaitOne(10000) Then Return '等待至多 10 秒
+                Catch Ignored As AbandonedMutexException
+                    Return '已有实例异常退出，继续启动
+                End Try
+            End If
+            '将已有的 PCL 窗口拖出来
+            Dim WindowHwnd As IntPtr = FindWindow(Nothing, "Plain Craft Launcher　")
+            If WindowHwnd = IntPtr.Zero Then WindowHwnd = FindWindow(Nothing, "Plain Craft Launcher 2　")
+            If WindowHwnd <> IntPtr.Zero Then ShowWindowToTop(WindowHwnd)
+            '播放提示音并退出
+            Beep()
+            Environment.[Exit](ProcessReturnValues.Cancel)
         Catch ex As Exception
-
+            Logger.Warn(ex, "单例检查失败")
         End Try
-
-        Return False
-    End Function
-
-    ''' <summary>
-    ''' 从文件锁中尝试拖出进程
-    ''' </summary>
-    Public Sub DropToTopByLock(LockPath As String)
-        Dim Pid As Integer
-        If Not Integer.TryParse(File.ReadAllText(LockPath), Pid) Then Return
-        Dim Handle = Process.GetProcessById(Pid)?.MainWindowHandle
-        If Handle <> Intptr.Zero Then ShowWindowToTop(Handle)
     End Sub
+    Private Shared PclMutex As Mutex
 
     '结束
     Private Sub Application_SessionEnding(sender As Object, e As SessionEndingCancelEventArgs) Handles Me.SessionEnding

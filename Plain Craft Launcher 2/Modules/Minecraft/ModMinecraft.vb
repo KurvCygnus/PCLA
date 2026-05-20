@@ -1286,7 +1286,7 @@ ExitDataLoad:
                 GoTo OnLoaded
             End If
             '有可用版本
-            Dim FolderListCheck As Integer = GetHash(Versions.MCINSTANCE_CACHE_VERSION & "#" & FolderList.Join("#"c)) Mod (Integer.MaxValue - 1) '根据文件夹名列表生成辨识码
+            Dim FolderListCheck As Integer = (Versions.MCINSTANCE_CACHE_VERSION & "#" & FolderList.Join("#"c)).GetStableHashCode() Mod (Integer.MaxValue - 1) '根据文件夹名列表生成辨识码
             If Not McInstanceListForceRefresh AndAlso Val(ReadIni(PathMc & "PCL.ini", "InstanceCache")) = FolderListCheck Then
                 '可以使用缓存
                 Dim Result = InitMcInstanceListWithCache(PathMc)
@@ -1747,7 +1747,7 @@ OnLoaded:
     ''' </summary>
     Public Function McSkinDownload(Address As String) As String
         Dim SkinName As String = PathUtils.GetLastPart(Address)
-        Dim FileAddress As String = PathTemp & "Cache\Skin\" & GetHash(Address) & ".png"
+        Dim FileAddress As String = PathTemp & "Cache\Skin\" & Address.GetStableHashCode() & ".png"
         SyncLock McSkinDownloadLock
             If Not FileUtils.Exists(FileAddress) Then
                 NetDownloadByClient(Address, FileAddress & ".PCLDownloading")

@@ -333,7 +333,7 @@ NextInner:
             Me.Type = Type
         End Sub
         Public Overrides Function GetHashCode() As Integer
-            Return GetHash(UserName & Password & BaseUrl & Token & Type) Mod Integer.MaxValue
+            Return (UserName & Password & BaseUrl & Token & Type).GetStableHashCode() Mod Integer.MaxValue
         End Function
 
     End Class
@@ -353,7 +353,7 @@ NextInner:
             Type = McLoginType.Ms
         End Sub
         Public Overrides Function GetHashCode() As Integer
-            Return GetHash(OAuthRefreshToken & AccessToken & Uuid & UserName & ProfileJson) Mod Integer.MaxValue
+            Return (OAuthRefreshToken & AccessToken & Uuid & UserName & ProfileJson).GetStableHashCode() Mod Integer.MaxValue
         End Function
     End Class
     Public Class McLoginLegacy
@@ -375,7 +375,7 @@ NextInner:
             Type = McLoginType.Legacy
         End Sub
         Public Overrides Function GetHashCode() As Integer
-            Return GetHash(UserName & SkinType & SkinName & Type) Mod Integer.MaxValue
+            Return (UserName & SkinType & SkinName & Type).GetStableHashCode() Mod Integer.MaxValue
         End Function
     End Class
 
@@ -535,21 +535,15 @@ NextInner:
         Data.Progress = 0.05
         '检查是否已经登录完成
         Dim ExpiresAt = Settings.Get(Of Long)("CacheMsV2Expires")
-
         If Not Data.IsForceRestarting AndAlso '不要求强行重启
-           ExpiresAt > 0 AndAlso ExpiresAt > GetUnixTimestampUtc() Then 'AccessToken 尚未过期
-            'https://github.com/Meloong-Git/PCL/issues/8638
-            '如果是程序刚启动时调用的登录，此时加载器的状态为 Waiting，GetLoginData 函数会返回不带 ProfileJson 的数据作为输入
-            If String.IsNullOrEmpty(Input.ProfileJson) Then
-                Input = PageLoginMsSkin.GetLoginData(True)
-            End If
+           ExpiresAt > 0 AndAlso ExpiresAt > GetUnixTimestampUtc() AndAlso 'AccessToken 尚未过期
+           Input.UserName = Settings.Get(Of String)("CacheMsV2Name") Then
             Data.Output = New McLoginResult With {
-                .AccessToken = Input.AccessToken,
-                .Name = Input.UserName,
-                .Uuid = Input.Uuid,
-                .Type = "Microsoft",
-                .ClientToken = Input.Uuid,
-                .ProfileJson = Input.ProfileJson
+                .Name = Input.UserName, .Type = "Microsoft",
+                .AccessToken = Settings.Get(Of String)("CacheMsV2Access"),
+                .Uuid = Settings.Get(Of String)("CacheMsV2Uuid"),
+                .ClientToken = Settings.Get(Of String)("CacheMsV2Uuid"),
+                .ProfileJson = Settings.Get(Of String)("CacheMsV2ProfileJson")
             }
             McLaunchLog("无需登录，AccessToken 尚未过期")
             GoTo SkipLogin
@@ -1018,16 +1012,18 @@ Retry:
             Result = NetRequestByClientRetry("https://api.minecraftservices.com/authentication/login_with_xbox", HttpMethod.Post,
                 Content:=Request, ContentType:="application/json", RequireJson:=True)
         Catch ex As HttpRequestCodeException
-            Select Case ex.StatusCode
-                Case 429
-                    Logger.Warn(ex, "微软登录第 4 步汇报 429")
-                    Throw New Exception("$登录尝试太过频繁，请等待几分钟后再试！")
-                Case HttpStatusCode.Forbidden
-                    Logger.Warn(ex, "微软登录第 4 步汇报 403")
-                    Throw New Exception("$当前 IP 的登录尝试异常。" & vbCrLf & "如果你使用了 VPN 或加速器，请把它们关掉或更换节点后再试！")
-                Case Else
-                    Throw
-            End Select
+            If ex.StatusCode = 429 Then
+                Logger.Warn(ex, "微软登录第 4 步汇报 429")
+                Throw New Exception("$登录尝试太过频繁，请等待几分钟后再试！")
+            ElseIf ex.StatusCode = HttpStatusCode.Forbidden Then
+                Logger.Warn(ex, "微软登录第 4 步汇报 403")
+                Throw New Exception("$当前 IP 的登录尝试异常。" & vbCrLf & "如果你使用了 VPN 或加速器，请把它们关掉或更换节点后再试！")
+            ElseIf ex.Response?.Contains("ACCOUNT_SUSPENDED") Then '#8655
+                MyMsgBox("该账号似乎已被微软封禁，无法登录。", "登录失败", "我知道了", IsWarn:=True)
+                Throw New Exception("$$")
+            Else
+                Throw
+            End If
         End Try
 
         Dim ResultJson As JObject = GetJson(Result)
@@ -1152,7 +1148,7 @@ Retry:
         Return Uuid
     End Function
     Public Function McLoginLegacyUuid(Name As String)
-        Dim FullUuid As String = Name.Length.ToString("X").EnsureLength("0", 16) & GetHash(Name).ToString("X").EnsureLength("0", 16)
+        Dim FullUuid As String = Name.Length.ToString("X").EnsureLength("0", 16) & Name.GetStableHashCode().ToString("X").EnsureLength("0", 16)
         Return FullUuid.Substring(0, 12) & "3" & FullUuid.Substring(13, 3) & "9" & FullUuid.Substring(17, 15)
     End Function
 
@@ -1445,14 +1441,13 @@ NextInstance:
         End If
 
         'JLW
-        '修复 Java 18- 在 Windows UTF-8 Beta 模式（非 GBK 编码）下命令行参数乱码的问题（JDK-8272352）
+        '非 GBK 编码下命令行参数乱码的问题（JDK-8272352）
         Dim UseJLW As Boolean =
             Not Settings.Get(Of Boolean)("LaunchAdvanceDisableJLW") AndAlso Not Settings.Get(Of Boolean)("VersionAdvanceDisableJLW", McInstanceSelected) AndAlso
-            McLaunchJavaSelected.MajorVersion <= 18 AndAlso 'Java 19+ 已经修复了该 Bug
             Not IsGBKEncoding AndAlso Not McFolderSelected.IsAsciiOnly() '仅在该环境下才会触发该 Bug
         If UseJLW AndAlso CustomArg.Contains("-javaagent") Then
             UseJLW = False
-            McLaunchLog("由于使用自定义 javaagent，已禁用 JLW，这可能导致游戏崩溃！", LogLevel.Warn)
+            McLaunchLog("由于使用了自定义 javaagent，已禁用 JLW，这可能导致游戏崩溃！", LogLevel.Warn)
         End If
         If UseJLW Then
             If McLaunchJavaSelected.MajorVersion >= 9 Then

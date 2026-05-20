@@ -11,10 +11,10 @@ Public Class FormMain
         Dim FeatureList As New List(Of KeyValuePair(Of Integer, String))
         '统计更新日志条目
         If BuildType = BuildTypes.Release Then
-            If LastVersion < 400 Then 'Release 2.12.8.0
+            If LastVersion < 402 Then 'Release 2.12.8.1
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(2, "优化：升级框架到 .NET Framework 4.8"))
-                FeatureCount += 28
-                BugCount += 19
+                FeatureCount += 35
+                BugCount += 21
             End If
             If LastVersion < 398 Then 'Release 2.12.7.3
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(2, "优化：下载游戏、整合包的稳定性"))
@@ -74,6 +74,11 @@ Public Class FormMain
             '3：BUG+ IMP* FEAT-
             '2：BUG* IMP-
             '1：BUG-
+            If LastVersion < 401 Then 'Snapshot 2.12.8.1
+                FeatureList.Add(New KeyValuePair(Of Integer, String)(1, "修复：可能无法更换披风"))
+                FeatureCount += 8
+                BugCount += 6
+            End If
             If LastVersion < 399 Then 'Snapshot 2.12.8.0
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(2, "优化：升级框架到 .NET Framework 4.8"))
                 FeatureCount += 28

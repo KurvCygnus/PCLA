@@ -1,4 +1,5 @@
 ﻿Public Class Settings
+    'TODO: 目前仅有此处在使用 DES 加密，后续考虑更换加密算法
     Public Shared ReadOnly Entries As Dictionary(Of String, Setting) = (New List(Of Setting) From {
         New Setting("Identify", "", Source:=Sources.Registry),
         New Setting("WindowHeight", 550),
@@ -248,7 +249,7 @@
             If Encrypted Then
                 Try
                     If Value Is Nothing Then Value = ""
-                    Value = SecretEncrypt(Value, "PCL" & Identify)
+                    Value = CryptographyUtils.DesEncrypt(Value, "PCL" & Identify)
                 Catch ex As Exception
                     Logger.Warn(ex, $"加密设置失败：{Key}")
                 End Try
@@ -318,7 +319,7 @@
         '正常读取
         Try
             Dim GotValue As String = Nothing '先用 String 储存，避免类型转换
-            Dim DefaultValue As String = If(Entry.Encrypted, SecretEncrypt(Entry.DefaultValue, "PCL" & Identify), Entry.DefaultValue)
+            Dim DefaultValue As String = If(Entry.Encrypted, CryptographyUtils.DesEncrypt(Entry.DefaultValue, "PCL" & Identify), Entry.DefaultValue)
             Select Case Entry.Source
                 Case Sources.Normal
                     GotValue = ReadIni("Setup", Key, DefaultValue)
@@ -336,7 +337,7 @@
                     GotValue = Entry.DefaultValue
                 Else
                     Try
-                        GotValue = SecretDecrypt(GotValue, "PCL" & Identify)
+                        GotValue = CryptographyUtils.DesDecrypt(GotValue, "PCL" & Identify)
                     Catch ex As Exception
                         Logger.Warn(ex, $"解密设置失败：{Key}")
                         GotValue = Entry.DefaultValue

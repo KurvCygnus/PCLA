@@ -261,8 +261,11 @@ Retry:
                     })
                 End If
             End SyncLock
-            CancelToken.Dispose() : CancelToken = New CancellationTokenSource(Timeout)
-            Response = RequestClient.SendAsync(Request, HttpCompletionOption.ResponseHeadersRead, CancelToken.Token).GetResultWithTimeout(CancelToken, Timeout)
+            ResilientUtils.RetryOn(Of FileNotFoundException, IOException)( 'CacheCow 读取缓存时若文件被占用，会调用不存在的 System.Net.Http.Formatting.resources，抛出此异常（#8150）
+            Sub()
+                CancelToken.Dispose() : CancelToken = New CancellationTokenSource(Timeout)
+                Response = RequestClient.SendAsync(Request, HttpCompletionOption.ResponseHeadersRead, CancelToken.Token).GetResultWithTimeout(CancelToken, Timeout)
+            End Sub)
             Dim ResponseBytes As Byte()
             CancelToken.Dispose() : CancelToken = New CancellationTokenSource(Timeout)
             Using ResponseStream = Response.Content.ReadAsStreamAsync().GetResultWithTimeout(CancelToken, Timeout)
@@ -286,9 +289,6 @@ Retry:
             Throw
         Catch ex As HttpRequestException
             Throw
-        Catch ex As FileNotFoundException
-            '由于 CacheCow 读取缓存失败，然后系统调用不存在的 System.Net.Http.Formatting.resources 抛出（#8150）
-            Throw New Exception($"网络请求时读取缓存失败", ex)
         Catch ex As Exception
             RecordIPReliability(HostIp, -1)
             If TypeOf ex Is OperationCanceledException OrElse TypeOf ex Is TimeoutException Then 'CancellationToken 超时

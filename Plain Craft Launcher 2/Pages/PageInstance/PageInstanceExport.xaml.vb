@@ -119,7 +119,7 @@ Public Class PageInstanceExport
                 If Rule.StartsWithF("!") Then Return False '只看正向规则
                 '检查前两级
                 Try
-                    If AllEntries.Any(Function(Entry) Entry Like Rule) Then Return True
+                    If AllEntries.Any(Function(Entry) Entry.Lower Like Rule.Lower) Then Return True
                 Catch ex As Exception
                     Logger.Error(ex, $"错误的规则：{Rule}", LogBehavior.Toast)
                     Return False
@@ -482,7 +482,7 @@ Public Class PageInstanceExport
                     Dim ShouldKeep As Boolean = False
                     For Each Rule In AllRules
                         Dim Revert = Rule.StartsWithF("!")
-                        If RelativePath Like Rule.TrimStart("!") Then ShouldKeep = Not Revert
+                        If RelativePath.Lower Like Rule.TrimStart("!").Lower Then ShouldKeep = Not Revert
                     Next
                     If Not ShouldKeep Then Continue For
                     Dim TargetPath As String = OverridesFolder & RelativePath
@@ -641,7 +641,7 @@ Public Class PageInstanceExport
                 Dim ModFile As LocalResourceFile = Pair.Key
                 Files.Add(New JObject From {
                     {"path", PathUtils.RemoveExtendedPrefix(ModFile.File.FullName).AfterFirst(OverridesFolder).Replace("\", "/")},
-                    {"hashes", New JObject From {{"sha1", ModFile.ModrinthHash}, {"sha512", HashUtils.ComputeFromFile(ModFile.File.FullName, HashUtils.HashMethod.Sha512)}}},
+                    {"hashes", New JObject From {{"sha1", ModFile.ModrinthHash}, {"sha512", CryptographyUtils.ComputeFileHash(ModFile.File.FullName, CryptographyUtils.HashMethod.Sha512)}}},
                     {"downloads", New JArray(Pair.Value.OrderBy(Function(u) u.Contains("modrinth.com")))}, '不优先选择 Modrinth
                     {"fileSize", ModFile.File.Length}
                 })
