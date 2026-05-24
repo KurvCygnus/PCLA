@@ -11,6 +11,11 @@ Public Class FormMain
         Dim FeatureList As New List(Of KeyValuePair(Of Integer, String))
         '统计更新日志条目
         If BuildType = BuildTypes.Release Then
+            If LastVersion < 404 Then 'Release 2.12.8.2
+                FeatureList.Add(New KeyValuePair(Of Integer, String)(1, "修复：Windows 7 无法正常联网"))
+                FeatureCount += 1
+                BugCount += 2
+            End If
             If LastVersion < 402 Then 'Release 2.12.8.1
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(2, "优化：升级框架到 .NET Framework 4.8"))
                 FeatureCount += 35
@@ -74,6 +79,11 @@ Public Class FormMain
             '3：BUG+ IMP* FEAT-
             '2：BUG* IMP-
             '1：BUG-
+            If LastVersion < 403 Then 'Snapshot 2.12.8.2
+                FeatureList.Add(New KeyValuePair(Of Integer, String)(1, "修复：Windows 7 无法正常联网"))
+                FeatureCount += 1
+                BugCount += 2
+            End If
             If LastVersion < 401 Then 'Snapshot 2.12.8.1
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(1, "修复：可能无法更换披风"))
                 FeatureCount += 8

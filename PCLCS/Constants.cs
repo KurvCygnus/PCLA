@@ -71,5 +71,5 @@ public static class Versions {
     /// <summary>
     /// Minecraft 本地实例信息缓存的版本号。
     /// </summary>
-    public const int MCINSTANCE_CACHE_VERSION = 37;
+    public const int MCINSTANCE_CACHE_VERSION = 38;
 }

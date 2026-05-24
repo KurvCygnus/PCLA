@@ -106,6 +106,9 @@ RetryCacheCheck:
             ServicePointManager.UseNagleAlgorithm = False
             ServicePointManager.EnableDnsRoundRobin = True
             ServicePointManager.ReusePort = True
+            If Environment.OSVersion.Version < New Version(6, 2) Then 'Windows 7 回退（#8519）
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 Or SecurityProtocolType.Tls Or SecurityProtocolType.Tls11 Or SecurityProtocolType.Tls12
+            End If
             '设置初始窗口
             If Settings.Get(Of Boolean)("UiLauncherLogo") Then
                 FrmStart = New SplashScreen("Images\icon.ico")

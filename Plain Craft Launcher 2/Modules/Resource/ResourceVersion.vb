@@ -178,19 +178,21 @@ Public Class ResourceVersion
                     .Size = File("size")
                     .Hash = File("hashes")("sha1")
                 End If
-                'Loaders
+                '类别
                 '结果可能混杂着 Mod、数据包和服务端插件
                 Dim RawLoaders As List(Of String) = Data("loaders").Select(Function(v) v.ToString).ToList
                 .ModLoaders = ModLoaders.None
                 If .ResourceType.HasFlag(ResourceTypes.Mod) OrElse .ResourceType.HasFlag(ResourceTypes.DataPack) Then
                     If RawLoaders.Intersect({"bukkit", "folia", "paper", "purpur", "spigot"}).Any() Then .ResourceType = ResourceTypes.Plugin 'Veinminer Enchantment 同时支持服务端与 Fabric
                     If RawLoaders.Contains("datapack") Then .ResourceType = ResourceTypes.DataPack
-                    For Each Loader As ModLoaders In EnumUtils.GetAllFlags(Of ModLoaders)()
-                        If RawLoaders.Contains(Loader.ToString.Lower) Then .ModLoaders = .ModLoaders Or Loader : .ResourceType = ResourceTypes.Mod
-                    Next
+                    If EnumUtils.GetAllFlags(Of ModLoaders)().Any() Then .ResourceType = ResourceTypes.Mod
                 Else
                     '使用传入的类别，不作修改（#8377）
                 End If
+                'Loaders
+                For Each Loader As ModLoaders In EnumUtils.GetAllFlags(Of ModLoaders)()
+                    If RawLoaders.Contains(Loader.ToString.Lower) Then .ModLoaders = .ModLoaders Or Loader
+                Next
                 'Dependencies
                 If Data.ContainsKey("dependencies") Then
                     .RawDependencies = Data("dependencies").
@@ -350,14 +352,14 @@ Public Class ResourceVersion
                 .Title = If(IsBadDisplay, FileName, Display)
                 .Logo = $"{PathImage}ReleaseTypes/{ReleaseType}.png"
                 AddHandler .Click, ClickHandler
-
                 '描述
                 .Info =
                 Iterator Function()
+                    If ModLoaders <> ModLoaders.None Then Yield ModLoaders.Flags.Join("、"c)
                     If .Title <> FileName.BeforeLast(".") Then Yield FileName.BeforeLast(".")
                     If Dependencies.Any Then Yield $"{Dependencies.Count} 项前置"
                     If GameVersions.All(Function(v) Not v.Contains(".") OrElse {"w", "snapshot", "rc", "pre", "experimental", "-"}.Any(Function(s) v.ContainsIgnoreCase(s))) Then Yield $"游戏版本 {GameVersions.Join("、"c)}"
-                    If DownloadCount > 0 Then Yield $"下载 {If(DownloadCount > 100000, Math.Round(DownloadCount / 10000) & " 万", DownloadCount)} 次" 'CurseForge 的下载次数经常错误地返回 0
+                    If DownloadCount > 0 Then Yield $"下载 {If(DownloadCount > 100000, Math.Round(DownloadCount / 10000) & " 万", DownloadCount & " ")}次" 'CurseForge 的下载次数经常错误地返回 0
                     Yield $"更新于 {GetTimeSpanString(ReleaseDate - Date.Now, False)}"
                     If ReleaseType <> ReleaseTypes.Release Then Yield ReleaseTypeDisplay
                 End Function().Join("，"c)
