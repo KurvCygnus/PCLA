@@ -277,6 +277,7 @@ Retry:
                     Next
                     If SelectedIndex > 0 Then SkinData("capes")(SelectedIndex - 1)("state") = "ACTIVE"
                     McLoginMsLoader.Output.ProfileJson = SkinData.ToString()
+                    Settings.Set("CacheMsV2ProfileJson", McLoginMsLoader.Output.ProfileJson)
                 End If
             Catch ex As Exception
                 If TypeOf ex Is HttpRequestCodeException Then
