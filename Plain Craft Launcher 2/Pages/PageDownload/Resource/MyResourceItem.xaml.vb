@@ -90,7 +90,6 @@
                 If Card.Title <> "" AndAlso Not Card.IsSwapped Then Titles.Add(Card.Title)
             Next
             Logger.Info($"记录当前已展开的卡片：{String.Join("、", Titles)}")
-            FrmMain.PageCurrent.Additional(1) = Titles
         End If
         '打开详情页
         Dim TargetType As ResourceTypes
@@ -123,7 +122,7 @@
             TargetLoader = FrmMain.PageCurrent.Additional(3)
         End If
         FrmMain.PageChange(New FormMain.PageStackData With {.Page = FormMain.PageType.ResourceDetail,
-                           .Additional = {sender.Tag, New List(Of String), TargetInstance, TargetLoader, TargetType}})
+                           .Additional = {sender.Tag, Titles, TargetInstance, TargetLoader, TargetType}})
     End Sub
 
     '鼠标点击判定
