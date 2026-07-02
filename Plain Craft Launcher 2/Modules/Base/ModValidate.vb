@@ -1,4 +1,4 @@
-﻿'提供不同的输入验证方法，名称以 Validate 开头
+'提供不同的输入验证方法，名称以 Validate 开头
 Public Module ModValidate
 
     ''' <summary>
@@ -63,6 +63,20 @@ Public Class ValidateNullOrWhiteSpace
     Public Overrides Function Validate(Str As String) As String
         If IsNothing(Str) OrElse String.IsNullOrWhiteSpace(Str) Then Return "输入内容不能为空！"
         Return ""
+    End Function
+End Class
+
+''' <summary>
+''' 自定义的 Validate。
+''' </summary>
+Public Class ValidateFunc
+    Inherits Validate
+    Private ReadOnly _func As Func(Of String, String)
+    Public Sub New(F As Func(Of String, String))
+        _func = F
+    End Sub
+    Public Overrides Function Validate(Str As String) As String
+        Return _func(Str)
     End Function
 End Class
 
@@ -255,7 +269,7 @@ Public Class ValidateFolderName
         Me.IgnoreCase = IgnoreCase
         Me.UseMinecraftCharCheck = UseMinecraftCharCheck
         On Error Resume Next
-        PathIgnore = DirectoryUtils.GetDirectories(Folder, True)
+        PathIgnore = DirectoryUtils.EnumerateDirectories(Folder)
     End Sub
     Public Overrides Function Validate(Str As String) As String
         Try

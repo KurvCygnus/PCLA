@@ -1,8 +1,7 @@
-﻿Public Class MyScrollViewer
+Public Class MyScrollViewer
     Inherits ScrollViewer
 
     Public Property DeltaMult As Double = 1
-
 
     Private RealOffset As Double
     Private Sub MyScrollViewer_PreviewMouseWheel(sender As Object, e As MouseWheelEventArgs) Handles Me.PreviewMouseWheel
@@ -12,7 +11,7 @@
                 (GetType(ComboBox).IsAssignableFrom(SourceType) AndAlso CType(e.Source, ComboBox).IsDropDownOpen) OrElse
                 (GetType(TextBox).IsAssignableFrom(SourceType) AndAlso CType(e.Source, TextBox).AcceptsReturn) OrElse
                 GetType(ComboBoxItem).IsAssignableFrom(SourceType) OrElse
-                TypeOf e.Source Is CheckBox) Then
+                PresentationSource.FromVisual(e.Source)?.RootVisual?.GetType().FullName = "System.Windows.Controls.Primitives.PopupRoot") Then
             '如果当前是在对有滚动条的下拉框或文本框执行，则不接管操作
             Return
         End If

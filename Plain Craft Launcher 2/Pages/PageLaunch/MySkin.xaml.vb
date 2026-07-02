@@ -1,4 +1,4 @@
-﻿Public Class MySkin
+Public Class MySkin
 
     '事件
     Public Event Click(sender As Object, e As MouseButtonEventArgs)
@@ -143,7 +143,7 @@
             End If
         Next
         If FrmLaunchLeft IsNot Nothing AndAlso HasLoaderRunning Then
-            '由于 Interrupt 不是实时的，暂时不会释放文件，会导致删除报错，故只能取消执行
+            '由于取消不是实时的，暂时不会释放文件，会导致删除报错，故只能取消执行
             Hint("有正在获取中的皮肤，请稍后再试！", HintType.Blue)
         Else
             RunInThread(
@@ -231,7 +231,7 @@ Retry:
                 End If
                 Dim AccessToken As String = McLoginMsLoader.Output.AccessToken
                 Dim Uuid As String = McLoginMsLoader.Output.Uuid
-                Dim SkinData As JObject = GetJson(McLoginMsLoader.Output.ProfileJson)
+                Dim SkinData As JObject = McLoginMsLoader.Output.ProfileJson.DeserializeJson()
                 '获取玩家的所有披风
                 Dim SelectedIndex As Integer? = Nothing
                 RunInUiWait(
@@ -267,7 +267,7 @@ Retry:
                     ContentType:="application/json",
                     Headers:={{"Authorization", "Bearer " & AccessToken}})
                 If Result.Contains("""errorMessage""") Then
-                    Hint("更改披风失败：" & GetJson(Result)("errorMessage").ToString, HintType.Red)
+                    Hint("更改披风失败：" & Result.DeserializeJson()("errorMessage").ToString, HintType.Red)
                     Return
                 Else
                     Hint("更改披风成功！", HintType.Green)
@@ -286,10 +286,10 @@ Retry:
                         Case HttpStatusCode.BadRequest
                             Logger.Warn(ex, "更改披风时遭遇 400 错误")
                             If requestException.Response?.Contains("""error""") Then
-                                Hint("更改披风失败：" & GetJson(requestException.Response)("error").ToString, HintType.Red)
+                                Hint("更改披风失败：" & requestException.Response.DeserializeJson()("error").ToString, HintType.Red)
                                 Return
                             ElseIf requestException.Response?.Contains("""errorMessage""") Then
-                                Hint("更改披风失败：" & GetJson(requestException.Response)("errorMessage").ToString, HintType.Red)
+                                Hint("更改披风失败：" & requestException.Response.DeserializeJson()("errorMessage").ToString, HintType.Red)
                                 Return
                             End If
                         Case HttpStatusCode.Unauthorized

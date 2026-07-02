@@ -1,4 +1,4 @@
-﻿Class PageSetupSystem
+Public Class PageSetupSystem
 
 
     Private Sub PageSetupSystem_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded

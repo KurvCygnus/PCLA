@@ -1,4 +1,4 @@
-﻿Public Module ModDownloadLib
+Public Module ModDownloadLib
 
 #Region "Minecraft 下载"
 
@@ -21,7 +21,7 @@
             End Sub) With {.ProgressWeight = 2, .Show = False})
         End If
         Loaders.Add(New LoaderDownload(McDownloadClientJsonName, New List(Of NetFile) From {
-            New NetFile(DlSourceLauncherOrMetaGet(If(JsonUrl, "")), VersionFolder & InstanceName & ".json", New FileChecker(CanUseExistsFile:=False, IsJson:=True))
+            New NetFile(DlSourceLauncherOrMetaGet(If(JsonUrl, "")), VersionFolder & InstanceName & ".json", New FileChecker With {.IsJson = True})
         }) With {.ProgressWeight = 3})
 
         '下载支持库文件
@@ -47,7 +47,7 @@
             End Try
             '顺手添加 Json 项目
             Try
-                Dim InstanceJson As JObject = GetJson(FileUtils.ReadAsString(VersionFolder & InstanceName & ".json"))
+                Dim InstanceJson As JObject = FileUtils.ReadAsJson(VersionFolder & InstanceName & ".json")
                 InstanceJson.Add("clientVersion", Id)
                 FileUtils.Write($"{VersionFolder}{InstanceName}.json", InstanceJson.ToString)
             Catch ex As Exception
@@ -106,32 +106,17 @@
     End Function
     Private Sub McDownloadSaveMenuBuild(sender As Object, e As EventArgs)
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf McDownloadMenuLog
         Dim BtnServer As New MyIconButton With {.LogoScale = 1, .Logo = Logo.IconButtonServer, .ToolTip = "下载服务端"}
-        ToolTipService.SetPlacement(BtnServer, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnServer, 30)
-        ToolTipService.SetHorizontalOffset(BtnServer, 2)
         AddHandler BtnServer.Click, AddressOf McDownloadMenuSaveServer
         sender.Buttons = {BtnServer, BtnInfo}
     End Sub
     Private Sub McDownloadMenuBuild(sender As Object, e As EventArgs)
         Dim BtnSave As New MyIconButton With {.Logo = Logo.IconButtonSave, .ToolTip = "另存为"}
-        ToolTipService.SetPlacement(BtnSave, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnSave, 30)
-        ToolTipService.SetHorizontalOffset(BtnSave, 2)
         AddHandler BtnSave.Click, AddressOf McDownloadMenuSave
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf McDownloadMenuLog
         Dim BtnServer As New MyIconButton With {.LogoScale = 1, .Logo = Logo.IconButtonServer, .ToolTip = "下载服务端"}
-        ToolTipService.SetPlacement(BtnServer, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnServer, 30)
-        ToolTipService.SetHorizontalOffset(BtnServer, 2)
         AddHandler BtnServer.Click, AddressOf McDownloadMenuSaveServer
         sender.Buttons = {BtnSave, BtnInfo, BtnServer}
     End Sub
@@ -172,7 +157,7 @@
             Dim Loaders As New List(Of LoaderBase)
             '下载版本 JSON 文件
             Loaders.Add(New LoaderDownload("下载版本 JSON 文件", New List(Of NetFile) From {
-                New NetFile(DlSourceLauncherOrMetaGet(JsonUrl), VersionFolder & Id & ".json", New FileChecker(CanUseExistsFile:=False, IsJson:=True))
+                New NetFile(DlSourceLauncherOrMetaGet(JsonUrl), VersionFolder & Id & ".json", New FileChecker With {.IsJson = True})
             }) With {.ProgressWeight = 2})
             '构建服务端
             Loaders.Add(New LoaderTask(Of String, List(Of NetFile))("构建服务端",
@@ -185,11 +170,11 @@
                     Task.Output = New List(Of NetFile)
                     Hint($"Mojang 没有给 Minecraft {Id} 提供官方服务端下载，没法下，撤退！", HintType.Red)
                     Thread.Sleep(2000) '等玩家把上一个提示看完
-                    Task.Interrupt()
+                    Task.Cancel()
                     Return
                 End If
                 Dim JarUrl As String = Instance.JsonObject("downloads")("server")("url")
-                Dim Checker As New FileChecker(MinSize:=1024, ActualSize:=If(Instance.JsonObject("downloads")("server")("size"), -1), Hash:=Instance.JsonObject("downloads")("server")("sha1"))
+                Dim Checker As New FileChecker With {.MinSize = 1024, .ActualSize = If(Instance.JsonObject("downloads")("server")("size"), -1), .Hash = Instance.JsonObject("downloads")("server")("sha1")}
                 Task.Output = New List(Of NetFile) From {New NetFile(DlSourceLauncherOrMetaGet(JarUrl), VersionFolder & Id & "-server.jar", Checker)}
                 '添加启动脚本
                 Dim Bat As String =
@@ -205,7 +190,7 @@ echo ----------------------
 echo 服务端已停止。
 pause"
                 FileUtils.Write(VersionFolder & "Launch Server.bat", Bat,
-                        Encoding:=If(Encoding.Default.Equals(Encoding.UTF8), Encoding.UTF8, Encoding.GetEncoding("GB18030")))
+                        encoding:=If(Encoding.Default.Equals(Encoding.UTF8), Encoding.UTF8, Encoding.GetEncoding("GB18030")))
                 '删除版本 JSON
                 FileUtils.Delete(VersionFolder & Id & ".json")
             End Sub) With {.ProgressWeight = 0.5, .Show = False})
@@ -248,7 +233,7 @@ pause"
             Dim Loaders As New List(Of LoaderBase)
             '下载版本 JSON 文件
             Loaders.Add(New LoaderDownload("下载版本 JSON 文件", New List(Of NetFile) From {
-                New NetFile(DlSourceLauncherOrMetaGet(JsonUrl), VersionFolder & Id & ".json", New FileChecker(CanUseExistsFile:=False, IsJson:=True))
+                New NetFile(DlSourceLauncherOrMetaGet(JsonUrl), VersionFolder & Id & ".json", New FileChecker With {.IsJson = True})
             }) With {.ProgressWeight = 2})
             '获取支持库文件地址
             Loaders.Add(New LoaderTask(Of String, List(Of NetFile))("分析核心 JAR 文件下载地址",
@@ -357,27 +342,29 @@ pause"
         End Try
     End Sub
     Private Sub McDownloadOptiFineInstall(BaseMcFolderHome As String, Target As String, Task As LoaderTask(Of List(Of NetFile), Boolean), UseJavaWrapper As Boolean)
+        Dim JavaRange = ValueRange(Of Version).AtLeast(New Version(21, 0)) '默认值
+        Try
+            Using Installer = FileUtils.OpenZip(Target)
+                Dim InstallerClass = Installer.GetEntry("optifine/Installer.class")
+                If InstallerClass Is Nothing Then Throw New FileNotFoundException("未找到 optifine/Installer.class")
+                Using Stream = InstallerClass.Open(), Reader As New BinaryReader(Stream)
+                    Dim Header = Reader.ReadBytes(8)
+                    If Header.Length < 8 Then Throw New IOException("Installer.class 长度不足")
+                    If Header(0) <> &HCA OrElse Header(1) <> &HFE OrElse Header(2) <> &HBA OrElse Header(3) <> &HBE Then Throw New InvalidDataException("Installer.class 文件头无效")
+                    Dim ClassVersion = Header(6) * &H100 + Header(7)
+                    If ClassVersion < 49 Then Throw New InvalidDataException("Installer.class 版本过低")
+                    If ClassVersion > 100 Then Throw New InvalidDataException("Installer.class 版本过高")
+                    JavaRange = ValueRange(Of Version).AtLeast(New Version(ClassVersion - 44, 0))
+                    Logger.Info($"OptiFine 安装器 class 版本：{ClassVersion}，需要 Java {JavaRange}")
+                End Using
+            End Using
+        Catch ex As Exception
+            Logger.Warn(ex, "读取 OptiFine 安装器 Java 版本失败")
+        End Try
         '选择 Java
-        Dim Java As JavaEntry
-        SyncLock JavaLock
-            Java = JavaSelect("已取消安装。", New Version(1, 8, 0, 0))
-            If Java Is Nothing Then
-                '开始自动下载
-                Dim JavaLoader = GetJavaDownloadLoader()
-                Try
-                    JavaLoader.Start(17, IsForceRestart:=True)
-                    Do While JavaLoader.State = LoadState.Loading AndAlso Not Task.IsInterrupted
-                        Thread.Sleep(10)
-                    Loop
-                Finally
-                    JavaLoader.Interrupt() '确保取消时中止 Java 下载
-                End Try
-                '检查下载结果
-                Java = JavaSelect("已取消安装。", New Version(1, 8, 0, 0))
-                If Task.IsInterrupted Then Return
-                If Java Is Nothing Then Throw New Exception("由于未找到 Java，已取消安装。")
-            End If
-        End SyncLock
+        Dim Java As Java = SelectOrDownloadJava(JavaRange, True, Task.CreateCancellationToken, Task.CreateSyncProgressProvider(0, 0.2))
+        If Task.IsCanceled Then Return
+        If Java Is Nothing Then Throw New OperationCanceledException
         '添加 Java Wrapper 作为主 Jar
         Dim Arguments As String
         If UseJavaWrapper AndAlso Not Settings.Get(Of Boolean)("LaunchAdvanceDisableJLW") Then
@@ -385,11 +372,11 @@ pause"
         Else
             Arguments = $"-Duser.home=""{BaseMcFolderHome.TrimEnd("\")}"" -cp ""{Target}"" optifine.Installer"
         End If
-        If Java.MajorVersion >= 9 Then Arguments = "--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED " & Arguments
+        If Java.Version.Major >= 9 Then Arguments = "--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED " & Arguments
         '开始启动
         SyncLock InstallSyncLock
             Dim Info = New ProcessStartInfo With {
-                .FileName = Java.PathJava,
+                .FileName = Java.JavaExePath,
                 .Arguments = Arguments,
                 .UseShellExecute = False,
                 .CreateNoWindow = True,
@@ -417,14 +404,14 @@ pause"
                                 LastResult = e.Data
                                 Logger.Trace(LastResult)
                                 TotalLength += 1
-                                Task.Progress += 0.9 / 7000
+                                Task.Progress += 0.7 / 7000
                             End If
                         Catch ex As ObjectDisposedException
                         Catch ex As Exception
                             Logger.Warn(ex, "读取 OptiFine 安装器信息失败")
                         End Try
                         Try
-                            If Task.State = LoadState.Interrupted AndAlso Not process.HasExited Then
+                            If Task.State = LoadState.Canceled AndAlso Not process.HasExited Then
                                 Logger.Info("由于任务取消，已中止 OptiFine 安装")
                                 process.Kill()
                             End If
@@ -441,14 +428,14 @@ pause"
                                 LastResult = e.Data
                                 Logger.Trace(LastResult)
                                 TotalLength += 1
-                                Task.Progress += 0.9 / 7000
+                                Task.Progress += 0.7 / 7000
                             End If
                         Catch ex As ObjectDisposedException
                         Catch ex As Exception
                             Logger.Warn(ex, "读取 OptiFine 安装器错误信息失败")
                         End Try
                         Try
-                            If Task.State = LoadState.Interrupted AndAlso Not process.HasExited Then
+                            If Task.State = LoadState.Canceled AndAlso Not process.HasExited Then
                                 Logger.Info("由于任务取消，已中止 OptiFine 安装")
                                 process.Kill()
                             End If
@@ -513,7 +500,7 @@ pause"
                 Logger.Warn(ex, $"获取 OptiFine {DownloadInfo.DisplayName} 官方下载地址失败")
             End Try
             '构造文件请求
-            Task.Output = New List(Of NetFile) From {New NetFile(Sources.ToArray, Target, New FileChecker(MinSize:=300 * 1024))}
+            Task.Output = New List(Of NetFile) From {New NetFile(Sources.ToArray, Target, New FileChecker With {.MinSize = 300 * 1024})}
         End Sub) With {.ProgressWeight = 8})
         Loaders.Add(New LoaderDownload("下载 OptiFine 主文件", New List(Of NetFile)) With {.ProgressWeight = 8})
         Loaders.Add(New LoaderTask(Of List(Of NetFile), Boolean)("等待原版下载",
@@ -523,11 +510,11 @@ pause"
                ClientDownloadLoader.GetLoaderList.Where(Function(l) l.Name = McDownloadClientLibName OrElse l.Name = McDownloadClientJsonName).
                Where(Function(l) l.State <> LoadState.Finished).ToList
             If TargetLoaders.Any Then Logger.Info("OptiFine 安装正在等待原版文件下载完成")
-            Do While TargetLoaders.Any AndAlso Not Task.IsInterrupted
+            Do While TargetLoaders.Any AndAlso Not Task.IsCanceled
                 TargetLoaders = TargetLoaders.Where(Function(l) l.State <> LoadState.Finished).ToList
                 Thread.Sleep(50)
             Loop
-            If Task.IsInterrupted Then Return
+            If Task.IsCanceled Then Return
             '复制原版文件
             If Not IsCustomFolder Then Return
             SyncLock VanillaSyncLock
@@ -666,7 +653,7 @@ Retry:
             End Try
             Task.Progress = 0.9
             '构造文件请求
-            Task.Output = New List(Of NetFile) From {New NetFile(Sources.ToArray, TargetFolder, New FileChecker(MinSize:=64 * 1024))}
+            Task.Output = New List(Of NetFile) From {New NetFile(Sources.ToArray, TargetFolder, New FileChecker With {.MinSize = 64 * 1024})}
         End Sub) With {.ProgressWeight = 6})
         '下载
         Loaders.Add(New LoaderDownload("下载 OptiFine 主文件", New List(Of NetFile)) With {.ProgressWeight = 10, .Block = True})
@@ -700,22 +687,13 @@ Retry:
     End Function
     Private Sub OptiFineSaveContMenuBuild(sender As Object, e As EventArgs)
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf OptiFineLog_Click
         sender.Buttons = {BtnInfo}
     End Sub
     Private Sub OptiFineContMenuBuild(sender As Object, e As EventArgs)
         Dim BtnSave As New MyIconButton With {.Logo = Logo.IconButtonSave, .ToolTip = "另存为"}
-        ToolTipService.SetPlacement(BtnSave, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnSave, 30)
-        ToolTipService.SetHorizontalOffset(BtnSave, 2)
         AddHandler BtnSave.Click, AddressOf OptiFineSave_Click
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf OptiFineLog_Click
         sender.Buttons = {BtnSave, BtnInfo}
     End Sub
@@ -783,7 +761,7 @@ Retry:
                 '官方源
                 Address.Add("http://jenkins.liteloader.com/job/LiteLoaderInstaller%20" & DownloadInfo.Inherit & "/lastSuccessfulBuild/artifact/" & If(DownloadInfo.Inherit = "1.8", "ant/dist/", "build/libs/") & DownloadInfo.FileName)
             End If
-            Loaders.Add(New LoaderDownload("下载主文件", New List(Of NetFile) From {New NetFile(Address.ToArray, Target, New FileChecker(MinSize:=1024 * 1024))}) With {.ProgressWeight = 15})
+            Loaders.Add(New LoaderDownload("下载主文件", New List(Of NetFile) From {New NetFile(Address.ToArray, Target, New FileChecker With {.MinSize = 1024 * 1024})}) With {.ProgressWeight = 15})
             '启动
             Dim Loader As New LoaderCombo(Of DlLiteLoaderListEntry)("LiteLoader " & Id & " 安装器下载", Loaders) With {.OnStateChanged = AddressOf LoaderStateChangedHintOnly}
             Loader.Start(DownloadInfo)
@@ -820,9 +798,9 @@ Retry:
                 VersionJson.Add("time", Date.ParseExact(DownloadInfo.ReleaseTime, "yyyy/MM/dd HH:mm", Globalization.CultureInfo.InvariantCulture))
                 VersionJson.Add("releaseTime", Date.ParseExact(DownloadInfo.ReleaseTime, "yyyy/MM/dd HH:mm", Globalization.CultureInfo.InvariantCulture))
                 VersionJson.Add("type", "release")
-                VersionJson.Add("arguments", GetJson("{""game"":[""--tweakClass"",""" & DownloadInfo.JsonToken("tweakClass").ToString & """]}"))
+                VersionJson.Add("arguments", ("{""game"":[""--tweakClass"",""" & DownloadInfo.JsonToken("tweakClass").ToString & """]}").DeserializeJson())
                 VersionJson.Add("libraries", DownloadInfo.JsonToken("libraries"))
-                CType(VersionJson("libraries"), JContainer).Add(GetJson("{""name"": ""com.mumfrey:liteloader:" & DownloadInfo.JsonToken("version").ToString & """,""url"": ""https://dl.liteloader.com/versions/""}"))
+                CType(VersionJson("libraries"), JContainer).Add(("{""name"": ""com.mumfrey:liteloader:" & DownloadInfo.JsonToken("version").ToString & """,""url"": ""https://dl.liteloader.com/versions/""}").DeserializeJson())
                 VersionJson.Add("mainClass", "net.minecraft.launchwrapper.Launch")
                 VersionJson.Add("minimumLauncherVersion", 18)
                 VersionJson.Add("inheritsFrom", DownloadInfo.Inherit)
@@ -866,26 +844,17 @@ Retry:
             sender.Buttons = {}
         Else
             Dim BtnList As New MyIconButton With {.Logo = Logo.IconButtonList, .ToolTip = "查看全部版本", .Tag = sender}
-            ToolTipService.SetPlacement(BtnList, Primitives.PlacementMode.Center)
-            ToolTipService.SetVerticalOffset(BtnList, 30)
-            ToolTipService.SetHorizontalOffset(BtnList, 2)
             AddHandler BtnList.Click, AddressOf LiteLoaderAll_Click
             sender.Buttons = {BtnList}
         End If
     End Sub
     Private Sub LiteLoaderContMenuBuild(sender As MyListItem, e As EventArgs)
         Dim BtnSave As New MyIconButton With {.Logo = Logo.IconButtonSave, .ToolTip = "保存安装器", .Tag = sender}
-        ToolTipService.SetPlacement(BtnSave, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnSave, 30)
-        ToolTipService.SetHorizontalOffset(BtnSave, 2)
         AddHandler BtnSave.Click, AddressOf LiteLoaderSave_Click
         If sender.Tag.IsLegacy Then
             sender.Buttons = {BtnSave}
         Else
             Dim BtnList As New MyIconButton With {.Logo = Logo.IconButtonList, .ToolTip = "查看全部版本", .Tag = sender}
-            ToolTipService.SetPlacement(BtnList, Primitives.PlacementMode.Center)
-            ToolTipService.SetVerticalOffset(BtnList, 30)
-            ToolTipService.SetHorizontalOffset(BtnList, 2)
             AddHandler BtnList.Click, AddressOf LiteLoaderAll_Click
             sender.Buttons = {BtnSave, BtnList}
         End If
@@ -936,14 +905,14 @@ Retry:
                 Dim Url As String = NeoForge.UrlBase & "-installer.jar"
                 Files.Add(New NetFile({
                     Url.Replace("maven.neoforged.net/releases", "bmclapi2.bangbang93.com/maven"), Url
-                }, Target, New FileChecker(MinSize:=64 * 1024)))
+                }, Target, New FileChecker With {.MinSize = 64 * 1024}))
             Else
                 'Forge
                 Dim Forge As DlForgeVersionEntry = Info
                 Files.Add(New NetFile({
                     $"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/{Forge.Inherit}-{Forge.FileVersion}/forge-{Forge.Inherit}-{Forge.FileVersion}-{Forge.Category}.{Forge.FileExtension}",
                     $"https://files.minecraftforge.net/maven/net/minecraftforge/forge/{Forge.Inherit}-{Forge.FileVersion}/forge-{Forge.Inherit}-{Forge.FileVersion}-{Forge.Category}.{Forge.FileExtension}"
-                }, Target, New FileChecker(MinSize:=64 * 1024, Hash:=Forge.Hash)))
+                }, Target, New FileChecker With {.MinSize = 64 * 1024, .Hash = Forge.Hash}))
             End If
 
             '构造加载器
@@ -964,26 +933,9 @@ Retry:
 
     Private Sub ForgelikeInjector(Target As String, Task As LoaderTask(Of Boolean, Boolean), McFolder As String, UseJavaWrapper As Boolean, IsNeoForge As Boolean)
         '选择 Java
-        Dim Java As JavaEntry
-        SyncLock JavaLock
-            Java = JavaSelect("已取消安装。", New Version(1, 8, 0, 60))
-            If Java Is Nothing Then
-                '开始自动下载
-                Dim JavaLoader = GetJavaDownloadLoader()
-                Try
-                    JavaLoader.Start(17, IsForceRestart:=True)
-                    Do While JavaLoader.State = LoadState.Loading AndAlso Not Task.IsInterrupted
-                        Thread.Sleep(10)
-                    Loop
-                Finally
-                    JavaLoader.Interrupt() '确保取消时中止 Java 下载
-                End Try
-                '检查下载结果
-                Java = JavaSelect("已取消安装。", New Version(1, 8, 0, 60))
-                If Task.IsInterrupted Then Return
-                If Java Is Nothing Then Throw New Exception("由于未找到 Java，已取消安装。")
-            End If
-        End SyncLock
+        Dim Java As Java = SelectOrDownloadJava(ValueRange(Of Version).AtLeast(New Version(8, 0, 60)), True, Task.CreateCancellationToken, Task.CreateSyncProgressProvider(0, 0.2))
+        If Task.IsCanceled Then Return
+        If Java Is Nothing Then Throw New OperationCanceledException
         '添加 Java Wrapper 作为主 Jar
         Dim Arguments As String
         If UseJavaWrapper AndAlso Not Settings.Get(Of Boolean)("LaunchAdvanceDisableJLW") Then
@@ -991,11 +943,11 @@ Retry:
         Else
             Arguments = $"-cp ""{PathTemp}Cache\forge_installer.jar;{Target}"" com.bangbang93.ForgeInstaller ""{McFolder}"
         End If
-        If Java.MajorVersion >= 9 Then Arguments = "--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED " & Arguments
+        If Java.Version.Major >= 9 Then Arguments = "--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED " & Arguments
         '开始启动
         SyncLock InstallSyncLock
             Dim Info = New ProcessStartInfo With {
-                .FileName = Java.PathJava,
+                .FileName = Java.JavaExePath,
                 .Arguments = Arguments,
                 .UseShellExecute = False,
                 .CreateNoWindow = True,
@@ -1023,7 +975,7 @@ Retry:
                             Logger.Warn(ex, $"读取 {LoaderName} 安装器信息失败")
                         End Try
                         Try
-                            If Task.State = LoadState.Interrupted AndAlso Not process.HasExited Then
+                            If Task.State = LoadState.Canceled AndAlso Not process.HasExited Then
                                 Logger.Info($"由于任务取消，已中止 {LoaderName} 安装")
                                 process.Kill()
                             End If
@@ -1046,7 +998,7 @@ Retry:
                             Logger.Warn(ex, $"读取 {LoaderName} 安装器错误信息失败")
                         End Try
                         Try
-                            If Task.State = LoadState.Interrupted AndAlso Not process.HasExited Then
+                            If Task.State = LoadState.Canceled AndAlso Not process.HasExited Then
                                 Logger.Info($"由于任务取消，已中止 {LoaderName} 安装")
                                 process.Kill()
                             End If
@@ -1080,35 +1032,35 @@ Retry:
     Private Sub ForgelikeInjectorLine(Content As String, Task As LoaderTask(Of Boolean, Boolean))
         Select Case Content
             Case "Extracting json"
-                Task.Progress = 0.07
+                Task.Progress = 0.27
             Case "Downloading libraries"
-                Task.Progress = 0.08
+                Task.Progress = 0.28
             Case "  File exists: Checksum validated."
                 Task.Progress += 0.003
             Case "Building Processors"
-                Task.Progress = 0.18
+                Task.Progress = 0.38
             Case "Task: DOWNLOAD_MOJMAPS" 'B
-                Task.Progress = 0.2
-            Case "Task: MERGE_MAPPING" 'B
-                Task.Progress = 0.3
-            Case "Splitting: "
-                Task.Progress = 0.35
-            Case "Parameter Annotations" 'B
                 Task.Progress = 0.4
+            Case "Task: MERGE_MAPPING" 'B
+                Task.Progress = 0.5
+            Case "Splitting: "
+                Task.Progress = 0.55
+            Case "Parameter Annotations" 'B
+                Task.Progress = 0.6
             Case "Processing Complete" 'B
-                Task.Progress = 0.5
+                Task.Progress = 0.67
             Case "log: null" 'new
-                Task.Progress = 0.5
+                Task.Progress = 0.67
             Case "Sorting" 'new
-                Task.Progress = 0.65
+                Task.Progress = 0.8
             Case "Remapping final jar" 'A
-                Task.Progress = 0.72
+                Task.Progress = 0.85
             Case "Remapping jar... 50%" 'A
-                Task.Progress = 0.76
+                Task.Progress = 0.9
             Case "Remapping jar... 100%" 'A
-                Task.Progress = 0.81
+                Task.Progress = 0.95
             Case "Injecting profile"
-                Task.Progress = 0.91
+                Task.Progress = 0.98
             Case Else
                 Logger.Trace(Content)
                 Return
@@ -1173,7 +1125,7 @@ Retry:
                 Dim Url As String = Neo.UrlBase & "-installer.jar"
                 Files.Add(New NetFile({
                     Url.Replace("maven.neoforged.net/releases", "bmclapi2.bangbang93.com/maven"), Url
-                }, InstallerAddress, New FileChecker(MinSize:=64 * 1024)))
+                }, InstallerAddress, New FileChecker With {.MinSize = 64 * 1024}))
             Else
                 'Forge
                 Dim Forge As DlForgeVersionEntry = Info
@@ -1182,7 +1134,7 @@ Retry:
                 Files.Add(New NetFile({
                     $"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/{FileName}",
                     $"https://files.minecraftforge.net/maven/net/minecraftforge/forge/{FileName}"
-                }, InstallerAddress, New FileChecker(MinSize:=64 * 1024, Hash:=Forge.Hash)))
+                }, InstallerAddress, New FileChecker With {.MinSize = 64 * 1024, .Hash = Forge.Hash}))
             End If
             Task.Output = Files
         End Sub) With {.ProgressWeight = 0.5, .Show = False})
@@ -1200,8 +1152,8 @@ Retry:
                     '解压并获取、合并两个 Json 的信息
                     Installer = FileUtils.OpenZip(InstallerAddress)
                     Task.Progress = 0.2
-                    Dim Json As JObject = GetJson(Installer.GetEntry("install_profile.json").Open().ReadString)
-                    Dim Json2 As JObject = GetJson(Installer.GetEntry("version.json").Open().ReadString)
+                    Dim Json As JObject = Installer.GetEntry("install_profile.json").Open().ReadString().DeserializeJson()
+                    Dim Json2 As JObject = Installer.GetEntry("version.json").Open().ReadString().DeserializeJson()
                     Json.Merge(Json2)
                     '获取 Lib 下载信息
                     Libs = McLibListGetWithJson(Json, True)
@@ -1209,7 +1161,7 @@ Retry:
                     If Json("data") IsNot Nothing AndAlso Json("data")("MOJMAPS") IsNot Nothing Then
                         '下载原版 Json 文件
                         Task.Progress = 0.4
-                        Dim RawJson As JObject = GetJson(NetRequestByLoader(DlSourceLauncherOrMetaGet(DlClientListGet(Inherit)), IsJson:=True))
+                        Dim RawJson As JObject = NetRequestByLoader(DlSourceLauncherOrMetaGet(DlClientListGet(Inherit)), IsJson:=True).DeserializeJson()
                         '[net.minecraft:client:1.17.1-20210706.113038:mappings@txt] 或 @tsrg]
                         Dim OriginalName As String = Json("data")("MOJMAPS")("client").ToString.Trim("[]".ToCharArray()).BeforeFirst("@")
                         Dim Address = McLibGet(OriginalName).Replace(".jar", "." & Json("data")("MOJMAPS")("client").ToString.Trim("[]".ToCharArray()).Split("@")(1))
@@ -1254,11 +1206,11 @@ Retry:
                     ClientDownloadLoader.GetLoaderList.Where(Function(l) l.Name = McDownloadClientLibName OrElse l.Name = McDownloadClientJsonName).
                     Where(Function(l) l.State <> LoadState.Finished).ToList()
                 If TargetLoaders.Any Then Logger.Info($"{LoaderName} 安装正在等待原版文件下载完成")
-                Do While TargetLoaders.Any AndAlso Not Task.IsInterrupted
+                Do While TargetLoaders.Any AndAlso Not Task.IsCanceled
                     TargetLoaders = TargetLoaders.Where(Function(l) l.State <> LoadState.Finished).ToList
                     Thread.Sleep(50)
                 Loop
-                If Task.IsInterrupted Then Return
+                If Task.IsCanceled Then Return
                 '复制原版文件
                 If Not IsCustomFolder Then Return
                 SyncLock VanillaSyncLock
@@ -1279,10 +1231,10 @@ Retry:
                 Try
                     Logger.Info($"开始进行 Forgelike 安装：{InstallerAddress}")
                     '记录当前文件夹列表（在新建目标文件夹之前）
-                    Dim OldList = DirectoryUtils.GetDirectories(McFolder & "versions\", True).ToList()
+                    Dim OldList = DirectoryUtils.EnumerateDirectories(McFolder & "versions\").ToList()
                     '解压并获取信息
                     Installer = FileUtils.OpenZip(InstallerAddress)
-                    Dim Json As JObject = GetJson(Installer.GetEntry("install_profile.json").Open().ReadString)
+                    Dim Json As JObject = Installer.GetEntry("install_profile.json").Open().ReadString().DeserializeJson()
                     '新建目标版本文件夹
                     DirectoryUtils.Create(VersionFolder)
                     Task.Progress = 0.04
@@ -1309,7 +1261,7 @@ Retry:
                         End If
                     End Try
                     '复制新增的版本 Json
-                    Dim DeltaList = DirectoryUtils.GetDirectories(McFolder & "versions\", True).
+                    Dim DeltaList = DirectoryUtils.EnumerateDirectories(McFolder & "versions\").
                         SkipWhile(Function(i) OldList.Contains(i)).Select(Function(f) DirectoryUtils.GetInfo(f)).ToList()
                     If DeltaList.Count > 1 Then
                         '它可能和 OptiFine 安装同时运行，导致增加的文件不止一个（这导致了 #151）
@@ -1350,7 +1302,7 @@ Retry:
                     '解压并获取信息
                     Installer = FileUtils.OpenZip(InstallerAddress)
                     Task.Progress = 0.2
-                    Dim Json As JObject = GetJson(Installer.GetEntry("install_profile.json").Open().ReadString)
+                    Dim Json As JObject = Installer.GetEntry("install_profile.json").Open().ReadString().DeserializeJson()
                     Task.Progress = 0.4
                     '新建版本文件夹
                     DirectoryUtils.Create(VersionFolder)
@@ -1359,7 +1311,7 @@ Retry:
                         '中版：Legacy 方式 1
                         Logger.Info($"开始进行 Forge 安装，Legacy 方式 1：{InstallerAddress}")
                         '建立 Json 文件
-                        Dim JsonVersion As JObject = GetJson(Installer.GetEntry(Json("json").ToString.TrimStart("/")).Open().ReadString)
+                        Dim JsonVersion As JObject = Installer.GetEntry(Json("json").ToString.TrimStart("/")).Open().ReadString().DeserializeJson()
                         JsonVersion("id") = NewInstanceName
                         FileUtils.Write(VersionFolder & NewInstanceName & ".json", JsonVersion.ToString)
                         Task.Progress = 0.6
@@ -1455,22 +1407,13 @@ Retry:
     End Function
     Private Sub ForgeContMenuBuild(sender As MyListItem, e As EventArgs)
         Dim BtnSave As New MyIconButton With {.Logo = Logo.IconButtonSave, .ToolTip = "另存为"}
-        ToolTipService.SetPlacement(BtnSave, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnSave, 30)
-        ToolTipService.SetHorizontalOffset(BtnSave, 2)
         AddHandler BtnSave.Click, AddressOf ForgeSave_Click
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf ForgeLog_Click
         sender.Buttons = {BtnSave, BtnInfo}
     End Sub
     Private Sub ForgeSaveContMenuBuild(sender As MyListItem, e As EventArgs)
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf ForgeLog_Click
         sender.Buttons = {BtnInfo}
     End Sub
@@ -1513,7 +1456,7 @@ Retry:
                 Logger.Info("刷新 Forge 推荐版本缓存开始")
                 Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/forge/promos", RequireJson:=True)
                 If Result.Length < 1000 Then Throw New Exception("获取的结果过短（" & Result & "）")
-                Dim ResultJson As JContainer = GetJson(Result)
+                Dim ResultJson As JContainer = Result.DeserializeJson()
                 '获取所有推荐版本列表
                 Dim RecommendedList As New List(Of String)
                 For Each Version As JObject In ResultJson
@@ -1546,7 +1489,7 @@ Retry:
                 Logger.Info("没有 Forge 推荐版本缓存文件")
                 Return Nothing
             End If
-            Dim Json As JObject = GetJson(List)
+            Dim Json As JObject = List.DeserializeJson()
             If Json Is Nothing OrElse (Not If(McVersion, "").Contains(".")) OrElse Not Json.ContainsKey(McVersion) Then Return Nothing
             Return If(Json(McVersion), "").ToString
         Catch ex As Exception
@@ -1613,22 +1556,13 @@ Retry:
     End Function
     Private Sub NeoForgeContMenuBuild(sender As MyListItem, e As EventArgs)
         Dim BtnSave As New MyIconButton With {.Logo = Logo.IconButtonSave, .ToolTip = "另存为"}
-        ToolTipService.SetPlacement(BtnSave, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnSave, 30)
-        ToolTipService.SetHorizontalOffset(BtnSave, 2)
         AddHandler BtnSave.Click, AddressOf NeoForgeSave_Click
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf NeoForgeLog_Click
         sender.Buttons = {BtnSave, BtnInfo}
     End Sub
     Private Sub NeoForgeSaveContMenuBuild(sender As MyListItem, e As EventArgs)
         Dim BtnInfo As New MyIconButton With {.LogoScale = 1.05, .Logo = Logo.IconButtonInfo, .ToolTip = "更新日志"}
-        ToolTipService.SetPlacement(BtnInfo, Primitives.PlacementMode.Center)
-        ToolTipService.SetVerticalOffset(BtnInfo, 30)
-        ToolTipService.SetHorizontalOffset(BtnInfo, 2)
         AddHandler BtnInfo.Click, AddressOf NeoForgeLog_Click
         sender.Buttons = {BtnInfo}
     End Sub
@@ -1680,7 +1614,7 @@ Retry:
             'BMCLAPI 不支持 Fabric Installer 下载
             Dim Address As New List(Of String)
             Address.Add(Url)
-            Loaders.Add(New LoaderDownload("下载主文件", New List(Of NetFile) From {New NetFile(Address.ToArray, Target, New FileChecker(MinSize:=1024 * 64))}) With {.ProgressWeight = 15})
+            Loaders.Add(New LoaderDownload("下载主文件", New List(Of NetFile) From {New NetFile(Address.ToArray, Target, New FileChecker With {.MinSize = 1024 * 64})}) With {.ProgressWeight = 15})
             '启动
             Dim Loader As New LoaderCombo(Of JObject)("Fabric " & Version & " 安装器下载", Loaders) With {.OnStateChanged = AddressOf LoaderStateChangedHintOnly}
             Loader.Start(DownloadInfo)
@@ -1712,7 +1646,7 @@ Retry:
             Task.Output = New List(Of NetFile) From {New NetFile({
                 "https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader/" & MinecraftName & "/" & FabricVersion & "/profile/json",
                 "https://meta.fabricmc.net/v2/versions/loader/" & MinecraftName & "/" & FabricVersion & "/profile/json"
-            }, VersionFolder & Id & ".json", New FileChecker(IsJson:=True))} '构造文件请求
+            }, VersionFolder & Id & ".json", New FileChecker With {.IsJson = True})} '构造文件请求
         End Sub) With {.ProgressWeight = 0.5})
         Loaders.Add(New LoaderDownload("下载 Fabric 主文件", New List(Of NetFile)) With {.ProgressWeight = 2.5})
 
@@ -1849,7 +1783,7 @@ Retry:
                 Hint(Loader.Name & "成功！", HintType.Green)
             Case LoadState.Failed
                 Hint(Loader.Name & "失败：" & Loader.Error.GetDisplay(False), HintType.Red)
-            Case LoadState.Interrupted
+            Case LoadState.Canceled
                 Hint(Loader.Name & "已取消！", HintType.Blue)
         End Select
     End Sub
@@ -1864,7 +1798,7 @@ Retry:
                 'TODO: 自动选择安装成功的版本
             Case LoadState.Failed
                 MyMsgBox(Loader.Error.GetDisplay(True), Loader.Name & "失败", IsWarn:=True)
-            Case LoadState.Interrupted
+            Case LoadState.Canceled
                 Hint(Loader.Name & "已取消！", HintType.Blue)
             Case LoadState.Loading
                 Return '不重新加载版本列表
@@ -1875,7 +1809,7 @@ Retry:
     Public Sub McInstallFailedClearFolder(Loader)
         Try
             Thread.Sleep(1000) '防止存在尚未完全释放的文件，导致清理失败（例如整合包安装）
-            If Loader.State = LoadState.Failed OrElse Loader.State = LoadState.Interrupted Then
+            If Loader.State = LoadState.Failed OrElse Loader.State = LoadState.Canceled Then
                 '删除版本文件夹
                 If DirectoryUtils.Exists(Loader.Input & "saves\") OrElse DirectoryUtils.Exists(Loader.Input & "versions\") Then
                     Logger.Warn($"由于版本已被独立启动，不清理版本文件夹：{Loader.Input}")
@@ -1905,8 +1839,6 @@ Retry:
             FrmMain.BtnExtraDownload.Ribble()
             Return True
 
-        Catch ex As CancelledException
-            Return False
         Catch ex As Exception
             Logger.Error(ex, "开始合并安装失败")
             Return False
@@ -1915,7 +1847,6 @@ Retry:
     ''' <summary>
     ''' 获取合并安装加载器列表，并进行前期的缓存清理与 Java 检查工作。
     ''' </summary>
-    ''' <exception cref="CancelledException" />
     Public Function McInstallLoader(Request As McInstallRequest) As List(Of LoaderBase)
         '获取缓存目录（安装 Mod 加载器的文件夹不能包含空格）
         Dim TempMcFolder As String = RequestTaskTempFolder(Request.OptiFineEntry IsNot Nothing OrElse Request.ForgeEntry IsNot Nothing OrElse Request.NeoForgeEntry IsNot Nothing)
@@ -1971,7 +1902,7 @@ Retry:
         '重复版本检查
         If FileUtils.Exists($"{VersionFolder}{Request.NewInstanceName}.json") Then
             Hint("版本 " & Request.NewInstanceName & " 已经存在！", HintType.Red)
-            Throw New CancelledException
+            Throw New OperationCanceledException
         End If
 
         Dim LoaderList As New List(Of LoaderBase)
@@ -2115,36 +2046,36 @@ Retry:
 #Region "读取文件并检查文件是否合规"
         Dim MinecraftJsonText As String = If(FileUtils.TryReadAsString(MinecraftJsonPath), "")
         If Not MinecraftJsonText.StartsWithF("{") Then Throw New Exception("Minecraft json 有误，地址：" & MinecraftJsonPath & "，前段内容：" & MinecraftJsonText.Substring(0, Math.Min(MinecraftJsonText.Length, 1000)))
-        MinecraftJson = GetJson(MinecraftJsonText)
+        MinecraftJson = MinecraftJsonText.DeserializeJson()
 
         If HasOptiFine Then
             Dim OptiFineJsonText As String = If(FileUtils.TryReadAsString(OptiFineJsonPath), "")
             If Not OptiFineJsonText.StartsWithF("{") Then Throw New Exception("OptiFine json 有误，地址：" & OptiFineJsonPath & "，前段内容：" & OptiFineJsonText.Substring(0, Math.Min(OptiFineJsonText.Length, 1000)))
-            OptiFineJson = GetJson(OptiFineJsonText)
+            OptiFineJson = OptiFineJsonText.DeserializeJson()
         End If
 
         If HasForge Then
             Dim ForgeJsonText As String = If(FileUtils.TryReadAsString(ForgeJsonPath), "")
             If Not ForgeJsonText.StartsWithF("{") Then Throw New Exception("Forge json 有误，地址：" & ForgeJsonPath & "，前段内容：" & ForgeJsonText.Substring(0, Math.Min(ForgeJsonText.Length, 1000)))
-            ForgeJson = GetJson(ForgeJsonText)
+            ForgeJson = ForgeJsonText.DeserializeJson()
         End If
 
         If HasNeoForge Then
             Dim NeoForgeJsonText As String = If(FileUtils.TryReadAsString(NeoForgeJsonPath), "")
             If Not NeoForgeJsonText.StartsWithF("{") Then Throw New Exception("NeoForge json 有误，地址：" & NeoForgeJsonPath & "，前段内容：" & NeoForgeJsonText.Substring(0, Math.Min(NeoForgeJsonText.Length, 1000)))
-            NeoForgeJson = GetJson(NeoForgeJsonText)
+            NeoForgeJson = NeoForgeJsonText.DeserializeJson()
         End If
 
         If HasLiteLoader Then
             Dim LiteLoaderJsonText As String = If(FileUtils.TryReadAsString(LiteLoaderJsonPath), "")
             If Not LiteLoaderJsonText.StartsWithF("{") Then Throw New Exception("LiteLoader json 有误，地址：" & LiteLoaderJsonPath & "，前段内容：" & LiteLoaderJsonText.Substring(0, Math.Min(LiteLoaderJsonText.Length, 1000)))
-            LiteLoaderJson = GetJson(LiteLoaderJsonText)
+            LiteLoaderJson = LiteLoaderJsonText.DeserializeJson()
         End If
 
         If HasFabric Then
             Dim FabricJsonText As String = If(FileUtils.TryReadAsString(FabricJsonPath), "")
             If Not FabricJsonText.StartsWithF("{") Then Throw New Exception("Fabric json 有误，地址：" & FabricJsonPath & "，前段内容：" & FabricJsonText.Substring(0, Math.Min(FabricJsonText.Length, 1000)))
-            FabricJson = GetJson(FabricJsonText)
+            FabricJson = FabricJsonText.DeserializeJson()
         End If
 #End Region
 

@@ -1,4 +1,4 @@
-﻿Public Class MyResourceItem
+Public Class MyResourceItem
 
 #Region "基础属性"
     Public Uuid As Integer = GetUuid()
@@ -38,19 +38,9 @@
     End Property
     '指向时扩展描述
     Private Sub LabInfo_MouseEnter(sender As Object, e As MouseEventArgs) Handles LabInfo.MouseEnter
-        If IsTextTrimmed(LabInfo) Then
-            ToolTipInfo.Content = LabInfo.Text
-            ToolTipInfo.Width = LabInfo.ActualWidth + 25
-            LabInfo.ToolTip = ToolTipInfo
-        Else
-            LabInfo.ToolTip = Nothing
-        End If
+        ToolTipInfo.Content = LabInfo.Text
+        LabInfo.ToolTip = If(IsTextTrimmed(LabInfo), ToolTipInfo, Nothing)
     End Sub
-    Private Function IsTextTrimmed(textBlock As TextBlock) As Boolean
-        Dim typeface As New Typeface(textBlock.FontFamily, textBlock.FontStyle, textBlock.FontWeight, textBlock.FontStretch)
-        Dim formattedText As New FormattedText(textBlock.Text, Thread.CurrentThread.CurrentCulture, textBlock.FlowDirection, typeface, textBlock.FontSize, textBlock.Foreground, DPI)
-        Return formattedText.Width > textBlock.ActualWidth
-    End Function
 
     'Tag
     Public WriteOnly Property Tags As List(Of String)
