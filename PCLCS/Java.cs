@@ -3,7 +3,7 @@ namespace PCLCS;
 /// <summary>
 /// 单个 Java 的实例。
 /// </summary>
-[Serializable] public class Java(string folder, Version? version = null) {
+[Serializable] public class Java(string folder, Version? version = null) : IEquatable<Java> {
 
     /// <summary>
     /// java.exe 文件所在的文件夹路径，这通常是 bin 文件夹。以 \ 结尾。
@@ -63,6 +63,12 @@ namespace PCLCS;
     /// <summary>若已进行过检查，表示该检查是否成功。若未检查，则为 null。</summary>
     [JsonIgnore] internal bool? available = null;
 
+    // 相同检查
+    public bool Equals(Java? other)
+        => other is not null && string.Equals(Folder, other.Folder, StringComparison.OrdinalIgnoreCase);
+    public override bool Equals(object? obj) => obj is Java other && Equals(other);
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Folder);
+
     /// <summary>用户友好的描述文本。</summary>
     public override string ToString()
         => $"Java {Version?.Major.ToString() ?? "尚未检查"} ({Version})：{Folder}";
@@ -92,9 +98,9 @@ public static class JavaUtils {
             var isLeftInCandidateFolder = JavaUtils.CandidateFolders.Any(folder => PathUtils.IsParentOf(folder, left.Folder));
             var isRightInCandidateFolder = JavaUtils.CandidateFolders.Any(folder => PathUtils.IsParentOf(folder, right.Folder));
             if (isLeftInCandidateFolder != isRightInCandidateFolder) return isLeftInCandidateFolder ? -1 : 1;
-            // 其次优先使用主版本号接近 25 的 Java
-            var leftDistance = left.Version is null ? int.MaxValue : Math.Abs(left.Version.Major - 25);
-            var rightDistance = right.Version is null ? int.MaxValue : Math.Abs(right.Version.Major - 25);
+            // 其次优先使用主版本号接近 21 的 Java
+            var leftDistance = left.Version is null ? int.MaxValue : Math.Abs(left.Version.Major - 21);
+            var rightDistance = right.Version is null ? int.MaxValue : Math.Abs(right.Version.Major - 21);
             return leftDistance.CompareTo(rightDistance);
         });
         return javas;
@@ -138,11 +144,10 @@ public static class JavaUtils {
         // 将新发现的 Java 排在最前，原有列表保留既有顺序排在后面
         var oldJavaList = Configs.JavaList.Get()!;
         oldJavaList = await JavaUtils.CheckAllAsync(oldJavaList, c, p?.SplitTo(0.9)).NoCapture(); // 检查原有列表中的 Java
-        HashSet<string> oldJavaFolders = new(oldJavaList.Select(j => j.Folder), StringComparer.OrdinalIgnoreCase);
-        javaList.RemoveIf(j => oldJavaFolders.Contains(j.Folder)); // 此时 javaList 中只剩下新发现的 Java
+        javaList.RemoveAll(oldJavaList); // 此时 javaList 中只剩下新发现的 Java
         javaList = await JavaUtils.SortAsync(javaList, c).NoCapture(); // 将所有新发现的 Java 按优先级排序
         javaList.AddRange(oldJavaList);
-        javaList = javaList.DistinctBy(j => j.Folder.Lower()).ToList();
+        javaList = javaList.Distinct().ToList();
         // 删掉已被移除的 Java
         javaList.RemoveIf(j => Configs.JavaRemovedList.Get()!.Contains(j.Folder, StringComparer.OrdinalIgnoreCase));
         // 写入设置

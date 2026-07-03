@@ -82,7 +82,7 @@ Public Module ModJava
         '加入列表顶部
         Configs.JavaList.Edit(
         Sub(ByRef List)
-            List.RemoveIf(Function(j) j.Folder.Equals(NewJava.Folder, StringComparison.OrdinalIgnoreCase))
+            List.Remove(NewJava)
             List.Insert(0, NewJava)
         End Sub)
         Hint($"已将 Java 加入列表：{NewJavaPath}", HintType.Green)
@@ -458,13 +458,11 @@ Public Module ModJava
                 p?.Set(0.4) : GoTo NoForcedJava
             End If
             Logger.Info($"将版本独立设置改为老版本中强制指定的 Java：{ForcedJava}")
-            Dim Match = Configs.JavaList.Get().FirstOrDefault(Function(j) j.Folder.Equals(ForcedJava.Folder, StringComparison.OrdinalIgnoreCase))
-            If Match Is Nothing Then
+            If Not Configs.JavaList.Get().Contains(ForcedJava) Then
                 Configs.JavaList.Edit(Sub(ByRef List) List.Add(ForcedJava)) '加入列表底部
-                Match = ForcedJava
                 Logger.Info($"已将强制指定的 Java 加入 Java 列表底部：{ForcedJava}")
             End If
-            Configs.InstanceForcedJava.Set(Match, Instance.Config)
+            Configs.InstanceForcedJava.Set(ForcedJava, Instance.Config)
             Settings.Set("VersionArgumentJavaV2", 3, Instance)
             UpdateJavaLists()
             Configs.InstanceMigratedJava.Set(True, Instance.Config) '完成

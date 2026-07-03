@@ -107,7 +107,7 @@ Public Class PageLaunchRight
                         Url = "https://qawsedrftgyhujiko.fun/pcl2/Custom.xaml"
                     Case 17
                         Logger.Info("Bangumi 番剧主页")
-                        Url = "https://pbp.kaphia.qzz.io"
+                        Url = "https://bangumi.p.kaphia.qzz.io"
                 End Select
         End Select
         '联网下载
