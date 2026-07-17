@@ -1,5 +1,6 @@
-﻿Public Class MyTextBox
+Public Class MyTextBox
     Inherits TextBox
+    Implements ISettingControl
 
     '自定义属性
 
@@ -36,7 +37,7 @@
     End Property
     Public Overrides Sub OnApplyTemplate()
         MyBase.OnApplyTemplate()
-        If HintText = "" OrElse labHint.Text <> "" Then Exit Sub
+        If HintText = "" OrElse labHint.Text <> "" Then Return
         labHint.Text = If(Text = "", HintText, "")
     End Sub
 
@@ -44,7 +45,13 @@
 
     Public Uuid As Integer = GetUuid()
     Public Shared Event ValidateChanged(sender As Object, e As EventArgs)
-    Public ChangedEventList As New List(Of RoutedEventHandler)
+    Private _ChangedEventList As List(Of RoutedEventHandler)
+    Public ReadOnly Property ChangedEventList As List(Of RoutedEventHandler)
+        Get
+            If _ChangedEventList Is Nothing Then _ChangedEventList = New List(Of RoutedEventHandler)
+            Return _ChangedEventList
+        End Get
+    End Property
     Public Custom Event ValidatedTextChanged As RoutedEventHandler
         AddHandler(value As RoutedEventHandler)
             ChangedEventList.Add(value)
@@ -217,11 +224,11 @@
             IsTextChanged = IsLoaded
             '进行输入验证
             Validate()
-            If Not IsValidated Then Exit Sub
+            If Not IsValidated Then Return
             '改变文本
             RaiseEvent ValidatedTextChanged(sender, e)
         Catch ex As Exception
-            Log(ex, "进行输入验证时出错", LogLevel.Assert)
+            Logger.Error(ex, "进行输入验证时出错")
         End Try
     End Sub
 
@@ -230,7 +237,7 @@
     Private Sub RefreshColor() Handles Me.IsEnabledChanged, Me.MouseEnter, Me.MouseLeave, Me.GotFocus, Me.LostFocus
         Try
             '不对 ComboBox 从属进行动画
-            If TemplatedParent IsNot Nothing AndAlso TypeOf TemplatedParent Is MyComboBox Then Exit Sub
+            If TemplatedParent IsNot Nothing AndAlso TypeOf TemplatedParent Is MyComboBox Then Return
             '判断当前颜色
             Dim ForeColorName As String, BackColorName As String
             Dim AnimationTime As Integer
@@ -264,7 +271,7 @@
             If IsLoaded AndAlso AniControlEnabled = 0 Then '防止默认属性变更触发动画
                 '有动画
                 AniStart({
-                         AaColor(Me, BorderBrushProperty, ForeColorName, AnimationTime)，
+                         AaColor(Me, BorderBrushProperty, ForeColorName, AnimationTime),
                          AaColor(Me, BackgroundProperty, BackColorName, AnimationTime)
                      }, "MyTextBox Color " & Uuid)
             Else
@@ -275,12 +282,12 @@
             End If
 
         Catch ex As Exception
-            Log(ex, "文本框颜色改变出错")
+            Logger.Warn(ex, "文本框颜色改变出错")
         End Try
     End Sub
     Private Sub RefreshTextColor() Handles Me.IsEnabledChanged
         Dim NewColor As MyColor = If(IsEnabled, ColorGray1, ColorGray4)
-        If CType(Foreground, SolidColorBrush).Color.R = NewColor.R Then Exit Sub
+        If CType(Foreground, SolidColorBrush).Color.R = NewColor.R Then Return
         If IsLoaded AndAlso AniControlEnabled = 0 AndAlso Not Text = "" Then
             '有动画
             AniStart({AaColor(Me, ForegroundProperty, If(IsEnabled, "ColorBrushGray1", "ColorBrushGray4"), 200)}, "MyTextBox TextColor " & Uuid)
@@ -290,5 +297,26 @@
             Foreground = NewColor
         End If
     End Sub
+
+    '在按下回车时触发自定义事件
+    Private Sub MyTextBox_KeyUp(sender As Object, e As KeyEventArgs) Handles Me.KeyUp
+        If e.Key = Key.Enter Then RaiseCustomEvent()
+    End Sub
+
+#Region "设置"
+
+    Private Sub RefreshSetting(NewValue As String) Implements ISettingControl.RefreshSetting
+        Text = NewValue
+    End Sub
+
+    Private Function GetCurrentSetting() As String Implements ISettingControl.GetCurrentSetting
+        Return Text
+    End Function
+
+    Private Sub SaveSetting() Handles Me.ValidatedTextChanged
+        SettingService.SaveSetting(Me)
+    End Sub
+
+#End Region
 
 End Class

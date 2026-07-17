@@ -1,4 +1,4 @@
-﻿Public Class MyMsgInput
+Public Class MyMsgInput
 
     Private ReadOnly MyConverter As MyMsgBoxConverter
     Private ReadOnly Uuid As Integer = GetUuid()
@@ -26,7 +26,7 @@
             ShapeLine.StrokeThickness = GetWPFSize(1)
 
         Catch ex As Exception
-            Log(ex, "输入弹窗初始化失败", LogLevel.Hint)
+            Logger.Error(ex, "输入弹窗初始化失败", LogBehavior.Toast)
         End Try
     End Sub
 
@@ -46,10 +46,10 @@
                 AaDouble(Sub(i) TransformRotate.Angle += i, -TransformRotate.Angle, 300, 60, New AniEaseOutFluent(AniEasePower.Weak))
             }, "MyMsgBox " & Uuid)
             '记录日志
-            Log("[Control] 输入弹窗：" & LabTitle.Text)
+            Logger.Info($"输入弹窗：{LabTitle.Text}")
 
         Catch ex As Exception
-            Log(ex, "输入弹窗加载失败", LogLevel.Hint)
+            Logger.Error(ex, "输入弹窗加载失败", LogBehavior.Toast)
         End Try
     End Sub
     Private Sub Close()
@@ -73,13 +73,13 @@
 
     Public Sub Btn1_Click() Handles Btn1.Click
         TextArea.Validate() '#5773
-        If MyConverter.IsExited OrElse Not TextArea.IsValidated Then Exit Sub
+        If MyConverter.IsExited OrElse Not TextArea.IsValidated Then Return
         MyConverter.IsExited = True
         MyConverter.Result = TextArea.Text
         Close()
     End Sub
     Public Sub Btn2_Click() Handles Btn2.Click
-        If MyConverter.IsExited Then Exit Sub
+        If MyConverter.IsExited Then Return
         MyConverter.IsExited = True
         MyConverter.Result = Nothing
         Close()

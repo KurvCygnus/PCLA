@@ -1,5 +1,6 @@
-﻿Public Class MyComboBox
+Public Class MyComboBox
     Inherits ComboBox
+    Implements ISettingControl
     Public Event TextChanged(sender As Object, e As TextChangedEventArgs)
 
     '基础
@@ -8,7 +9,7 @@
     Public Property HintText As String = ""
     Public Overrides Sub OnApplyTemplate()
         MyBase.OnApplyTemplate()
-        If Not IsEditable Then Exit Sub
+        If Not IsEditable Then Return
         Try
             TextBox = Template.FindName("PART_EditableTextBox", Me)
             TextBox.AddHandler(LostFocusEvent, New RoutedEventHandler(AddressOf RefreshColor))
@@ -21,7 +22,7 @@
             End If
             If HintText.Length > 0 Then TextBox.HintText = HintText
         Catch ex As Exception
-            Log(ex, "初始化可编辑文本框失败（" & If(Name, "") & "）", LogLevel.Feedback)
+            Logger.Error(ex, $"初始化可编辑文本框失败（{If(Name, "")}）")
         End Try
     End Sub
     Private _Text As String = SelectedItem
@@ -103,10 +104,11 @@
     Private Sub MyComboBox_DropDownOpened(sender As Object, e As EventArgs) Handles Me.DropDownOpened
         RealWidth = Width
         Width = ActualWidth
+        '将下拉菜单透明度与主窗口同步
         Try
             CType(Template.FindName("PanPopup", Me), Grid).Opacity = FrmMain.Opacity
         Catch ex As Exception
-            Log(ex, "设置下拉框透明度失败", LogLevel.Feedback)
+            Logger.Error(ex, "设置下拉框透明度失败")
         End Try
     End Sub
     Private Sub MyComboBox_DropDownClosed(sender As Object, e As EventArgs) Handles Me.DropDownClosed
@@ -116,16 +118,15 @@
     '修复 WPF Bug：下拉框文本修改后，依然误认为还选择着此前的选项，导致再次点击该选项时内容不变
     Private IsTextChanging As Boolean = False
     Private Sub MyComboBox_TextChanged(sender As Object, e As TextChangedEventArgs) Handles Me.TextChanged
-        If IsTextChanging OrElse Not IsEditable Then Exit Sub
-        If SelectedItem IsNot Nothing AndAlso Text <> SelectedItem.ToString Then
-            Dim RawText As String = Text
-            Dim RawSelectionStart As Integer = TextBox.SelectionStart
-            IsTextChanging = True
-            SelectedItem = Nothing
-            Text = RawText
-            TextBox.SelectionStart = RawSelectionStart
-            IsTextChanging = False
-        End If
+        If IsTextChanging OrElse Not IsEditable Then Return
+        If SelectedItem Is Nothing OrElse Text = SelectedItem.ToString Then Return
+        Dim RawText As String = Text
+        Dim RawSelectionStart As Integer = TextBox.SelectionStart
+        IsTextChanging = True
+        SelectedItem = Nothing
+        Text = RawText
+        TextBox.SelectionStart = RawSelectionStart
+        IsTextChanging = False
     End Sub
 
     Public ReadOnly Property ContentPresenter As ContentPresenter
@@ -133,5 +134,40 @@
             Return Template.FindName("PART_Content", Me)
         End Get
     End Property
+
+    Private Sub MyComboBox_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles Me.SelectionChanged
+        If IsLoaded AndAlso AniControlEnabled = 0 Then RaiseCustomEvent()
+    End Sub
+
+#Region "设置"
+
+    Private Sub RefreshSetting(NewValue As String) Implements ISettingControl.RefreshSetting
+        Dim TargetItem = Items.OfType(Of DependencyObject)().FirstOrDefault(Function(i) Val(If(SettingService.GetValue(i), -1)) = NewValue)
+        If TargetItem IsNot Nothing Then
+            SelectedItem = TargetItem
+        ElseIf Items.Count > NewValue Then
+            SelectedIndex = NewValue
+        Else
+            Logger.Warn($"尝试显示设置 {SettingService.GetKey(Me)}，但没有找到设置值 {NewValue} 的对应项")
+            SelectedIndex = -1
+            SelectedItem = Nothing
+        End If
+    End Sub
+
+    Private Function GetCurrentSetting() As String Implements ISettingControl.GetCurrentSetting
+        If SelectedItem Is Nothing Then Return Nothing
+        If TypeOf SelectedItem Is DependencyObject Then
+            Return If(SettingService.GetValue(SelectedItem), SelectedIndex)
+        Else
+            Return SelectedIndex
+        End If
+    End Function
+
+    Private Sub SaveSetting() Handles Me.SelectionChanged
+        If SelectedItem Is Nothing Then Return
+        SettingService.SaveSetting(Me)
+    End Sub
+
+#End Region
 
 End Class

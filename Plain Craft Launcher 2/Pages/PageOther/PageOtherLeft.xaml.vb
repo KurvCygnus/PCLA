@@ -1,24 +1,24 @@
-﻿Public Class PageOtherLeft
+Public Class PageOtherLeft
 
     Private IsLoad As Boolean = False
     Private IsPageSwitched As Boolean = False '如果在 Loaded 前切换到其他页面，会导致触发 Loaded 时再次切换一次
     Private Sub PageOtherLeft_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         '是否处于隐藏的子页面
         Dim IsHiddenPage As Boolean = False
-        If ItemHelp.Checked AndAlso Setup.Get("UiHiddenOtherHelp") Then IsHiddenPage = True
-        If ItemAbout.Checked AndAlso Setup.Get("UiHiddenOtherAbout") Then IsHiddenPage = True
-        If ItemTest.Checked AndAlso Setup.Get("UiHiddenOtherTest") Then IsHiddenPage = True
+        If ItemHelp.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenOtherHelp") Then IsHiddenPage = True
+        If ItemAbout.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenOtherAbout") Then IsHiddenPage = True
+        If ItemTest.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenOtherTest") Then IsHiddenPage = True
         If PageSetupUI.HiddenForceShow Then IsHiddenPage = False
         '若页面错误，或尚未加载，则继续
-        If IsLoad AndAlso Not IsHiddenPage Then Exit Sub
+        If IsLoad AndAlso Not IsHiddenPage Then Return
         IsLoad = True
         '刷新子页面隐藏情况
         PageSetupUI.HiddenRefresh()
         '选择第一个未被禁用的子页面
-        If IsPageSwitched Then Exit Sub
-        If Not Setup.Get("UiHiddenOtherHelp") Then
+        If IsPageSwitched Then Return
+        If Not Settings.Get(Of Boolean)("UiHiddenOtherHelp") Then
             ItemHelp.SetChecked(True, False, False)
-        ElseIf Not Setup.Get("UiHiddenOtherAbout") Then
+        ElseIf Not Settings.Get(Of Boolean)("UiHiddenOtherAbout") Then
             ItemAbout.SetChecked(True, False, False)
         Else
             ItemTest.SetChecked(True, False, False)
@@ -37,9 +37,9 @@
     Public Sub New()
         InitializeComponent()
         '选择第一个未被禁用的子页面
-        If Not Setup.Get("UiHiddenOtherHelp") Then
+        If Not Settings.Get(Of Boolean)("UiHiddenOtherHelp") Then
             PageID = FormMain.PageSubType.OtherHelp
-        ElseIf Not Setup.Get("UiHiddenOtherAbout") Then
+        ElseIf Not Settings.Get(Of Boolean)("UiHiddenOtherAbout") Then
             PageID = FormMain.PageSubType.OtherAbout
         Else
             PageID = FormMain.PageSubType.OtherTest
@@ -49,7 +49,7 @@
     ''' <summary>
     ''' 勾选事件改变页面。
     ''' </summary>
-    Private Sub PageCheck(sender As MyListItem, e As RouteEventArgs) Handles ItemAbout.Check, ItemHelp.Check, ItemTest.Check
+    Private Sub PageCheck(sender As FrameworkElement, e As RouteEventArgs) Handles ItemAbout.Check, ItemHelp.Check, ItemTest.Check
         '尚未初始化控件属性时，sender.Tag 为 Nothing，会导致切换到页面 0
         '若使用 IsLoaded，则会导致模拟点击不被执行（模拟点击切换页面时，控件的 IsLoaded 为 False）
         If sender.Tag IsNot Nothing Then PageChange(Val(sender.Tag))
@@ -76,14 +76,14 @@
     ''' 切换现有页面。
     ''' </summary>
     Public Sub PageChange(ID As FormMain.PageSubType)
-        If PageID = ID Then Exit Sub
+        If PageID = ID Then Return
         AniControlEnabled += 1
         IsPageSwitched = True
         Try
             PageChangeRun(PageGet(ID))
             PageID = ID
         Catch ex As Exception
-            Log(ex, "切换分页面失败（ID " & ID & "）", LogLevel.Feedback)
+            Logger.Error(ex, $"切换分页面失败（ID {ID}）")
         Finally
             AniControlEnabled -= 1
         End Try
@@ -119,36 +119,41 @@
         Hint("正在刷新……", Log:=False)
     End Sub
     Public Shared Sub RefreshHelp()
-        Setup.Set("SystemHelpVersion", 0) '强制重新解压文件
+        Settings.Set("SystemHelpVersion", 0) '强制重新解压文件
         FrmOtherHelp.PageLoaderRestart()
         FrmOtherHelp.SearchBox.Text = ""
     End Sub
 
     '打开网页
     Private Sub TryFeedback(sender As Object, e As RouteEventArgs) Handles ItemFeedback.Changed
-        If Not ItemFeedback.Checked Then Exit Sub
+        If Not ItemFeedback.Checked Then Return
         TryFeedback()
         e.Handled = True
     End Sub
     Public Shared Sub TryFeedback()
-        If Not CanFeedback(True) Then Exit Sub
-        Select Case MyMsgBox("在提交新反馈前，建议先搜索反馈列表，以避免重复提交。" & vbCrLf & "如果无法打开该网页，请尝试使用加速器或 VPN。",
+        If False.Equals(PageSetupSystem.IsLauncherNewest) Then
+            If MyMsgBox($"你的 PCL 不是最新版，因此无法提交反馈。{vbCrLf}请在更新后，确认该问题在最新版中依然存在，然后再提交反馈。", "无法提交反馈", "更新", "取消") = 1 Then
+                UpdateCheckByButton()
+            End If
+            Return
+        End If
+        Select Case MyMsgBox("在提交新反馈前，建议先搜索反馈列表，以避免重复提交。" & vbCrLf & "如果无法打开该网页，请使用 VPN 改善网络环境。",
                     "反馈", "提交新反馈", "查看反馈列表", "取消")
             Case 1
                 Feedback(True, False)
             Case 2
-                OpenWebsite("https://github.com/Hex-Dragon/PCL2/issues/")
+                OpenWebsite("https://github.com/Meloong-Git/PCL/issues/")
         End Select
     End Sub
     Private Sub TryVote(sender As Object, e As RouteEventArgs) Handles ItemVote.Changed
-        If Not ItemVote.Checked Then Exit Sub
+        If Not ItemVote.Checked Then Return
         TryVote()
         e.Handled = True
     End Sub
     Public Shared Sub TryVote()
-        If MyMsgBox("是否要打开新功能投票网页？" & vbCrLf & "如果无法打开该网页，请尝试使用加速器或 VPN。",
-                    "新功能投票", "打开", "取消") = 2 Then Exit Sub
-        OpenWebsite("https://github.com/Hex-Dragon/PCL2/discussions/categories/%E5%8A%9F%E8%83%BD%E6%8A%95%E7%A5%A8?discussions_q=category%3A%E5%8A%9F%E8%83%BD%E6%8A%95%E7%A5%A8+sort%3Adate_created")
+        If MyMsgBox("是否要打开新功能投票网页？" & vbCrLf & "如果无法打开该网页，请使用 VPN 改善网络环境。",
+                    "新功能投票", "打开", "取消") = 2 Then Return
+        OpenWebsite("https://github.com/Meloong-Git/PCL/discussions/categories/%E5%8A%9F%E8%83%BD%E6%8A%95%E7%A5%A8?discussions_q=category%3A%E5%8A%9F%E8%83%BD%E6%8A%95%E7%A5%A8+sort%3Adate_created")
     End Sub
 
 End Class

@@ -1,4 +1,4 @@
-﻿Public Class MyMsgText
+Public Class MyMsgText
 
     Private ReadOnly MyConverter As MyMsgBoxConverter
     Private ReadOnly Uuid As Integer = GetUuid()
@@ -25,7 +25,7 @@
             ShapeLine.StrokeThickness = GetWPFSize(1)
 
         Catch ex As Exception
-            Log(ex, "普通弹窗初始化失败", LogLevel.Hint)
+            Logger.Error(ex, "普通弹窗初始化失败", LogBehavior.Toast)
         End Try
     End Sub
 
@@ -44,10 +44,10 @@
                 AaDouble(Sub(i) TransformRotate.Angle += i, -TransformRotate.Angle, 300, 60, New AniEaseOutFluent(AniEasePower.Weak))
             }, "MyMsgBox " & Uuid)
             '记录日志
-            Log("[Control] 普通弹窗：" & LabTitle.Text & vbCrLf & LabCaption.Text)
+            Logger.Info($"普通弹窗：{LabTitle.Text}{vbCrLf}{LabCaption.Text}")
 
         Catch ex As Exception
-            Log(ex, "普通弹窗加载失败", LogLevel.Hint)
+            Logger.Error(ex, "普通弹窗加载失败", LogBehavior.Toast)
         End Try
     End Sub
     Private Sub Close()
@@ -70,7 +70,7 @@
     End Sub
 
     Public Sub Btn1_Click() Handles Btn1.Click
-        If MyConverter.IsExited Then Exit Sub
+        If MyConverter.IsExited Then Return
         If MyConverter.Button1Action IsNot Nothing Then
             MyConverter.Button1Action()
         Else
@@ -80,7 +80,7 @@
         End If
     End Sub
     Public Sub Btn2_Click() Handles Btn2.Click
-        If MyConverter.IsExited Then Exit Sub
+        If MyConverter.IsExited Then Return
         If MyConverter.Button2Action IsNot Nothing Then
             MyConverter.Button2Action()
         Else
@@ -90,7 +90,7 @@
         End If
     End Sub
     Public Sub Btn3_Click() Handles Btn3.Click
-        If MyConverter.IsExited Then Exit Sub
+        If MyConverter.IsExited Then Return
         If MyConverter.Button3Action IsNot Nothing Then
             MyConverter.Button3Action()
         Else

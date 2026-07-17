@@ -1,4 +1,4 @@
-﻿Public Class MyComboBoxItem
+Public Class MyComboBoxItem
     Inherits ComboBoxItem
 
     '基础
@@ -35,7 +35,7 @@
             NewFontOpacity = 0.4
             Time = AnimationTimeOut
         End If
-        If BackColorName = NewBackColorName AndAlso FontOpacity = NewFontOpacity Then Exit Sub
+        If BackColorName = NewBackColorName AndAlso FontOpacity = NewFontOpacity Then Return
         BackColorName = NewBackColorName
         FontOpacity = NewFontOpacity
         '触发颜色动画
@@ -61,7 +61,7 @@
     End Operator
 
     Private Sub MyComboBoxItem_MouseLeftButtonUp(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonUp
-        Log("[Control] 选择下拉列表项：" & Tostring())
+        Logger.Info($"选择下拉列表项：{Tostring()}")
     End Sub
 
 End Class

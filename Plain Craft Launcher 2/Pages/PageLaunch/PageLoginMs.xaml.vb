@@ -1,4 +1,4 @@
-﻿Public Class PageLoginMs
+Public Class PageLoginMs
 
     ''' <summary>
     ''' 刷新页面显示的所有信息。
@@ -9,7 +9,7 @@
         ComboAccounts.Items.Clear()
         ComboAccounts.Items.Add(New MyComboBoxItem With {.Content = "添加新账号"})
         Try
-            Dim MsJson As JObject = GetJson(Setup.Get("LoginMsJson"))
+            Dim MsJson As JObject = Settings.Get(Of String)("LoginMsJson").DeserializeJson()
             For Each Account In MsJson
                 Dim Item As MyListItem = CType(FindResource("ComboBoxItemTemplateWithDelete"), DataTemplate).LoadContent()
                 Item.Tag = Account.Value.ToString
@@ -18,14 +18,14 @@
                 ComboAccounts.Items.Add(Item)
             Next
         Catch ex As Exception
-            Log(ex, $"微软登录信息出错，登录信息已被重置（{Setup.Get("LoginMsJson")}）", LogLevel.Hint)
-            Setup.Set("LoginMsJson", "{}")
+            Logger.Error(ex, $"微软登录信息出错，登录信息已被重置（{Settings.Get(Of String)("LoginMsJson")}）", LogBehavior.Toast)
+            Settings.Set("LoginMsJson", "{}")
         End Try
         '如果不保留输入，刷新列表后自动选择第一项
         ComboAccounts.SelectedIndex = If(KeepInput, Math.Max(0, IndexBefore), 0)
     End Sub
     Private Sub ComboAccounts_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboAccounts.SelectionChanged
-        If AniControlEnabled <> 0 OrElse ComboAccounts.SelectedItem Is Nothing OrElse ComboAccounts.ContentPresenter Is Nothing Then Exit Sub
+        If AniControlEnabled <> 0 OrElse ComboAccounts.SelectedItem Is Nothing OrElse ComboAccounts.ContentPresenter Is Nothing Then Return
         If TypeOf ComboAccounts.SelectedItem Is MyListItem Then
             ComboAccounts.ContentPresenter.Content = CType(ComboAccounts.SelectedItem, MyListItem).Title
         ElseIf TypeOf ComboAccounts.SelectedItem Is MyComboBoxItem Then
@@ -37,7 +37,7 @@
     ''' 获取当前页面的登录信息。
     ''' </summary>
     Public Shared Function GetLoginData() As McLoginMs
-        If FrmLoginMs Is Nothing Then Return New McLoginMs With {.OAuthRefreshToken = Setup.Get("CacheMsV2OAuthRefresh"), .UserName = Setup.Get("CacheMsV2Name")}
+        If FrmLoginMs Is Nothing Then Return New McLoginMs With {.OAuthRefreshToken = Settings.Get(Of String)("CacheMsV2OAuthRefresh"), .UserName = Settings.Get(Of String)("CacheMsV2Name")}
         Dim Result As McLoginMs = Nothing
         RunInUiWait(
         Sub()
@@ -78,23 +78,21 @@
                 Loop
                 If McLoginMsLoader.State = LoadState.Finished Then
                     RunInUi(Sub() FrmLaunchLeft.RefreshPage(False, True))
-                ElseIf McLoginMsLoader.State = LoadState.Aborted Then
-                    Throw New ThreadInterruptedException
+                ElseIf McLoginMsLoader.State = LoadState.Canceled Then
+                    Throw New OperationCanceledException
                 ElseIf McLoginMsLoader.Error Is Nothing Then
                     Throw New Exception("未知错误！")
                 Else
                     Throw New Exception(McLoginMsLoader.Error.Message, McLoginMsLoader.Error)
                 End If
-            Catch ex As ThreadInterruptedException
-                Hint("已取消登录！")
             Catch ex As Exception
-                If ex.Message = "$$" Then
-                ElseIf ex.Message.StartsWith("$") Then
-                    Hint(ex.Message.TrimStart("$"), HintType.Critical)
-                ElseIf TypeOf ex Is Security.Authentication.AuthenticationException AndAlso ex.Message.ContainsF("SSL/TLS") Then
-                    Log(ex, "正版登录验证失败，请考虑在 [设置 → 其他] 中关闭 [在正版登录时验证 SSL 证书]，然后再试。" & vbCrLf & vbCrLf & "原始错误信息：", LogLevel.Msgbox)
+                If ex.IsCanceled Then
+                ElseIf ex.Message.StartsWithF("$") Then
+                    Hint(ex.Message.TrimStart("$"), HintType.Red)
+                ElseIf TypeOf ex Is Security.Authentication.AuthenticationException AndAlso ex.Message.Contains("SSL/TLS") Then
+                    Logger.Error(ex, $"正版登录验证失败，请考虑在 [设置 → 其他] 中关闭 [在正版登录时验证 SSL 证书]，然后再试。{vbCrLf}{vbCrLf}原始错误信息：", LogBehavior.Alert)
                 Else
-                    Log(ex, "正版登录尝试失败", LogLevel.Msgbox)
+                    Logger.Error(ex, "正版登录尝试失败", LogBehavior.Alert)
                 End If
             Finally
                 RunInUi(

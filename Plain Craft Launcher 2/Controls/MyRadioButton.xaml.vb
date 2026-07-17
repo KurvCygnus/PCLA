@@ -1,4 +1,4 @@
-﻿Imports System.Windows.Markup
+Imports System.Windows.Markup
 
 <ContentProperty("Inlines")>
 Public Class MyRadioButton
@@ -7,10 +7,6 @@ Public Class MyRadioButton
 
     Public Uuid As Integer = GetUuid()
     Public Event Check(sender As Object, raiseByMouse As Boolean)
-    Public Event Change(sender As Object, raiseByMouse As Boolean)
-    Public Sub RaiseChange()
-        RaiseEvent Change(Me, False)
-    End Sub '使外部程序可以引发本控件的 Change 事件
 
     '自定义属性
 
@@ -46,23 +42,22 @@ Public Class MyRadioButton
     ''' 手动设置 Checked 属性。
     ''' </summary>
     ''' <param name="value">新的 Checked 属性。</param>
-    ''' <param name="user">是否由用户引发。</param>
+    ''' <param name="raiseByMouse">是否由用户引发。</param>
     ''' <param name="anime">是否执行动画。</param>
-    Public Sub SetChecked(value As Boolean, user As Boolean, anime As Boolean)
+    Public Sub SetChecked(value As Boolean, raiseByMouse As Boolean, anime As Boolean)
         Try
 
             '自定义属性基础
 
             Dim IsChanged As Boolean = False
-            If IsLoaded AndAlso Not value = _Checked Then RaiseEvent Change(Me, user)
-            If Not value = _Checked Then
+            If _Checked <> value Then
                 _Checked = value
                 IsChanged = True
             End If
 
             '保证只有一个单选框选中
 
-            If IsNothing(Parent) Then Exit Sub
+            If Parent Is Nothing Then Return
             Dim RadioboxList As New List(Of MyRadioButton)
             Dim CheckedCount As Integer = 0
             '收集控件列表与选中个数
@@ -101,14 +96,15 @@ Public Class MyRadioButton
 
             '更改动画
 
-            If Not IsChanged Then Exit Sub
+            If Not IsChanged Then Return
             RefreshColor(Nothing, anime)
 
             '触发事件
-            If Checked Then RaiseEvent Check(Me, user)
+            If Checked Then RaiseEvent Check(Me, raiseByMouse)
+            RaiseCustomEvent()
 
         Catch ex As Exception
-            Log(ex, "单选按钮勾选改变错误", LogLevel.Hint)
+            Logger.Error(ex, "单选按钮勾选改变错误", LogBehavior.Toast)
         End Try
     End Sub
 
@@ -147,17 +143,17 @@ Public Class MyRadioButton
     Public Event PreviewClick(sender As Object, e As RouteEventArgs)
     Private IsMouseDown As Boolean = False
     Private Sub Radiobox_MouseUp() Handles Me.MouseLeftButtonUp
-        If Checked Then Exit Sub
-        If Not IsMouseDown Then Exit Sub
-        Log("[Control] 按下单选按钮：" & Text)
+        If Checked Then Return
+        If Not IsMouseDown Then Return
+        Logger.Info($"按下单选按钮：{Text}")
         IsMouseDown = False
         Dim e As New RouteEventArgs(True)
         RaiseEvent PreviewClick(Me, e)
-        If e.Handled Then Exit Sub
+        If e.Handled Then Return
         SetChecked(True, True, True)
     End Sub
     Private Sub Radiobox_MouseDown() Handles Me.MouseLeftButtonDown
-        If Checked Then Exit Sub
+        If Checked Then Return
         IsMouseDown = True
         RefreshColor()
     End Sub
@@ -259,7 +255,7 @@ Public Class MyRadioButton
 
             End If
         Catch ex As Exception
-            Log(ex, "刷新单选按钮颜色出错")
+            Logger.Warn(ex, "刷新单选按钮颜色出错")
         End Try
     End Sub
 

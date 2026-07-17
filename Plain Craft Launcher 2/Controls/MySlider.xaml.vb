@@ -1,4 +1,7 @@
-﻿Public Class MySlider
+Imports System.Windows.Shapes
+
+Public Class MySlider
+    Implements ISettingControl
 
     '基础
 
@@ -14,7 +17,7 @@
             Return _MaxValue
         End Get
         Set(value As Integer)
-            If value = _MaxValue Then Exit Property
+            If value = _MaxValue Then Return
             _MaxValue = value
             RefreshWidth(Nothing, Nothing)
         End Set
@@ -28,8 +31,8 @@
         Set(newValue As Integer)
             Try
 
-                newValue = MathClamp(newValue, 0, MaxValue)
-                If _Value = newValue Then Exit Property
+                newValue = newValue.Clamp(0, MaxValue)
+                If _Value = newValue Then Return
 
                 '触发 Preview 事件，修改新值
                 Dim OldValue = _Value
@@ -40,12 +43,12 @@
                     If e.Handled Then
                         _Value = OldValue
                         DragStop()
-                        Exit Property
+                        Return
                     End If
                 End If
 
                 If IsLoaded AndAlso AniControlEnabled = 0 Then
-                    If ActualWidth < ShapeDot.Width Then Exit Property
+                    If ActualWidth < ShapeDot.Width Then Return
                     Dim NewWidth As Double = _Value / MaxValue * (ActualWidth - ShapeDot.Width)
                     Dim DeltaProcess As Double = Math.Abs(LineFore.Width / (ActualWidth - ShapeDot.Width) - _Value / MaxValue)
                     Dim Time As Double = (1 - Math.Pow(1 - DeltaProcess, 3)) * 300 + If(ChangeByKey, 100, 0)
@@ -60,7 +63,7 @@
                 If AniControlEnabled = 0 Then RaiseEvent Change(Me, False)
 
             Catch ex As Exception
-                Log(ex, "滑动条进度改变出错", LogLevel.Hint)
+                Logger.Error(ex, "滑动条进度改变出错", LogBehavior.Toast)
             End Try
         End Set
     End Property
@@ -70,7 +73,7 @@
         Dim NewWidth As Double = _Value / MaxValue * (ActualWidth - ShapeDot.Width)
         LineFore.Width = Math.Max(0, NewWidth + If(NewWidth < 0.5, 0, 0.5))
         LineBack.Width = Math.Max(0, ActualWidth - ShapeDot.Width - NewWidth + If(ActualWidth - ShapeDot.Width - NewWidth < 0.5, 0, 0.5))
-        SetLeft(ShapeDot, NewWidth)
+        ShapeDot.Margin = New Thickness(NewWidth, ShapeDot.Margin.Top, ShapeDot.Margin.Right, ShapeDot.Margin.Bottom)
     End Sub
 
     '拖动
@@ -88,7 +91,7 @@
         AniStop("MySlider KeyPopup " & Uuid)
     End Sub
     Public Sub DragDoing()
-        Dim Percent As Double = MathClamp((Mouse.GetPosition(PanMain).X - ShapeDot.Width / 2) / (ActualWidth - ShapeDot.Width), 0, 1)
+        Dim Percent As Double = ((Mouse.GetPosition(PanMain).X - ShapeDot.Width / 2) / (ActualWidth - ShapeDot.Width)).Clamp(0, 1)
         Dim NewValue As Integer = Percent * MaxValue
         If Not NewValue = Value Then
             Value = NewValue
@@ -103,7 +106,7 @@
         Popup.IsOpen = False
     End Sub
     Public Sub RefreshPopup()
-        If GetHintText Is Nothing Then Exit Sub
+        If GetHintText Is Nothing Then Return
         Popup.IsOpen = True
         TextHint.Text = GetHintText.DynamicInvoke(Value)
         Dim typeface As New Typeface(TextHint.FontFamily, TextHint.FontStyle, TextHint.FontWeight, TextHint.FontStretch)
@@ -153,7 +156,7 @@
             End If
 
         Catch ex As Exception
-            Log(ex, "滑动条颜色改变出错")
+            Logger.Warn(ex, "滑动条颜色改变出错")
         End Try
     End Sub
 
@@ -165,7 +168,7 @@
     End Sub
     Private Sub MySlider_KeyDown(sender As Object, e As KeyEventArgs) Handles Me.KeyDown
         '拒绝一边拖动一边用按键改变
-        If ReferenceEquals(Me, DragControl) Then Exit Sub
+        If ReferenceEquals(Me, DragControl) Then Return
         '改变值
         If e.Key = Key.Left Then
             ChangeByKey = True
@@ -178,7 +181,7 @@
             ChangeByKey = False
             e.Handled = True
         Else
-            Exit Sub
+            Return
         End If
         '更新 Popup
         If GetHintText IsNot Nothing Then
@@ -187,5 +190,21 @@
             AniStart(AaCode(Sub() Popup.IsOpen = False, 700 * AniSpeed), "MySlider KeyPopup " & Uuid)
         End If
     End Sub
+
+#Region "设置"
+
+    Private Sub RefreshSetting(NewValue As String) Implements ISettingControl.RefreshSetting
+        Value = Val(NewValue)
+    End Sub
+
+    Private Function GetCurrentSetting() As String Implements ISettingControl.GetCurrentSetting
+        Return Value
+    End Function
+
+    Private Sub SaveSetting() Handles Me.Change
+        SettingService.SaveSetting(Me)
+    End Sub
+
+#End Region
 
 End Class

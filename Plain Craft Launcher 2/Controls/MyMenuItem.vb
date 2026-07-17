@@ -1,4 +1,4 @@
-﻿Public Class MyMenuItem
+Public Class MyMenuItem
     Inherits MenuItem
 
     Private Sub MyMenuItem_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
@@ -7,7 +7,9 @@
             If IconControl IsNot Nothing Then IconControl.Data = (New GeometryConverter).ConvertFromString(Icon)
         End If
         '对父级设置透明度
-        CType(Parent, ContextMenu).Opacity = Setup.Get("UiLauncherTransparent") / 1000 + 0.4
+        If TypeOf Parent Is ContextMenu Then
+            CType(Parent, ContextMenu).Opacity = Settings.Get(Of Integer)("UiLauncherTransparent") / 1000 + 0.4
+        End If
     End Sub
 
     '基础
@@ -37,7 +39,7 @@
             Time = AnimationTimeOut
         End If
         '重复性验证
-        If ColorName = BackName Then Exit Sub
+        If ColorName = BackName Then Return
         ColorName = BackName
         '触发颜色动画
         If IsLoaded AndAlso AniControlEnabled = 0 Then '防止默认属性变更触发动画
@@ -54,4 +56,7 @@
         End If
     End Sub
 
+    Private Sub MyMenuItem_Click(sender As Object, e As RoutedEventArgs) Handles Me.Click
+        RaiseCustomEvent()
+    End Sub
 End Class

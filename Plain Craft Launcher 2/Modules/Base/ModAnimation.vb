@@ -1,5 +1,7 @@
-﻿'动画引擎模块
+'动画引擎模块
 '使用 Ani 作为方法或属性的开头，使用 Aa 作为单个动画对象的开头（便于自动补全）
+
+Imports System.Windows.Media.Effects
 
 Public Module ModAnimation
 
@@ -8,7 +10,12 @@ Public Module ModAnimation
     ''' <summary>
     ''' 动画速度。最大为 200。
     ''' </summary>
-    Public AniSpeed As Double = 1
+    Public ReadOnly Property AniSpeed As Double
+        Get
+            Dim Setting As Integer = Settings.Get(Of Integer)("SystemDebugAnim")
+            Return If(Setting >= 30, 200, (Setting * 0.1 + 0.1).Clamp(0.1, 3))
+        End Get
+    End Property
     ''' <summary>
     ''' 动画组列表。
     ''' </summary>
@@ -107,7 +114,7 @@ Public Module ModAnimation
         Public ValueLast As Object
 
         Public Overrides Function ToString() As String
-            Return GetStringFromEnum(TypeMain) & " | " & TimeFinished & "/" & TimeTotal & "(" & Math.Round(TimePercent * 100) & "%)" & If(Obj Is Nothing, "", " | " & Obj.ToString & "(" & Obj.GetType.Name & ")")
+            Return TypeMain.ToString() & " | " & TimeFinished & "/" & TimeTotal & "(" & Math.Round(TimePercent * 100) & "%)" & If(Obj Is Nothing, "", " | " & Obj.ToString & "(" & Obj.GetType.Name & ")")
         End Function
 
     End Structure
@@ -467,7 +474,7 @@ Public Module ModAnimation
     ''' 按照 WPF 方式旋转控件的动画。
     ''' </summary>
     ''' <param name="Obj">动画的对象。它必须已经拥有了单一的 ScaleTransform 值。</param>
-    ''' <param name="Value">大小改变的百分比（如-0.6）。</param>
+    ''' <param name="Value">旋转角度（度）。</param>
     ''' <param name="Time">动画长度（毫秒）。</param>
     ''' <param name="Delay">动画延迟执行的时间（毫秒）。</param>
     ''' <param name="Ease">插值器类型。</param>
@@ -514,13 +521,14 @@ Public Module ModAnimation
     ''' </summary>
     ''' <remarks></remarks>
     Public Function AaStack(Stack As StackPanel, Optional Time As Integer = 100, Optional Delay As Integer = 25) As List(Of AniData)
-        AaStack = New List(Of AniData)
+        Dim Result = New List(Of AniData)
         Dim AniDelay As Integer = 0
         For Each Item In Stack.Children
             Item.Opacity = 0
-            AaStack.Add(AaOpacity(Item, 1, Time, AniDelay))
+            Result.Add(AaOpacity(Item, 1, Time, AniDelay))
             AniDelay += Delay
         Next
+        Return Result
     End Function
 
 #End Region
@@ -577,10 +585,10 @@ Public Module ModAnimation
     Public Class AniEaseLinear
         Inherits AniEase
         Public Overrides Function GetValue(t As Double) As Double
-            Return MathClamp(t, 0, 1)
+            Return t.Clamp(0, 1)
         End Function
         Public Overrides Function GetDelta(t1 As Double, t0 As Double) As Double
-            Return MathClamp(t1, 0, 1) - MathClamp(t0, 0, 1)
+            Return t1.Clamp(0, 1) - t0.Clamp(0, 1)
         End Function
     End Class
 
@@ -595,7 +603,7 @@ Public Module ModAnimation
             p = Power
         End Sub
         Public Overrides Function GetValue(t As Double) As Double
-            Return MathClamp(t, 0, 1) ^ p
+            Return t.Clamp(0, 1) ^ p
         End Function
     End Class
     ''' <summary>
@@ -608,7 +616,7 @@ Public Module ModAnimation
             p = Power
         End Sub
         Public Overrides Function GetValue(t As Double) As Double
-            Return 1 - MathClamp(1 - t, 0, 1) ^ p
+            Return 1 - (1 - t).Clamp(0, 1) ^ p
         End Function
     End Class
     ''' <summary>
@@ -624,6 +632,26 @@ Public Module ModAnimation
             Return Ease.GetValue(t)
         End Function
     End Class
+    ''' <summary>
+    ''' 以特定速度开始的平滑结束。
+    ''' </summary>
+    Public Class AniEaseOutFluentWithInitial
+        Inherits AniEase
+        Private ReadOnly alpha As Double '(初速度 / 平均速度) – 1
+        ''' <param name="InitialPixelPerSecond">初速度，px/s</param>
+        ''' <param name="TotalSecond">总时长，s</param>
+        ''' <param name="TotalDistance">总路程，px</param>
+        Public Sub New(InitialPixelPerSecond As Double, TotalSecond As Double, TotalDistance As Double)
+            Dim v0_norm As Double = InitialPixelPerSecond * TotalSecond / TotalDistance '归一化初速度
+            alpha = v0_norm - 1.0
+            If alpha < 0 Then alpha = 0 '初速度小于平均速度时，退化为线性
+        End Sub
+        Public Overrides Function GetValue(percent As Double) As Double
+            Dim p As Double = percent.Clamp(0, 1)
+            If alpha = 0 Then Return p '退化到线性
+            Return (alpha + 1) * p / (1 + alpha * p)
+        End Function
+    End Class
 
     'Back / 回弹
     ''' <summary>
@@ -636,7 +664,7 @@ Public Module ModAnimation
             p = 3 - Power * 0.5
         End Sub
         Public Overrides Function GetValue(t As Double) As Double
-            t = MathClamp(t, 0, 1)
+            t = t.Clamp(0, 1)
             Return t ^ p * Math.Cos(1.5 * Math.PI * (1 - t))
         End Function
     End Class
@@ -650,7 +678,7 @@ Public Module ModAnimation
             p = 3 - Power * 0.5
         End Sub
         Public Overrides Function GetValue(t As Double) As Double
-            t = MathClamp(t, 0, 1)
+            t = t.Clamp(0, 1)
             Return 1 - (1 - t) ^ p * Math.Cos(1.5 * Math.PI * t)
         End Function
     End Class
@@ -694,7 +722,7 @@ Public Module ModAnimation
             p = Power + 4
         End Sub
         Public Overrides Function GetValue(t As Double) As Double
-            t = MathClamp(t, 0, 1)
+            t = t.Clamp(0, 1)
             Return t ^ ((p - 1) * 0.25) * Math.Cos((p - 3.5) * Math.PI * (1 - t) ^ 1.5)
         End Function
     End Class
@@ -708,7 +736,7 @@ Public Module ModAnimation
             p = Power + 4
         End Sub
         Public Overrides Function GetValue(t As Double) As Double
-            t = 1 - MathClamp(t, 0, 1)
+            t = 1 - t.Clamp(0, 1)
             Return 1 - t ^ ((p - 1) * 0.25) * Math.Cos((p - 3.5) * Math.PI * (1 - t) ^ 1.5)
         End Function
     End Class
@@ -723,9 +751,17 @@ Public Module ModAnimation
     ''' <param name="AniGroup">由 Aa 开头的函数初始化的 AniData 对象集合。</param>
     ''' <param name="Name">动画组的名称。如果重复会直接停止同名动画组。</param>
     Public Sub AniStart(AniGroup As IList, Optional Name As String = "", Optional RefreshTime As Boolean = False)
-        If RefreshTime Then AniLastTick = GetTimeTick() '避免处理动画时已经造成了极大的延迟，导致动画突然结束
+        If RefreshTime Then AniLastTick = GetTimeMs() '避免处理动画时已经造成了极大的延迟，导致动画突然结束
         '添加到正在执行的动画组
-        Dim NewEntry As New AniGroupEntry With {.Data = GetFullList(Of AniData)(AniGroup), .StartTick = GetTimeTick()}
+        Dim AllAnis = New List(Of AniData)
+        For Each Element In AniGroup
+            If TypeOf Element Is ICollection Then
+                AllAnis.AddRange(Element)
+            Else
+                AllAnis.Add(Element)
+            End If
+        Next
+        Dim NewEntry As New AniGroupEntry With {.Data = AllAnis, .StartTick = GetTimeMs()}
         If Name = "" Then
             Name = NewEntry.Uuid
         Else
@@ -768,48 +804,50 @@ Public Module ModAnimation
     ''' </summary>
     Public Sub AniStart()
         '初始化计时器
-        AniLastTick = GetTimeTick()
+        AniLastTick = GetTimeMs()
         AniFPSTimer = AniLastTick
         AniRunning = True '标记动画执行开始
 
-        RunInNewThread(Sub()
-                           Try
-                               Log("[Animation] 动画线程开始")
-                               Do While True
-                                   '两帧之间的间隔时间
-                                   Dim DeltaTime As Long = MathClamp(GetTimeTick() - AniLastTick, 0, 100000)
-                                   If DeltaTime < 3 Then GoTo Sleeper
-                                   AniLastTick = GetTimeTick()
-                                   '记录 FPS
-                                   If ModeDebug Then
-                                       If MathClamp(AniLastTick - AniFPSTimer, 0, 100000) >= 500 Then
-                                           AniFPS = AniFPSCounter
-                                           AniFPSCounter = 0
-                                           AniFPSTimer = AniLastTick
-                                       End If
-                                       AniFPSCounter += 2
-                                   End If
-                                   '执行动画
-                                   RunInUiWait(Sub()
-                                                   AniCount = 0
-                                                   AniTimer(DeltaTime * AniSpeed)
-                                                   '#If DEBUG Then
-                                                   '    FrmMain.Title = "F " & AniFPS & ", A " & AniCount & ", R " & NetManage.FileRemain
-                                                   '#Else
-                                                   '    If ModeDebug Then FrmMain.Title = "FPS " & AniFPS & ", 动画 " & AniCount & ", 下载中 " & NetManage.FileRemain
-                                                   '#End If
-                                                   If RandomInteger(0, 64 * If(ModeDebug, 5, 30)) = 0 AndAlso ((AniFPS < 62 AndAlso AniFPS > 0) OrElse AniCount > 4 OrElse NetManager.FileRemain <> 0) Then
-                                                       Log("[Report] FPS " & AniFPS & ", 动画 " & AniCount & ", 下载中 " & NetManager.FileRemain & "（" & GetString(NetManager.Speed) & "/s）")
-                                                   End If
-                                               End Sub)
+        RunInNewThread(
+        Sub()
+            Try
+                Logger.Info("动画线程开始")
+                Do While True
+                    '两帧之间的间隔时间
+                    Dim DeltaTime As Long = (GetTimeMs() - AniLastTick).Clamp(0, 100000)
+                    If DeltaTime < 3 Then GoTo Sleeper
+                    AniLastTick = GetTimeMs()
+                    '记录 FPS
+                    If ModeDebug Then
+                        If (AniLastTick - AniFPSTimer).Clamp(0, 100000) >= 500 Then
+                            AniFPS = AniFPSCounter
+                            AniFPSCounter = 0
+                            AniFPSTimer = AniLastTick
+                        End If
+                        AniFPSCounter += 2
+                    End If
+                    '执行动画
+                    RunInUiWait(
+                    Sub()
+                        AniCount = 0
+                        AniTimer(DeltaTime * AniSpeed)
+                        If RandomInteger(0, 64 * If(ModeDebug, 5, 30)) = 0 AndAlso ((AniFPS < 62 AndAlso AniFPS > 0) OrElse AniCount > 4 OrElse NetManager.FileRemain <> 0) Then
+                            Logger.Info($"FPS {AniFPS}, 动画 {AniCount}, 下载中 {NetManager.FileRemain}（{StringUtils.FormatByteSize(NetManager.Speed)}/s）")
+                            If NetManager.FileRemain < 5 Then
+                                For Each File In NetManager.AllFiles.Values
+                                    If File.State < NetState.Finished Then Logger.Trace($"- {File.State} {StringUtils.FormatByteSize(File.Speed)}/s {File.LocalPath}")
+                                Next
+                            End If
+                        End If
+                    End Sub)
 Sleeper:
-                                   '控制 FPS
-                                   Thread.Sleep(1)
-                               Loop
-                           Catch ex As Exception
-                               Log(ex, "动画帧执行失败", LogLevel.Assert)
-                           End Try
-                       End Sub, "Animation", ThreadPriority.AboveNormal)
+                    '控制 FPS
+                    Thread.Sleep(1)
+                Loop
+            Catch ex As Exception
+                Logger.Error(ex, "动画帧执行失败", LogBehavior.AlertThenCrash)
+            End Try
+        End Sub, "Animation", ThreadPriority.AboveNormal)
     End Sub
 
     ''' <summary>
@@ -818,7 +856,7 @@ Sleeper:
     Public Sub AniTimer(DeltaTick As Integer)
         Try
 
-            If DeltaTick / AniSpeed > 200 Then Log("[Animation] 两个动画帧间隔 " & DeltaTick & " ms", LogLevel.Developer)
+            If DeltaTick / AniSpeed > 100 Then Logger.Info($"两个动画帧间隔 {DeltaTick} ms")
             Dim i As Integer = -1
             '循环每个动画组
             Do While i + 1 < AniGroups.Count
@@ -883,7 +921,7 @@ NextAni:
             Loop
 
         Catch ex As Exception
-            Log(ex, "动画刻执行失败", LogLevel.Hint)
+            Logger.Error(ex, "动画刻执行失败", LogBehavior.Toast)
         End Try
     End Sub
 
@@ -896,15 +934,39 @@ NextAni:
             Select Case Ani.TypeMain
 
                 Case AniType.Number
-                    Dim Delta As Double = MathPercent(0, Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent))
+                    Dim Delta As Double = MathUtils.Lerp(0, Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent))
                     If Delta <> 0 Then
                         Select Case Ani.TypeSub
                             Case AniTypeSub.X
-                                DeltaLeft(Ani.Obj, Delta)
+                                If TypeOf Ani.Obj Is Window Then
+                                    CType(Ani.Obj, Window).Left += Delta
+                                Else
+                                    Select Case Ani.Obj.HorizontalAlignment
+                                        Case HorizontalAlignment.Left, HorizontalAlignment.Stretch
+                                            Ani.Obj.Margin = New Thickness(Ani.Obj.Margin.Left + Delta, Ani.Obj.Margin.Top, Ani.Obj.Margin.Right, Ani.Obj.Margin.Bottom)
+                                        Case HorizontalAlignment.Right
+                                            Ani.Obj.Margin = New Thickness(Ani.Obj.Margin.Left, Ani.Obj.Margin.Top, Ani.Obj.Margin.Right - Delta, Ani.Obj.Margin.Bottom)
+                                    End Select
+                                End If
                             Case AniTypeSub.Y
-                                DeltaTop(Ani.Obj, Delta)
+                                If TypeOf Ani.Obj Is Window Then
+                                    CType(Ani.Obj, Window).Top += Delta
+                                Else
+                                    Select Case Ani.Obj.VerticalAlignment
+                                        Case VerticalAlignment.Top
+                                            Ani.Obj.Margin = New Thickness(Ani.Obj.Margin.Left, Ani.Obj.Margin.Top + Delta, Ani.Obj.Margin.Right, Ani.Obj.Margin.Bottom)
+                                        Case VerticalAlignment.Bottom
+                                            Ani.Obj.Margin = New Thickness(Ani.Obj.Margin.Left, Ani.Obj.Margin.Top, Ani.Obj.Margin.Right, Ani.Obj.Margin.Bottom - Delta)
+                                    End Select
+                                End If
                             Case AniTypeSub.Opacity
-                                Ani.Obj.Opacity = MathClamp(Ani.Obj.Opacity + Delta, 0, 1)
+                                If TypeOf Ani.Obj Is UIElement Then
+                                    Dim Obj As UIElement = Ani.Obj
+                                    Obj.Opacity = (Obj.Opacity + Delta).Clamp(0, 1)
+                                ElseIf TypeOf Ani.Obj Is DropShadowEffect Then
+                                    Dim Obj As DropShadowEffect = Ani.Obj
+                                    Obj.Opacity = (Obj.Opacity + Delta).Clamp(0, 1)
+                                End If
                             Case AniTypeSub.Width
                                 Dim Obj As FrameworkElement = Ani.Obj
                                 Obj.Width = Math.Max(If(Double.IsNaN(Obj.Width), Obj.ActualWidth, Obj.Width) + Delta, 0)
@@ -936,7 +998,7 @@ NextAni:
 
                 Case AniType.Color
                     '利用 Last 记录了余下的小数值
-                    Dim Delta As MyColor = MathPercent(New MyColor(0, 0, 0, 0), Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent)) + Ani.ValueLast
+                    Dim Delta As MyColor = MyColor.Lerp(New MyColor(0, 0, 0, 0), Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent)) + Ani.ValueLast
                     Dim Obj As FrameworkElement = Ani.Obj(0)
                     Dim Prop As DependencyProperty = Ani.Obj(1)
                     Dim NewColor As MyColor = New MyColor(Obj.GetValue(Prop)) + Delta
@@ -946,21 +1008,22 @@ NextAni:
                 Case AniType.Scale
                     Dim Obj As FrameworkElement = Ani.Obj
                     Dim Delta As Double = Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent)
-                    Obj.Margin = New Thickness(Obj.Margin.Left + MathPercent(0, Ani.Value.Left, Delta), Obj.Margin.Top + MathPercent(0, Ani.Value.Top, Delta), Obj.Margin.Right + MathPercent(0, Ani.Value.Left, Delta), Obj.Margin.Bottom + MathPercent(0, Ani.Value.Top, Delta))
-                    Obj.Width = Math.Max(Obj.Width + MathPercent(0, Ani.Value.Width, Delta), 0)
-                    Obj.Height = Math.Max(Obj.Height + MathPercent(0, Ani.Value.Height, Delta), 0)
+                    Obj.Margin = New Thickness(Obj.Margin.Left + MathUtils.Lerp(0, Ani.Value.Left, Delta), Obj.Margin.Top + MathUtils.Lerp(0, Ani.Value.Top, Delta), Obj.Margin.Right + MathUtils.Lerp(0, Ani.Value.Left, Delta), Obj.Margin.Bottom + MathUtils.Lerp(0, Ani.Value.Top, Delta))
+                    Obj.Width = Math.Max(Obj.Width + MathUtils.Lerp(0, Ani.Value.Width, Delta), 0)
+                    Obj.Height = Math.Max(Obj.Height + MathUtils.Lerp(0, Ani.Value.Height, Delta), 0)
 
                 Case AniType.TextAppear
-                    Dim TextCount As Integer = If(Ani.Value(1), Ani.Value(0).ToString.Length, 0) +
-                                               Math.Round(Ani.Value(0).ToString.Length * If(Ani.Value(1), -1, 1) * Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, 0))
-                    Dim NewText As String = Mid(Ani.Value(0), 1, TextCount)
+                    Dim Text As String = Ani.Value(0)
+                    Dim TextCount As Integer = If(Ani.Value(1), Text.Length, 0) +
+                                               Math.Round(Text.Length * If(Ani.Value(1), -1, 1) * Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, 0))
+                    Dim NewText As String = Text.Substring(0, TextCount)
                     '添加乱码
-                    If TextCount < Ani.Value(0).ToString.Length Then
-                        Dim NextText As String = Mid(Ani.Value(0), TextCount + 1, 1)
+                    If TextCount < Text.Length Then
+                        Dim NextText As String = Text.Substring(TextCount, 1)
                         If Convert.ToInt32(Convert.ToChar(NextText)) >= Convert.ToInt32(Convert.ToChar(128)) Then
                             NewText &= Encoding.GetEncoding("GB18030").GetString({RandomInteger(16 + 160, 87 + 160), RandomInteger(1 + 160, 89 + 160)})
                         Else
-                            NewText &= RandomOne("0123456789./*-+\[]{};':/?,!@#$%^&*()_+-=qwwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM".ToCharArray)
+                            NewText &= RandomInteger(0, 85).ConvertRadix(86)
                         End If
                     End If
                     '设置文本
@@ -976,26 +1039,26 @@ NextAni:
                 Case AniType.ScaleTransform
                     Dim Obj As FrameworkElement = Ani.Obj
                     If TypeOf Obj.RenderTransform IsNot ScaleTransform Then
-                        Obj.RenderTransformOrigin = New Point(0.5, 0.5)
+                        If Obj.RenderTransformOrigin = New Point(0, 0) Then Obj.RenderTransformOrigin = New Point(0.5, 0.5)
                         Obj.RenderTransform = New ScaleTransform(1, 1)
                     End If
-                    Dim Delta As Double = MathPercent(0, Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent))
+                    Dim Delta As Double = MathUtils.Lerp(0, Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent))
                     CType(Obj.RenderTransform, ScaleTransform).ScaleX = Math.Max(CType(Obj.RenderTransform, ScaleTransform).ScaleX + Delta, 0)
                     CType(Obj.RenderTransform, ScaleTransform).ScaleY = Math.Max(CType(Obj.RenderTransform, ScaleTransform).ScaleY + Delta, 0)
 
                 Case AniType.RotateTransform
                     Dim Obj As FrameworkElement = Ani.Obj
                     If TypeOf Obj.RenderTransform IsNot RotateTransform Then
-                        Obj.RenderTransformOrigin = New Point(0.5, 0.5)
+                        If Obj.RenderTransformOrigin = New Point(0, 0) Then Obj.RenderTransformOrigin = New Point(0.5, 0.5)
                         Obj.RenderTransform = New RotateTransform(0)
                     End If
-                    Dim Delta As Double = MathPercent(0, Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent))
+                    Dim Delta As Double = MathUtils.Lerp(0, Ani.Value, Ani.Ease.GetDelta(Ani.TimeFinished / Ani.TimeTotal, Ani.TimePercent))
                     CType(Obj.RenderTransform, RotateTransform).Angle = CType(Obj.RenderTransform, RotateTransform).Angle + Delta
 
             End Select
             Ani.TimePercent = Ani.TimeFinished / Ani.TimeTotal '修改执行百分比
         Catch ex As Exception
-            Log(ex, "执行动画失败：" & Ani.ToString, LogLevel.Hint)
+            Logger.Error(ex, $"执行动画失败：{Ani}", LogBehavior.Toast)
         End Try
         Return Ani
     End Function
