@@ -324,8 +324,9 @@ Public Module ModWatcher
                     GetWindowText(hwnd, str, str.Capacity)
                     Dim WindowText As String = str.ToString
                     '有的 Mod 可以修改窗口标题，所以不能检测是否为 Minecraft 打头，这并不准确
-                    '部分版本会搞个 GLFW message window 出来所以得反选
-                    If Not (WindowText.StartsWithF("FML") OrElse (WindowText <> "PopupMessageWindow") AndAlso Not WindowText.StartsWithF("GLFW")) Then Return
+                    '部分版本会搞个 GLFW message window，高版本还有个 Hidden Utility Window，都要反选
+                    If String.IsNullOrWhiteSpace(WindowText) OrElse WindowText = "SDL_app" OrElse WindowText = "PopupMessageWindow" OrElse
+                       WindowText.StartsWithF("GLFW") OrElse WindowText.EndsWithF("Hidden Utility Window") Then Return
                     '获取窗口关联的进程
                     Dim ProcessId As Integer
                     GetWindowThreadProcessId(hwnd, ProcessId)
