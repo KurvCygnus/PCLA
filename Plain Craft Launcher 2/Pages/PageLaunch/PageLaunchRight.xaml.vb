@@ -118,6 +118,8 @@ Public Class PageLaunchRight
         End Select
         '联网下载
         If Not String.IsNullOrWhiteSpace(Url) Then
+            '替换自定义变量与设置
+            Url = ArgumentReplace(Url, AddressOf WebUtility.HtmlEncode)
             If Url = Settings.Get(Of String)("CacheSavedPageUrl") AndAlso FileUtils.Exists(PathTemp & "Cache\Custom.xaml") Then
                 '缓存可用
                 Logger.Info("主页自定义数据来源：联网缓存文件")
@@ -145,8 +147,6 @@ Public Class PageLaunchRight
         Dim Address As String = Task.Input.Address '#3721 中连续触发两次导致内容变化
         Dim ShouldRefresh As Boolean = Task.Input.ShouldRefresh
         Try
-            '替换自定义变量与设置
-            Address = ArgumentReplace(Address, AddressOf WebUtility.HtmlEncode)
             '获取版本校验地址
             Dim VersionAddress As String
             If Address.Contains(".xaml") Then
