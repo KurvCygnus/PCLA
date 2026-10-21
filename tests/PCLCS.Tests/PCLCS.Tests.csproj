@@ -29,7 +29,6 @@
 
 	<ItemGroup>
 		<None Update="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Update="Expected\**\*.txt" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 </Project>
