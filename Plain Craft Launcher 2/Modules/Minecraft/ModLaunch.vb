@@ -1222,43 +1222,17 @@ Retry:
         Dim Args As New List(Of String)
 
         'Minecraft 参数
-        If McInstanceSelected.JsonObject("arguments") IsNot Nothing AndAlso McInstanceSelected.JsonObject("arguments")("jvm") IsNot Nothing Then
-            '新版 MC：从版本 JSON 获取参数
-            Dim CurrentInstance As McInstance = McInstanceSelected
-NextInstance:
-            McLaunchLog($"新版 JVM 参数：从版本 JSON 获取（{CurrentInstance.Name}）")
-            If CurrentInstance.JsonObject("arguments") IsNot Nothing AndAlso CurrentInstance.JsonObject("arguments")("jvm") IsNot Nothing Then
-                For Each SubJson As JToken In CurrentInstance.JsonObject("arguments")("jvm")
-                    Select Case SubJson.Type
-                        Case JTokenType.String
-                            Args.Add(SubJson.ToString.Trim)
-                        Case JTokenType.Object
-                            Dim Argument As JObject = CType(SubJson, JObject)
-                            If Argument.ContainsKey("rules") AndAlso Not McJsonRuleCheck(Argument("rules")) Then Continue For '不满足准则
-                            If Not Argument.ContainsKey("value") Then Continue For '没有 value 字段
-                            If Argument("value").Type = JTokenType.String Then
-                                Args.Add(Argument("value").ToString.Trim)
-                            Else
-                                For Each value As JToken In Argument("value")
-                                    Args.Add(value.ToString.Trim)
-                                Next
-                            End If
-                    End Select
-                Next
-            End If
-            If CurrentInstance.InheritName <> "" Then
-                CurrentInstance = New McInstance(CurrentInstance.InheritName)
-                GoTo NextInstance
-            End If
-            '1.17.1 中有个 "-Dos.name=Windows 10"，不立即加双引号会导致 10 被隔开
-            Args = Args.Select(Function(a) If(a.Contains(" ") AndAlso Not a.StartsWithF("""") AndAlso Not a.EndsWithF(""""), $"""{a.Replace("""", "\""")}""", a)).ToList
+        If McInstanceSelected.JsonObject("arguments") IsNot Nothing AndAlso
+           McInstanceSelected.JsonObject("arguments")("jvm") IsNot Nothing Then
+            McLaunchLog($"新版 JVM 参数：从版本 JSON 获取（{McInstanceSelected.Name}）")
         Else
-            '旧版 MC：直接添加参数
-            McLaunchLog($"旧版 JVM 参数")
-            Args.Add("-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump")
-            Args.Add("-Djava.library.path=${natives_directory}")
-            Args.Add("-cp") : Args.Add("${classpath}")
+            McLaunchLog("旧版 JVM 参数")
         End If
+        Args.AddRange(PCLCS.Minecraft.Launch.VersionArguments.CollectJvm(
+            McInstanceSelected.JsonObject,
+            Function(name) (New McInstance(name)).JsonObject,
+            New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
+            Sub(message) Logger.Warn(message)))
 
         '设置里自定义的参数
         Dim CustomArg As String = Settings.Get(Of String)("VersionAdvanceJvm", Instance:=McInstanceSelected)
@@ -1323,46 +1297,16 @@ NextInstance:
         '2：仅 G1GC
         '3：不指定，玩家自定义
         Dim SetupType As Integer = Settings.Get(Of Integer)("LaunchAdvanceGC")
-        If McInstanceSelected IsNot Nothing AndAlso Settings.Get(Of Integer)("VersionAdvanceGC", McInstanceSelected) > 0 Then SetupType = Settings.Get(Of Integer)("VersionAdvanceGC", McInstanceSelected) - 1 '去掉默认
+        If McInstanceSelected IsNot Nothing AndAlso Settings.Get(Of Integer)("VersionAdvanceGC", McInstanceSelected) > 0 Then
+            SetupType = Settings.Get(Of Integer)("VersionAdvanceGC", McInstanceSelected) - 1
+        End If
         If SetupType <> 3 Then
-            '确定是使用 G1GC 还是 ZGC
-            Dim UseG1GC As Boolean = False
-            If (SetupType = 0 AndAlso McLaunchJavaSelected.Version.Major < 15) OrElse
-               (SetupType = 1 AndAlso McLaunchJavaSelected.Version.Major < 21) OrElse
-               (SetupType = 2 OrElse SetupType = 4) Then UseG1GC = True '检查 Java 版本，ZGC 在 Java 15+ 可用，分代 ZGC 在 Java 21+ 可用
-            If Environment.OSVersion.Version.Major < 10 OrElse Environment.OSVersion.Version.Build < 17763 Then UseG1GC = True '检查系统兼容性，ZGC 需要 Windows 10 1809+
-            McLaunchLog($"GC 设置：{SetupType}，选取 {If(UseG1GC, "G1GC", "ZGC")}，Java 版本：{McLaunchJavaSelected.Version.Major}")
-            '移除已有的 GC 参数
-            Args = Args.Where(Function(a) Not a.RegexCheck(
-                "( )*-XX:[+-]?(Use\w+GC|ZGenerational|UseCompactObjectHeaders|G1\w+Percent|G1\w+Size|(Max|Min)(GCPauseMillis|HeapFreeRatio))")).ToList
-            '添加 GC 参数
-            Args.Add("-XX:+UnlockExperimentalVMOptions")
-            If McLaunchJavaSelected.Version.Major >= 24 Then Args.Add("-XX:+UseCompactObjectHeaders")
-            If UseG1GC AndAlso SetupType = 4 Then
-                '优化的 G1GC
-                Args.Add("-XX:+UseG1GC")
-                Args.Add("-XX:G1NewSizePercent=20")
-                Args.Add("-XX:G1ReservePercent=20")
-                Args.Add("-XX:G1HeapRegionSize=32M")
-                Args.Add("-XX:MaxGCPauseMillis=50")
-                If Not ModeDebug Then Args.Add("-XX:+PerfDisableSharedMem")
-                If McLaunchJavaSelected.Version.Major <= 7 Then Args.Add("-XX:MaxPermSize=512m") '#8286
-                If McLaunchJavaSelected.Version.Major = 8 Then Args.Add("-XX:+ParallelRefProcEnabled")
-                If McLaunchJavaSelected.Version.Major >= 12 Then Args.Add("-XX:MinHeapFreeRatio=25") '需要比 G1NewSizePercent 大一点
-                If McLaunchJavaSelected.Version.Major >= 12 Then Args.Add("-XX:MaxHeapFreeRatio=40") '需要比 MinHeapFreeRatio 大一些
-            ElseIf UseG1GC Then
-                'Mojang G1GC
-                Args.Add("-XX:+UseG1GC")
-                Args.Add("-XX:G1NewSizePercent=20")
-                Args.Add("-XX:G1ReservePercent=20")
-                Args.Add("-XX:G1HeapRegionSize=32M")
-                Args.Add("-XX:MaxGCPauseMillis=50")
-                If McLaunchJavaSelected.Version.Major <= 7 Then Args.Add("-XX:MaxPermSize=512m") '#8286
-            Else
-                'ZGC
-                Args.Add("-XX:+UseZGC")
-                If McLaunchJavaSelected.Version.Major = 21 OrElse McLaunchJavaSelected.Version.Major = 22 Then Args.Add("-XX:+ZGenerational") 'Java 23 起默认启用分代 ZGC，不需要再添加参数
-            End If
+            Args = Args.Where(Function(a) Not PCLCS.Minecraft.Launch.GcPolicy.IsGcArgument(a)).ToList()
+            Args.AddRange(PCLCS.Minecraft.Launch.GcPolicy.Build(
+                SetupType,
+                McLaunchJavaSelected.Version.Major,
+                Environment.OSVersion.Version,
+                ModeDebug))
         End If
 
         Args.Remove("-XX:MaxDirectMemorySize=256M") '#3511 的清理
@@ -1402,46 +1346,18 @@ NextInstance:
     End Function
     '游戏参数部分
     Private Function McLaunchArgumentsGame() As List(Of String)
-        Dim Arg As String = ""
-
         'Minecraft 参数
-        '旧版 MC：直接添加参数
-        If McInstanceSelected.JsonObject("minecraftArguments")?.ToString.Any Then
-            Dim BasicString As String = McInstanceSelected.JsonObject("minecraftArguments").ToString
-            McLaunchLog($"旧版游戏参数：" & BasicString)
-            BasicString += " --height ${resolution_height} --width ${resolution_width}" '总是添加宽高选项，之后去重的时候会覆盖 MC 自带的
-            Arg &= " " & BasicString
+        Dim BasicString As String = McInstanceSelected.JsonObject("minecraftArguments")?.ToString()
+        If Not String.IsNullOrEmpty(BasicString) Then McLaunchLog($"旧版游戏参数：{BasicString}")
+        If McInstanceSelected.JsonObject("arguments") IsNot Nothing AndAlso
+           McInstanceSelected.JsonObject("arguments")("game") IsNot Nothing Then
+            McLaunchLog($"新版游戏参数：从版本 JSON 获取（{McInstanceSelected.Name}）")
         End If
-        '新版 MC：从版本 JSON 获取参数
-        If McInstanceSelected.JsonObject("arguments") IsNot Nothing AndAlso McInstanceSelected.JsonObject("arguments")("game") IsNot Nothing Then
-            Dim CurrentInstance As McInstance = McInstanceSelected
-            Dim AppendArg = Sub(a As String) Arg &= " " & If(a.Contains(" ") AndAlso Not a.StartsWithF("""") AndAlso Not a.EndsWithF(""""), $"""{a.Replace("""", "\""")}""", a)
-NextInstance:
-            McLaunchLog($"新版游戏参数：从版本 JSON 获取（{CurrentInstance.Name}）")
-            If CurrentInstance.JsonObject("arguments") IsNot Nothing AndAlso CurrentInstance.JsonObject("arguments")("game") IsNot Nothing Then
-                For Each SubJson As JToken In CurrentInstance.JsonObject("arguments")("game")
-                    Select Case SubJson.Type
-                        Case JTokenType.String
-                            AppendArg(SubJson.ToString)
-                        Case JTokenType.Object
-                            Dim Argument As JObject = CType(SubJson, JObject)
-                            If Argument.ContainsKey("rules") AndAlso Not McJsonRuleCheck(Argument("rules")) Then Continue For '不满足准则
-                            If Not Argument.ContainsKey("value") Then Continue For '没有 value 字段
-                            If Argument("value").Type = JTokenType.String Then
-                                AppendArg(Argument("value").ToString)
-                            Else
-                                For Each value As JToken In Argument("value")
-                                    AppendArg(value.ToString)
-                                Next
-                            End If
-                    End Select
-                Next
-            End If
-            If CurrentInstance.InheritName <> "" Then
-                CurrentInstance = New McInstance(CurrentInstance.InheritName)
-                GoTo NextInstance
-            End If
-        End If
+        Dim Arg As String = PCLCS.Minecraft.Launch.VersionArguments.CollectGame(
+            McInstanceSelected.JsonObject,
+            Function(name) (New McInstance(name)).JsonObject,
+            New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
+            Sub(message) Logger.Warn(message))
 
         '设置里自定义的参数
         Dim CustomArg As String = Settings.Get(Of String)("VersionAdvanceGame", Instance:=McInstanceSelected)
@@ -1581,77 +1497,19 @@ NextInstance:
     ''' <summary>
     ''' 分割 Java 参数字符串。
     ''' </summary>
-    Private Iterator Function SplitJavaArguments(Arg As String) As IEnumerable(Of String)
-        Arg = Arg.ReplaceLineEndings(" ", mergeMultiple:=True).Trim '预处理换行符
-        If String.IsNullOrWhiteSpace(Arg) Then Return
-        Dim Current As New StringBuilder
-        Dim InQuotes As Boolean = False
-        Dim i As Integer = 0
-        While i < Arg.Length
-            Dim c As Char = Arg(i)
-            If c = "\"c AndAlso i + 1 < Arg.Length AndAlso Arg(i + 1) = """"c Then '检测 \"
-                '转义的双引号：保留反斜杠和引号，不切换 InQuotes
-                Current.Append("\""")
-                i += 1 '额外跳过下一个字符（双引号）
-            ElseIf c = """"c Then
-                '未转义的双引号：切换 InQuotes
-                InQuotes = Not InQuotes
-                Current.Append(c)
-            ElseIf c = " "c AndAlso Not InQuotes Then
-                '不在双引号内的空格：一个参数结束
-                If Current.Length > 0 Then
-                    Yield Current.ToString()
-                    Current.Clear()
-                End If
-            Else
-                '普通字符，直接添加
-                Current.Append(c)
-            End If
-            i += 1
-        End While
-        If Current.Length > 0 Then Yield Current.ToString '添加剩余的
+    Private Function SplitJavaArguments(Arg As String) As IEnumerable(Of String)
+        Return PCLCS.Minecraft.Launch.ArgumentLine.Split(Arg)
     End Function
     ''' <summary>
     ''' 对 Java 参数进行去重。
     ''' </summary>
     Private Function DeduplicateJavaArguments(Args As List(Of String), IsJVMArgs As Boolean) As List(Of String)
-        Dim Result As New List(Of String)
-        Dim i As Integer = 0
-        While i < Args.Count
-            Dim Key As String = Args(i)
-            If Not Key.StartsWithF("-") OrElse
-               (i + 1 >= Args.Count OrElse (Args(i + 1).StartsWithF("-") AndAlso Val(Args(i + 1).AfterFirst("-")) = 0)) Then '避免 -xPos 23 -xPos -50 中后面的 -50 被识别为参数
-                '单参数
-                i += 1
-                If Result.Contains(Key) Then
-                    McLaunchLog($"已去重单个{If(IsJVMArgs, " JVM ", "游戏")}参数：{Key}")
-                    Continue While
-                End If
-                Result.Add(Key)
-            Else
-                '以空格间隔的键值对（例如 --width 233）
-                Dim Value As String = Args(i + 1)
-                i += 2
-                For j = 0 To Result.Count - 2 '向前寻找相同的键
-                    If Result(j) <> Key Then Continue For
-                    '仅当是游戏参数且不是 tweakClass 时，用新的值覆盖旧的值
-                    '据测试，如果包含多个相同 --width 或 --uuid 等参数，两个都会直接失效，如果这发生在关键参数上会导致崩溃
-                    If Not IsJVMArgs AndAlso Key <> "--tweakClass" Then
-                        McLaunchLog($"已覆盖重复的{If(IsJVMArgs, " JVM ", "游戏")}参数：{Key} {Result(j + 1)} → {Key} {Value}")
-                        Result(j + 1) = Value
-                        Continue While
-                    End If
-                    '键和值完全相同，直接抛弃
-                    If Result(j + 1) = Value Then
-                        McLaunchLog($"已去重{If(IsJVMArgs, " JVM ", "游戏")}参数对：{Key} {Value}")
-                        Continue While
-                    End If
-                Next
-                Result.Add(Key)
-                Result.Add(Value)
-            End If
-        End While
-        Return Result
+        Dim Diagnostics As New List(Of String)
+        Dim Result = PCLCS.Minecraft.Launch.ArgumentLine.Deduplicate(Args, IsJVMArgs, Diagnostics)
+        For Each Line In Diagnostics
+            McLaunchLog(Line)
+        Next
+        Return Result.ToList()
     End Function
 
 #End Region

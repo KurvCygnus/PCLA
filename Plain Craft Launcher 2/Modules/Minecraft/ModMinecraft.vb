@@ -1552,46 +1552,10 @@ OnLoaded:
     ''' </summary>
     ''' <param name="RuleToken">Json 中的 "rules" 项目。</param>
     Public Function McJsonRuleCheck(RuleToken As JToken) As Boolean
-        If RuleToken Is Nothing Then Return True
-
-        '初始化
-        Dim Required As Boolean = False
-        For Each Rule As JToken In RuleToken
-
-            '单条条件验证
-            Dim IsRightRule As Boolean = True '是否为正确的规则
-            If Rule("os") IsNot Nothing Then '操作系统
-                If Rule("os")("name") IsNot Nothing Then '操作系统名称
-                    Dim OsName As String = Rule("os")("name").ToString
-                    If OsName = "unknown" Then
-                    ElseIf OsName = "windows" Then
-                        If Rule("os")("version") IsNot Nothing Then '操作系统版本
-                            IsRightRule = IsRightRule AndAlso OSVersion.RegexCheck(Rule("os")("version").ToString)
-                        End If
-                    Else
-                        IsRightRule = False
-                    End If
-                End If
-                If Rule("os")("arch") IsNot Nothing Then '操作系统架构
-                    IsRightRule = IsRightRule AndAlso Rule("os")("arch").ToString <> "x86" AndAlso Not Rule("os")("arch").Contains("arm")
-                End If
-            End If
-            If Not IsNothing(Rule("features")) Then '标签
-                IsRightRule = IsRightRule AndAlso IsNothing(Rule("features")("is_demo_user")) '反选是否为 Demo 用户
-                If CType(Rule("features"), JObject).Children.Any(Function(j As JProperty) j.Name.Contains("quick_play")) Then
-                    IsRightRule = False '不开 Quick Play，让玩家自己加去
-                End If
-            End If
-
-            '反选确认
-            If Rule("action").ToString = "allow" Then
-                If IsRightRule Then Required = True 'allow
-            Else
-                If IsRightRule Then Required = False 'disallow
-            End If
-
-        Next
-        Return Required
+        Return PCLCS.Minecraft.Launch.VersionArgumentRules.IsAllowed(
+            RuleToken,
+            New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
+            Sub(message) Logger.Warn(message))
     End Function
     Private OSVersion As String = My.Computer.Info.OSVersion
 
