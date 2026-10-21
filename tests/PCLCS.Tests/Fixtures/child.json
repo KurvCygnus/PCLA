@@ -1,0 +1,8 @@
+{
+  "id": "child",
+  "inheritsFrom": "parent",
+  "arguments": {
+    "jvm": [ "-Dchild=1" ],
+    "game": [ "--child", "C" ]
+  }
+}

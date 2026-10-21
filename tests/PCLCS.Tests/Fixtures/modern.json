@@ -1,0 +1,19 @@
+{
+  "id": "modern",
+  "arguments": {
+    "jvm": [
+      "-Djava.library.path=${natives_directory}",
+      { "rules": [ { "action": "allow", "os": { "name": "windows" } } ], "value": "-Dos.name=Windows 10" },
+      { "rules": [ { "action": "allow", "os": { "name": "osx" } } ], "value": "-XstartOnFirstThread" },
+      "-cp",
+      "${classpath}"
+    ],
+    "game": [
+      "--username",
+      "${auth_player_name}",
+      { "rules": [ { "action": "allow", "features": { "has_custom_resolution": true } } ], "value": [ "--width", "${resolution_width}" ] },
+      { "rules": [ { "action": "allow", "features": { "quick_play_singleplayer": true } } ], "value": "--quickPlaySingleplayer" },
+      { "rules": [ { "action": "disallow", "features": { "is_demo_user": true } } ], "value": "--demo" }
+    ]
+  }
+}

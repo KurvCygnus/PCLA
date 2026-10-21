@@ -1,0 +1,4 @@
+{
+  "id": "legacy",
+  "minecraftArguments": "--username ${auth_player_name} --version ${version_name}"
+}

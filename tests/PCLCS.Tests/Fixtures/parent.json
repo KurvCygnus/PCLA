@@ -1,0 +1,7 @@
+{
+  "id": "parent",
+  "arguments": {
+    "jvm": [ "-Dparent=1" ],
+    "game": [ "--parent", "P" ]
+  }
+}
