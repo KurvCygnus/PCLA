@@ -127,8 +127,8 @@
 
 ## 5. 启动参数抽离：已偿还与残留（2026-10-21）
 
-- **已偿还：启动参数逻辑不可测。** 版本 JSON 规则判定、JVM/游戏参数收集、参数行拆分与去重、GC 策略已移入 `PCLCS\Minecraft\Launch\`（`VersionArgumentRules.cs`、`VersionArguments.cs`、`ArgumentLine.cs`、`GcPolicy.cs`），由 `tests\PCLCS.Tests` 的 71 项单测覆盖；VB 侧只保留适配层、设置读取与 `${...}` 展开。`ModLaunch.vb` 降至 2081 行。
+- **已偿还：启动参数逻辑不可测。** 版本 JSON 规则判定、JVM/游戏参数收集、参数行拆分与去重、GC 策略已移入 `PCLCS\Minecraft\Launch\`（`VersionArgumentRules.cs`、`VersionArguments.cs`、`ArgumentLine.cs`、`GcPolicy.cs`），由 `tests\PCLCS.Tests` 的 79 项单测覆盖；VB 侧只保留适配层、设置读取与 `${...}` 展开。`ModLaunch.vb` 降至 2081 行。
 - **已偿还：合并 JSON 的输入顺序。** `CollectJvm` / `CollectGame` 原先反向遍历继承链（父级先、选中版本后），与 VB 的追加顺序不符：VB 先输出选中版本的合并 JSON（数组内部祖先→子），再沿 `InheritName` 逐级追加父级。JVM 去重保留首次出现，两种顺序的最终值恰好一致；游戏参数去重由后者覆盖，跨层重复键会取到父级值。现已改为按 `chain` 正序遍历，并由 `tests\PCLCS.Tests\MergedJsonTests.cs` 用合并 JSON fixture 锁定最终列表与父级覆盖语义。
 - **残留：`ArgumentLine` 的并发状态。** 当前实现没有规则缓存：`Deduplicate` 每次调用新建 `List`，`Split` 无可变静态状态，与 VB 原实现的 `List` + 线性扫描一致，不存在 `Dictionary` 缓存竞态。若以后为规则求值引入缓存，必须使用并发容器（`ConcurrentDictionary`），不要退回普通 `Dictionary`。
-- **残留：实机差分未执行。** 本机没有 Minecraft 实例，三次启动与 `[Parity]` 日志对比未做；本轮只验证了单元测试与 Release 全量构建（0 警告 0 错误）。
+- **已偿还：实机差分。** 2026-10-21 晚用 `D:\MC\.minecraft` 的三个真实实例（Forge 1.20.1 ZombieCraft、Forge 1.20.1-47.4.23、Fabric 1.21.8）各启动一次，全部进入主菜单并完成材质加载。ZombieCraft 的新旧日志参数块各 80 行，逐行比对仅 4 处环境差异（`-Xmx` 设置、离线用户名、两个会话 token），其余参数（`-cp`、Forge 模块参数、`--add-opens`、GC、游戏参数）完全一致；比对同时发现并修复了丢失的 `GC 设置：…` 日志行（`517a028`）。
 - **残留：`McInstance` 仍是上帝类**，`${...}` 展开仍留在 VB（依赖登录态、路径、窗口尺寸与 UI 线程）。
