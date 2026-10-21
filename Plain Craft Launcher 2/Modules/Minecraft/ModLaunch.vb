@@ -1302,6 +1302,11 @@ Retry:
             SetupType = Settings.Get(Of Integer)("VersionAdvanceGC", McInstanceSelected) - 1
         End If
         If SetupType <> 3 Then
+            Dim UseG1GC As Boolean = PCLCS.Minecraft.Launch.GcPolicy.UsesG1Gc(
+                SetupType,
+                McLaunchJavaSelected.Version.Major,
+                Environment.OSVersion.Version)
+            McLaunchLog($"GC 设置：{SetupType}，选取 {If(UseG1GC, "G1GC", "ZGC")}，Java 版本：{McLaunchJavaSelected.Version.Major}")
             Args = Args.Where(Function(a) Not PCLCS.Minecraft.Launch.GcPolicy.IsGcArgument(a)).ToList()
             Args.AddRange(PCLCS.Minecraft.Launch.GcPolicy.Build(
                 SetupType,

@@ -14,6 +14,20 @@ public static class GcPolicy {
     public static bool IsGcArgument(string argument) => Regex.IsMatch(argument, GcArgumentPattern);
 
     /// <summary>
+    /// 判断指定设置是否选用 G1GC；系统版本过低时强制 G1GC。
+    /// </summary>
+    /// <param name="setupType">0 分代/非分代自动，1 仅 Java 21+ 分代，2 仅 G1，4 优化 G1；3 由调用方跳过。</param>
+    /// <param name="javaMajor">Java 主版本号。</param>
+    /// <param name="windowsVersion">当前 Windows 版本。</param>
+    public static bool UsesG1Gc(int setupType, int javaMajor, Version windowsVersion) {
+        var useG1 = setupType is 2 or 4
+                    || (setupType == 0 && javaMajor < 15)
+                    || (setupType == 1 && javaMajor < 21);
+        // ZGC 需要 Windows 10 1809+。
+        return useG1 || windowsVersion.Major < 10 || windowsVersion.Build < 17763;
+    }
+
+    /// <summary>
     /// 生成 GC 参数。
     /// </summary>
     /// <param name="setupType">0 分代/非分代自动，1 仅 Java 21+ 分代，2 仅 G1，3 自定义，4 优化 G1；其他值按 ZGC 处理。</param>
@@ -25,11 +39,7 @@ public static class GcPolicy {
         if (setupType == 3) return result;
 
         // 只有 2 和 4 强制 G1；0 与 1 按 Java 版本回退，其余值（含越界的设置）落到 ZGC。
-        var useG1 = setupType is 2 or 4
-                    || (setupType == 0 && javaMajor < 15)
-                    || (setupType == 1 && javaMajor < 21);
-        // ZGC 需要 Windows 10 1809+。
-        if (windowsVersion.Major < 10 || windowsVersion.Build < 17763) useG1 = true;
+        var useG1 = UsesG1Gc(setupType, javaMajor, windowsVersion);
 
         result.Add("-XX:+UnlockExperimentalVMOptions");
         if (javaMajor >= 24) result.Add("-XX:+UseCompactObjectHeaders");

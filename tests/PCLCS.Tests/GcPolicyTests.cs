@@ -104,6 +104,23 @@ public class GcPolicyTests {
     }
 
     [Theory]
+    [InlineData(0, 14, true)]
+    [InlineData(0, 17, false)]
+    [InlineData(1, 20, true)]
+    [InlineData(1, 21, false)]
+    [InlineData(2, 21, true)]
+    [InlineData(4, 21, true)]
+    [InlineData(5, 17, false)]
+    public void UsesG1GcFollowsSetupAndJava(int setupType, int javaMajor, bool expected) {
+        Assert.Equal(expected, GcPolicy.UsesG1Gc(setupType, javaMajor, Windows10));
+    }
+
+    [Fact]
+    public void UsesG1GcOnLegacyWindows() {
+        Assert.True(GcPolicy.UsesG1Gc(0, 21, Windows81));
+    }
+
+    [Theory]
     [InlineData("-XX:+UseG1GC", true)]
     [InlineData("-XX:+UseZGC", true)]
     [InlineData("-XX:+ZGenerational", true)]
