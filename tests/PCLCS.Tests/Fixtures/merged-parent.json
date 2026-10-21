@@ -1,0 +1,13 @@
+{
+  "id": "merged-parent",
+  "arguments": {
+    "jvm": [
+      "-Dmerged.parent=1",
+      "-Dmerged.shared=parent"
+    ],
+    "game": [
+      "--username", "ParentUser",
+      "--width", "800"
+    ]
+  }
+}

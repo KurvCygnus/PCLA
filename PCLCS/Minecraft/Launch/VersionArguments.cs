@@ -26,7 +26,7 @@ public static class VersionArguments {
         var chain = BuildChain(version, resolveParent, inheritName);
         var result = new List<string>();
         if (chain.Any(level => level["arguments"]?["jvm"] is not null)) {
-            for (var i = chain.Count - 1; i >= 0; i--) {
+            for (var i = 0; i < chain.Count; i++) {
                 EmitSection(chain[i], "jvm", environment, warn, value => result.Add(value.Trim()));
             }
             for (var i = 0; i < result.Count; i++) {
@@ -72,14 +72,15 @@ public static class VersionArguments {
             builder.Append(" --height ${resolution_height} --width ${resolution_width}");
         }
         if (chain.Any(level => level["arguments"]?["game"] is not null)) {
-            for (var i = chain.Count - 1; i >= 0; i--) {
+            for (var i = 0; i < chain.Count; i++) {
                 EmitSection(chain[i], "game", environment, warn, value => Append(builder, value));
             }
         }
         return builder.ToString();
     }
 
-    // 子版本在前、根在最后；输出时反向遍历，对齐合并 JSON 中祖先→子的数组顺序。
+    // 子版本在前、根在最后；输出时正序遍历，对齐 VB 的追加顺序：
+    // 先输出选中版本的合并 JSON（内部祖先→子），再沿 InheritName 逐级追加父级。
     private static List<JObject> BuildChain(
         JObject version,
         Func<string, JObject?> resolveParent,

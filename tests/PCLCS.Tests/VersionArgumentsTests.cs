@@ -42,11 +42,12 @@ public class VersionArgumentsTests
     }
 
     [Fact]
-    public void Jvm_WalksParentsAncestorFirst()
+    public void Jvm_WalksParentsSelectedVersionFirst()
     {
         var version = Load("child.json");
         var result = VersionArguments.CollectJvm(version, name => name == "parent" ? Load("parent.json") : null, Windows10);
-        Assert.Equal(new[] { "-Dparent=1", "-Dchild=1" }, result);
+        // VB 先追加选中版本的 jvm，再沿 InheritName 追加父级，因此子级参数在前。
+        Assert.Equal(new[] { "-Dchild=1", "-Dparent=1" }, result);
     }
 
     [Fact]
@@ -76,11 +77,12 @@ public class VersionArgumentsTests
     }
 
     [Fact]
-    public void Game_WalksParentsAncestorFirst()
+    public void Game_WalksParentsSelectedVersionFirst()
     {
         var version = Load("child.json");
         var result = VersionArguments.CollectGame(version, name => name == "parent" ? Load("parent.json") : null, Windows10);
-        Assert.Equal(" --parent P --child C", result);
+        // VB 先追加选中版本的 game，再沿 InheritName 追加父级，因此子级参数在前。
+        Assert.Equal(" --child C --parent P", result);
     }
 
     [Fact]
@@ -97,7 +99,8 @@ public class VersionArgumentsTests
         var parent = JObject.Parse("{\"minecraftArguments\":\"--legacy\",\"arguments\":{\"game\":[\"--parent\"]}}");
         var child = JObject.Parse("{\"inheritsFrom\":\"parent\",\"arguments\":{\"game\":[\"--child\"]}}");
         var result = VersionArguments.CollectGame(child, name => name == "parent" ? parent : null, Windows10);
-        Assert.Equal(" --legacy --height ${resolution_height} --width ${resolution_width} --parent --child", result);
+        // minecraftArguments 仍最先输出；arguments.game 按"选中版本 → 父级"追加，子级 --child 在父级 --parent 之前。
+        Assert.Equal(" --legacy --height ${resolution_height} --width ${resolution_width} --child --parent", result);
     }
 
     [Fact]
@@ -148,9 +151,10 @@ public class VersionArgumentsTests
         var version = Load("child.json");
         JObject? Resolve(string name) => name == "parent" ? Load("parent.json") : null;
 
+        // null 沿用 JSON 的 inheritsFrom，顺序同样是选中版本 → 父级。
         Assert.Equal(
-            new[] { "-Dparent=1", "-Dchild=1" },
+            new[] { "-Dchild=1", "-Dparent=1" },
             VersionArguments.CollectJvm(version, Resolve, Windows10, inheritName: null));
-        Assert.Equal(" --parent P --child C", VersionArguments.CollectGame(version, Resolve, Windows10, inheritName: null));
+        Assert.Equal(" --child C --parent P", VersionArguments.CollectGame(version, Resolve, Windows10, inheritName: null));
     }
 }

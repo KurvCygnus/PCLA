@@ -1,0 +1,19 @@
+{
+  "id": "merged-child",
+  "inheritsFrom": "merged-parent",
+  "arguments": {
+    "jvm": [
+      "-Dmerged.parent=1",
+      "-Dmerged.shared=parent",
+      "-Dmerged.child=1",
+      "-Dmerged.shared=child"
+    ],
+    "game": [
+      "--username", "ParentUser",
+      "--width", "800",
+      "--childFlag", "C",
+      "--username", "ChildUser",
+      "--width", "1200"
+    ]
+  }
+}
