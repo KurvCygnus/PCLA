@@ -346,3 +346,6 @@ MaskFiles/
 # Playwright CLI session artifacts
 .playwright-cli/
 .playwright-mcp/
+
+#* superpowers SDD workspace
+.superpowers/
