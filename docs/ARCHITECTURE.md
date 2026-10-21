@@ -11,7 +11,7 @@
 | `MeloongCore` | C#（子模块） | net48 / netstandard2.0 | 通用基础设施：日志、路径、配置、网络、文件工具 |
 | `MeloongCore.Wpf` | C# | net48 | WPF 相关基础件 |
 
-- 规模：VB/XAML 共 176 个文件、约 46.1k 行。单文件超过 1000 行的有 12 个，前四名：`Modules\Minecraft\ModLaunch.vb`（2108）、`Pages\PageDownload\ModDownloadLib.vb`（2080）、`Modules\Minecraft\ModMinecraft.vb`（2024）、`Modules\Base\ModNet.vb`（1850）。
+- 规模：VB/XAML 共 176 个文件、约 46.1k 行。单文件超过 1000 行的有 12 个，前四名：`Modules\Minecraft\ModMinecraft.vb`（2117）、`Modules\Minecraft\ModLaunch.vb`（2081）、`Pages\PageDownload\ModDownloadLib.vb`（2080）、`Modules\Base\ModNet.vb`（1850）。
 - 编译选项：`OptionStrict Off`、`OptionInfer On`、`WarningLevel 1`，并屏蔽了 `BC41999/42016-42022/42032/42036/42314` 一整批晚期绑定与类型转换警告（`Plain Craft Launcher 2\Plain Craft Launcher 2.vbproj:75-85`）。这决定了整个代码库默认使用晚期绑定。
 - `MeloongCore` 是 git submodule（`.gitmodules`），未初始化时无法编译。
 
@@ -116,7 +116,7 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 
 - 入口 `McInstallStart`/`McModificationStart`（`Pages\PageDownload\ModDownloadLib.vb:1948-2062`），按 `McInstallRequest` 生成加载器链：原版、Forge/NeoForge、LiteLoader、Fabric、OptiFine（有加载器时作为 mod 安装）、合并 JSON、补库、写 manifest（`:1733-1944`）。
 - 原版文件计划 `DlClientFix`（`Modules\Minecraft\ModDownload.vb:54-153`）：jar、资源索引、库、资源对象，权重分别为 16/27 等。
-- 库解析 `McLibListGetWithJson`（`ModMinecraft.vb:1653-1761`）：处理 rules、natives、`${arch}`，按 `名称+是否 native` 去重并保留高版本；下载地址重写 `McLibNetFilesFromTokens`（`:1845-1897`）。
+- 库解析 `McLibListGetWithJson`（`ModMinecraft.vb:1617-1725`）：处理 rules、natives、`${arch}`，按 `名称+是否 native` 去重并保留高版本；下载地址重写 `McLibNetFilesFromTokens`（`:1809-1862`）。
 - 资源对象按哈希分桶 `assets\objects\ab\hash`，legacy 资源额外做 `virtual\legacy` 与 `map_to_resources`（`:1930-2082`）。
 - 磁盘布局：`versions\{名称}\{名称}.json|.jar`、`{名称}-natives\`、`libraries\`、`assets\indexes|objects`、`runtime\{组件}\`，PCL 自身状态写在 `PCL\Setup.ini` 与 `PCL\config.json`。
 - 修改已装实例用临时目录构建后 `McInstallCommit`（`ModDownloadLib.vb:2067-2111`）做 manifest 差量提交。
@@ -124,10 +124,10 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 ### 6.3 启动
 
 - `McLaunchStart`（`ModLaunch.vb:31-206`）组装加载器链：Java → 登录 → 补文件 → 参数 → natives → 预执行 → 自定义命令 → 启动 → 等窗口 → 结束，权重见 `:122-145`。
-- JVM 参数 `McLaunchArgumentsJVM`（`:1221-1402`）：继承链合并、`-Xmx`、GC 策略、Authlib/Nide 注入、JLW、log4j 缓解参数、编码参数。
-- 游戏参数 `McLaunchArgumentsGame`（`:1404-1504`）：新旧两种格式、OptiFineForgeTweaker 重排、2023-05-04 之后改用 `--quickPlayMultiplayer`。
-- 占位符替换 `McLaunchArgumentsReplace`（`:1506-1579`）：`${auth_*}`, `${classpath}`, `${natives_directory}` 等；classpath 中 OptiFine 被强制放到倒数第二。
-- 进程 `McLaunchRun`（`:2093-2141`）：启动 `java.exe`（注释说明 `javaw` 有问题 #6263），把 `appdata` 环境变量指向所选 MC 目录，工作目录为版本隔离目录，重定向 stdout/stderr。
+- JVM 参数 `McLaunchArgumentsJVM`（`:1221-1347`）：继承链合并、`-Xmx`、GC 策略、Authlib/Nide 注入、JLW、log4j 缓解参数、编码参数。
+- 游戏参数 `McLaunchArgumentsGame`（`:1349-1422`）：新旧两种格式、OptiFineForgeTweaker 重排、2023-05-04 之后改用 `--quickPlayMultiplayer`。
+- 占位符替换 `McLaunchArgumentsReplace`（`:1424-1497`）：`${auth_*}`, `${classpath}`, `${natives_directory}` 等；classpath 中 OptiFine 被强制放到倒数第二。
+- 进程 `McLaunchRun`（`:1953-2001`）：启动 `java.exe`（注释说明 `javaw` 有问题 #6263），把 `appdata` 环境变量指向所选 MC 目录，工作目录为版本隔离目录，重定向 stdout/stderr。
 - 监控 `Watcher`（`ModWatcher.vb:58-394`）：状态机 `Loading/Running/Crashed/Ended/Canceled`，用 `EnumWindows` 找游戏窗口，崩溃判定基于日志关键字。
 
 ### 6.4 Java

@@ -33,9 +33,9 @@
 
 | 文件 | 行数 | 职责 |
 | --- | --- | --- |
-| `Modules\Minecraft\ModLaunch.vb` | 2108 | 登录、参数拼装、进程启动、皮肤、UI 回调 |
+| `Modules\Minecraft\ModLaunch.vb` | 2081 | 登录、参数拼装、进程启动、皮肤、UI 回调 |
 | `Pages\PageDownload\ModDownloadLib.vb` | 2080 | 原版/Forge/Fabric 安装、manifest 提交 |
-| `Modules\Minecraft\ModMinecraft.vb` | 2024 | 版本模型、库解析、资源、皮肤、锁 |
+| `Modules\Minecraft\ModMinecraft.vb` | 2117 | 版本模型、库解析、资源、皮肤、锁 |
 | `Modules\Base\ModNet.vb` | 1850 | HTTP、下载、限速、缓存 |
 | `FormMain.xaml.vb` | 1678 | 窗口、路由、拖放、快捷键、Win32 钩子 |
 
@@ -53,7 +53,7 @@
 ### P0-5 崩溃与退出路径吞异常
 
 - `Application.xaml.vb:186` 的全局异常处理器以 `On Error Resume Next` 开头；`FormMain.xaml.vb:619,644` 的 `EndProgramForce`/关窗路径同样。
-- 34 处空 `Catch … End Try`（10 个文件），集中在下载与安装：`ModNet.vb:123,1496`、`ModDownloadLib.vb:421,445,978,1001`、`ModCrash.vb:100`、`ModMinecraft.vb:1942`。
+- 34 处空 `Catch … End Try`（10 个文件），集中在下载与安装：`ModNet.vb:123,1496`、`ModDownloadLib.vb:421,445,978,1001`、`ModCrash.vb:100`、`ModMinecraft.vb:1906`。
 - 后果：失败表现为"卡在 99%"或无提示退出，日志里没有根因。
 - 方向：禁止空 catch；所有兜底必须写 `Logger.Error` 并带上上下文。
 
@@ -124,3 +124,11 @@
 **阶段 2（平台）**
 1. 决定是否迁移到 `net8.0-windows`；前置条件是注册表设置、`My.Computer`、`CacheCow`、`AssemblyResolve` 嵌入机制全部拆掉。
 2. UI 若重写，先做 `MyListItem`/`MyCard` 的模板化试点，再谈 MVVM。
+
+## 5. 启动参数抽离：已偿还与残留（2026-10-21）
+
+- **已偿还：启动参数逻辑不可测。** 版本 JSON 规则判定、JVM/游戏参数收集、参数行拆分与去重、GC 策略已移入 `PCLCS\Minecraft\Launch\`（`VersionArgumentRules.cs`、`VersionArguments.cs`、`ArgumentLine.cs`、`GcPolicy.cs`），由 `tests\PCLCS.Tests` 的 69 项单测覆盖；VB 侧只保留适配层、设置读取与 `${...}` 展开。`ModLaunch.vb` 降至 2081 行。
+- **残留：合并 JSON 的输入顺序。** 去重前的参数顺序与 VB 实现不同。JVM 参数最终结果一致；游戏参数在同一键跨继承层重复时，可能取子级值而不是 VB 取的值。当前无实例可做差分验证。
+- **残留：`ArgumentLine` 的并发状态。** 当前实现没有规则缓存：`Deduplicate` 每次调用新建 `List`，`Split` 无可变静态状态，与 VB 原实现的 `List` + 线性扫描一致，不存在 `Dictionary` 缓存竞态。若以后为规则求值引入缓存，必须使用并发容器（`ConcurrentDictionary`），不要退回普通 `Dictionary`。
+- **残留：实机差分未执行。** 本机没有 Minecraft 实例，三次启动与 `[Parity]` 日志对比未做；本轮只验证了单元测试与 Release 全量构建（0 警告 0 错误）。
+- **残留：`McInstance` 仍是上帝类**，`${...}` 展开仍留在 VB（依赖登录态、路径、窗口尺寸与 UI 线程）。
