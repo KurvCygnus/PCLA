@@ -6,12 +6,14 @@ on:
       - 'PCLCS/**'
       - 'tests/**'
       - 'MeloongCore/**'
+      - 'Plain Craft Launcher 2.sln'
       - '.github/workflows/tests.yml'
   pull_request:
     paths:
       - 'PCLCS/**'
       - 'tests/**'
       - 'MeloongCore/**'
+      - 'Plain Craft Launcher 2.sln'
       - '.github/workflows/tests.yml'
   workflow_dispatch:
 
@@ -28,7 +30,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Test
         run: dotnet test tests/PCLCS.Tests/PCLCS.Tests.csproj -c Release --logger "console;verbosity=normal"

@@ -28,8 +28,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Expected\**\*.txt" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="Expected\**\*.txt" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 </Project>
