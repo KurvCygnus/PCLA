@@ -106,4 +106,51 @@ public class VersionArgumentsTests
         var version = JObject.Parse("{\"arguments\":{\"game\":[\"arg with space\"]}}");
         Assert.Equal(" \"arg with space\"", VersionArguments.CollectGame(version, _ => null, Windows10));
     }
+
+    [Fact]
+    public void InheritName_OverridesJsonInheritsFrom()
+    {
+        var version = JObject.Parse("{\"id\":\"child\",\"inheritsFrom\":\"wrong\"}");
+        var parents = new Dictionary<string, JObject>
+        {
+            ["parent"] = Load("parent.json"),
+            ["wrong"] = JObject.Parse("{\"arguments\":{\"jvm\":[\"-Dwrong=1\"],\"game\":[\"--wrong\"]}}")
+        };
+        JObject? Resolve(string name) => parents.TryGetValue(name, out var parent) ? parent : null;
+
+        Assert.Equal(
+            new[] { "-Dparent=1" },
+            VersionArguments.CollectJvm(version, Resolve, Windows10, inheritName: "parent"));
+        Assert.Equal(" --parent P", VersionArguments.CollectGame(version, Resolve, Windows10, inheritName: "parent"));
+    }
+
+    [Fact]
+    public void InheritName_EmptySuppressesJsonInheritsFrom()
+    {
+        var version = JObject.Parse("{\"id\":\"hmcl\",\"inheritsFrom\":\"parent\"}");
+        JObject Resolve(string name) => throw new InvalidOperationException($"不应解析父级 {name}");
+
+        Assert.Equal(
+            new[]
+            {
+                "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump",
+                "-Djava.library.path=${natives_directory}",
+                "-cp",
+                "${classpath}"
+            },
+            VersionArguments.CollectJvm(version, Resolve, Windows10, inheritName: ""));
+        Assert.Equal("", VersionArguments.CollectGame(version, Resolve, Windows10, inheritName: ""));
+    }
+
+    [Fact]
+    public void InheritName_NullKeepsJsonInheritsFrom()
+    {
+        var version = Load("child.json");
+        JObject? Resolve(string name) => name == "parent" ? Load("parent.json") : null;
+
+        Assert.Equal(
+            new[] { "-Dparent=1", "-Dchild=1" },
+            VersionArguments.CollectJvm(version, Resolve, Windows10, inheritName: null));
+        Assert.Equal(" --parent P --child C", VersionArguments.CollectGame(version, Resolve, Windows10, inheritName: null));
+    }
 }

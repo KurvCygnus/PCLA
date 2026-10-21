@@ -14,12 +14,16 @@ public static class VersionArguments {
     /// <param name="resolveParent">按 <c>inheritsFrom</c> 解析父版本 JSON；返回 <c>null</c> 时停止继承。</param>
     /// <param name="environment">规则求值环境。</param>
     /// <param name="warn">规则警告回调。</param>
+    /// <param name="inheritName">
+    /// 覆盖第一层父级名；<c>null</c> 表示沿用 JSON 的 <c>inheritsFrom</c>，空字符串表示没有父级。
+    /// </param>
     public static IReadOnlyList<string> CollectJvm(
         JObject version,
         Func<string, JObject?> resolveParent,
         RuleEnvironment environment,
-        Action<string>? warn = null) {
-        var chain = BuildChain(version, resolveParent);
+        Action<string>? warn = null,
+        string? inheritName = null) {
+        var chain = BuildChain(version, resolveParent, inheritName);
         var result = new List<string>();
         if (chain.Any(level => level["arguments"]?["jvm"] is not null)) {
             for (var i = chain.Count - 1; i >= 0; i--) {
@@ -46,12 +50,16 @@ public static class VersionArguments {
     /// <summary>
     /// 收集游戏参数并拼成单行；旧版 <c>minecraftArguments</c> 与新版 <c>arguments.game</c> 都会处理。
     /// </summary>
+    /// <param name="inheritName">
+    /// 覆盖第一层父级名；<c>null</c> 表示沿用 JSON 的 <c>inheritsFrom</c>，空字符串表示没有父级。
+    /// </param>
     public static string CollectGame(
         JObject version,
         Func<string, JObject?> resolveParent,
         RuleEnvironment environment,
-        Action<string>? warn = null) {
-        var chain = BuildChain(version, resolveParent);
+        Action<string>? warn = null,
+        string? inheritName = null) {
+        var chain = BuildChain(version, resolveParent, inheritName);
         var builder = new StringBuilder();
         // 合并时子版本的 minecraftArguments 覆盖父版本，等效于从选中版本向上取最近的一级。
         var legacy = chain
@@ -72,12 +80,19 @@ public static class VersionArguments {
     }
 
     // 子版本在前、根在最后；输出时反向遍历，对齐合并 JSON 中祖先→子的数组顺序。
-    private static List<JObject> BuildChain(JObject version, Func<string, JObject?> resolveParent) {
+    private static List<JObject> BuildChain(
+        JObject version,
+        Func<string, JObject?> resolveParent,
+        string? inheritName = null) {
         var chain = new List<JObject>();
         JObject? current = version;
         for (var depth = 0; current is not null && depth < MaxInheritDepth; depth++) {
             chain.Add(current);
-            var inherit = current["inheritsFrom"]?.ToString();
+            // 老 LiteLoader 的 JSON 没有 inheritsFrom，由调用方通过 inheritName 提供真实父级；
+            // 空字符串表示明确没有父级（HMCL 格式），此时不能回退到 JSON。
+            var inherit = depth == 0 && inheritName is not null
+                ? inheritName
+                : current["inheritsFrom"]?.ToString();
             if (string.IsNullOrEmpty(inherit)) break;
             current = resolveParent(inherit!);
         }

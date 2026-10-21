@@ -1232,7 +1232,8 @@ Retry:
             McInstanceSelected.JsonObject,
             Function(name) (New McInstance(name)).JsonObject,
             New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
-            Sub(message) Logger.Warn(message)))
+            Sub(message) Logger.Warn(message),
+            inheritName:=McInstanceSelected.InheritName))
 
         '设置里自定义的参数
         Dim CustomArg As String = Settings.Get(Of String)("VersionAdvanceJvm", Instance:=McInstanceSelected)
@@ -1357,7 +1358,8 @@ Retry:
             McInstanceSelected.JsonObject,
             Function(name) (New McInstance(name)).JsonObject,
             New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
-            Sub(message) Logger.Warn(message))
+            Sub(message) Logger.Warn(message),
+            inheritName:=McInstanceSelected.InheritName)
 
         '设置里自定义的参数
         Dim CustomArg As String = Settings.Get(Of String)("VersionAdvanceGame", Instance:=McInstanceSelected)
