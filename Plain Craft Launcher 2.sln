@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeloongCore", "MeloongCore\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeloongCore.Wpf", "MeloongCore\Wpf\MeloongCore.Wpf.csproj", "{2DFFE2A0-1101-816B-D240-F644B2D74A68}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PCLCS.Tests", "tests\PCLCS.Tests\PCLCS.Tests.csproj", "{C584D9C7-92B1-4495-9929-0C4452F7CE5F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,9 +52,18 @@ Global
 		{2DFFE2A0-1101-816B-D240-F644B2D74A68}.Release|Any CPU.Build.0 = Release|Any CPU
 		{2DFFE2A0-1101-816B-D240-F644B2D74A68}.Snapshot|Any CPU.ActiveCfg = Snapshot|Any CPU
 		{2DFFE2A0-1101-816B-D240-F644B2D74A68}.Snapshot|Any CPU.Build.0 = Snapshot|Any CPU
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F}.Snapshot|Any CPU.ActiveCfg = Debug|Any CPU
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F}.Snapshot|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C584D9C7-92B1-4495-9929-0C4452F7CE5F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {838A572E-025C-4A2B-B682-68732EC0FE76}
