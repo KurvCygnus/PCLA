@@ -8,7 +8,7 @@ public static class VersionArguments {
     private const int MaxInheritDepth = 64;
 
     /// <summary>
-    /// 收集 JVM 参数；新版 JSON 无 <c>arguments.jvm</c> 时返回旧版固定参数。
+    /// 收集 JVM 参数；整条继承链都没有 <c>arguments.jvm</c> 时返回旧版固定参数。
     /// </summary>
     /// <param name="version">起始版本 JSON。</param>
     /// <param name="resolveParent">按 <c>inheritsFrom</c> 解析父版本 JSON；返回 <c>null</c> 时停止继承。</param>
@@ -19,9 +19,12 @@ public static class VersionArguments {
         Func<string, JObject?> resolveParent,
         RuleEnvironment environment,
         Action<string>? warn = null) {
+        var chain = BuildChain(version, resolveParent);
         var result = new List<string>();
-        if (version["arguments"]?["jvm"] is not null) {
-            Walk(version, resolveParent, environment, warn, "jvm", value => result.Add(value.Trim()));
+        if (chain.Any(level => level["arguments"]?["jvm"] is not null)) {
+            for (var i = chain.Count - 1; i >= 0; i--) {
+                EmitSection(chain[i], "jvm", environment, warn, value => result.Add(value.Trim()));
+            }
             for (var i = 0; i < result.Count; i++) {
                 var argument = result[i];
                 // 1.17.1 的 "-Dos.name=Windows 10" 不加引号会让 10 被当成独立参数。
@@ -48,53 +51,64 @@ public static class VersionArguments {
         Func<string, JObject?> resolveParent,
         RuleEnvironment environment,
         Action<string>? warn = null) {
+        var chain = BuildChain(version, resolveParent);
         var builder = new StringBuilder();
-        var legacy = version["minecraftArguments"]?.ToString();
+        // 合并时子版本的 minecraftArguments 覆盖父版本，等效于从选中版本向上取最近的一级。
+        var legacy = chain
+            .Where(level => level["minecraftArguments"] is not null)
+            .Select(level => level["minecraftArguments"]!.ToString())
+            .FirstOrDefault();
         if (!string.IsNullOrEmpty(legacy)) {
             builder.Append(' ').Append(legacy);
             // 总是补宽高，之后去重时覆盖 MC 自带的值。
             builder.Append(" --height ${resolution_height} --width ${resolution_width}");
         }
-        if (version["arguments"]?["game"] is not null) {
-            Walk(version, resolveParent, environment, warn, "game", value => Append(builder, value));
+        if (chain.Any(level => level["arguments"]?["game"] is not null)) {
+            for (var i = chain.Count - 1; i >= 0; i--) {
+                EmitSection(chain[i], "game", environment, warn, value => Append(builder, value));
+            }
         }
         return builder.ToString();
     }
 
-    private static void Walk(
-        JObject version,
-        Func<string, JObject?> resolveParent,
-        RuleEnvironment environment,
-        Action<string>? warn,
-        string section,
-        Action<string> emit) {
+    // 子版本在前、根在最后；输出时反向遍历，对齐合并 JSON 中祖先→子的数组顺序。
+    private static List<JObject> BuildChain(JObject version, Func<string, JObject?> resolveParent) {
+        var chain = new List<JObject>();
         JObject? current = version;
         for (var depth = 0; current is not null && depth < MaxInheritDepth; depth++) {
-            if (current["arguments"] is JObject arguments && arguments[section] is JArray list) {
-                foreach (var token in list) {
-                    switch (token.Type) {
-                        case JTokenType.String:
-                            emit(token.ToString());
-                            break;
-                        case JTokenType.Object: {
-                            if (token["rules"] is not null
-                                && !VersionArgumentRules.IsAllowed(token["rules"], environment, warn)) continue;
-                            var value = token["value"];
-                            if (value is null) continue;
-                            if (value.Type == JTokenType.String) {
-                                emit(value.ToString());
-                            } else {
-                                foreach (var item in value) emit(item.ToString());
-                            }
-                            break;
-                        }
+            chain.Add(current);
+            var inherit = current["inheritsFrom"]?.ToString();
+            if (string.IsNullOrEmpty(inherit)) break;
+            current = resolveParent(inherit!);
+        }
+        return chain;
+    }
+
+    private static void EmitSection(
+        JObject level,
+        string section,
+        RuleEnvironment environment,
+        Action<string>? warn,
+        Action<string> emit) {
+        if (level["arguments"] is not JObject arguments || arguments[section] is not JArray list) return;
+        foreach (var token in list) {
+            switch (token.Type) {
+                case JTokenType.String:
+                    emit(token.ToString());
+                    break;
+                case JTokenType.Object: {
+                    if (token["rules"] is not null
+                        && !VersionArgumentRules.IsAllowed(token["rules"], environment, warn)) continue;
+                    var value = token["value"];
+                    if (value is null) continue;
+                    if (value.Type == JTokenType.String) {
+                        emit(value.ToString());
+                    } else {
+                        foreach (var item in value) emit(item.ToString());
                     }
+                    break;
                 }
             }
-
-            var inherit = current["inheritsFrom"]?.ToString();
-            if (string.IsNullOrEmpty(inherit)) return;
-            current = resolveParent(inherit!);
         }
     }
 

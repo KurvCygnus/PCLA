@@ -42,11 +42,19 @@ public class VersionArgumentsTests
     }
 
     [Fact]
-    public void Jvm_WalksParentsInChildFirstOrder()
+    public void Jvm_WalksParentsAncestorFirst()
     {
         var version = Load("child.json");
         var result = VersionArguments.CollectJvm(version, name => name == "parent" ? Load("parent.json") : null, Windows10);
-        Assert.Equal(new[] { "-Dchild=1", "-Dparent=1" }, result);
+        Assert.Equal(new[] { "-Dparent=1", "-Dchild=1" }, result);
+    }
+
+    [Fact]
+    public void Jvm_UsesParentSectionWhenChildHasNone()
+    {
+        var version = JObject.Parse("{\"id\":\"child\",\"inheritsFrom\":\"parent\",\"arguments\":{\"game\":[\"--child\"]}}");
+        var result = VersionArguments.CollectJvm(version, name => name == "parent" ? Load("parent.json") : null, Windows10);
+        Assert.Equal(new[] { "-Dparent=1" }, result);
     }
 
     [Fact]
@@ -68,11 +76,28 @@ public class VersionArgumentsTests
     }
 
     [Fact]
-    public void Game_WalksParentsInChildFirstOrder()
+    public void Game_WalksParentsAncestorFirst()
     {
         var version = Load("child.json");
         var result = VersionArguments.CollectGame(version, name => name == "parent" ? Load("parent.json") : null, Windows10);
-        Assert.Equal(" --child C --parent P", result);
+        Assert.Equal(" --parent P --child C", result);
+    }
+
+    [Fact]
+    public void Game_UsesParentSectionWhenChildHasNone()
+    {
+        var version = JObject.Parse("{\"id\":\"child\",\"inheritsFrom\":\"parent\",\"arguments\":{\"jvm\":[\"-Dchild=1\"]}}");
+        var result = VersionArguments.CollectGame(version, name => name == "parent" ? Load("parent.json") : null, Windows10);
+        Assert.Equal(" --parent P", result);
+    }
+
+    [Fact]
+    public void Game_LegacyFromParentPrecedesModernChild()
+    {
+        var parent = JObject.Parse("{\"minecraftArguments\":\"--legacy\",\"arguments\":{\"game\":[\"--parent\"]}}");
+        var child = JObject.Parse("{\"inheritsFrom\":\"parent\",\"arguments\":{\"game\":[\"--child\"]}}");
+        var result = VersionArguments.CollectGame(child, name => name == "parent" ? parent : null, Windows10);
+        Assert.Equal(" --legacy --height ${resolution_height} --width ${resolution_width} --parent --child", result);
     }
 
     [Fact]
