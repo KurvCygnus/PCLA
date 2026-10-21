@@ -39,6 +39,7 @@ public static class ArgumentLine {
 
     /// <summary>
     /// 去重 JVM/游戏参数，保留原顺序。
+    /// 游戏参数里重复出现同名的键会让这一组参数整体失效，因此用后出现的值覆盖先出现的值。
     /// </summary>
     public static IReadOnlyList<string> Deduplicate(
         IReadOnlyList<string> args,
@@ -67,6 +68,7 @@ public static class ArgumentLine {
             var handled = false;
             for (var i = 0; i + 1 < result.Count; i++) {
                 if (result[i] != key) continue;
+                // 游戏对重复的 --width、--uuid 之类参数会整组失效，覆盖成最后一个值比保留多个更安全；--tweakClass 允许出现多次。
                 if (!isJvm && key != "--tweakClass") {
                     diagnostics?.Add($"已覆盖重复的{(isJvm ? " JVM " : "游戏")}参数：{key} {result[i + 1]} → {key} {value}");
                     result[i + 1] = value;
@@ -90,21 +92,50 @@ public static class ArgumentLine {
         var builder = new StringBuilder(raw.Length);
         for (var i = 0; i < raw.Length; i++) {
             var c = raw[i];
-            if (c != '\r' && c != '\n') {
+            if (!IsLineEnding(c)) {
                 builder.Append(c);
                 continue;
             }
             builder.Append(' ');
-            while (i + 1 < raw.Length && (raw[i + 1] == '\r' || raw[i + 1] == '\n')) i++;
+            // 连续的行尾（包括 \r\n 混用）只产生一个空格，与 ReplaceLineEndings(mergeMultiple:=True) 的合并语义一致。
+            while (i + 1 < raw.Length && IsLineEnding(raw[i + 1])) i++;
         }
         return builder.ToString();
     }
 
+    // 字符集与 MeloongCore 的 ReplaceLineEndings 保持一致，例如 \f 与 U+2028 也会被当作换行。
+    private static bool IsLineEnding(char c) => c is '\r' or '\n' or '\f' or '\u0085' or '\u2028' or '\u2029';
+
     // 复刻 VB Val 的数值前缀解析，用于区分 "-xPos -50" 中的负数值。
+    // 与 VB 的已知差异：超长的 &H/&O 在 VB 里会抛 OverflowException（足以让启动崩溃），这里只返回有限值；调用方只判断是否为 0。
     private static double VbVal(string text) {
         var s = text.TrimStart();
+        // 进制前缀只在无符号时生效：Val("&H10") = 16，而 Val("-&H10") = 0。
+        if (s.Length > 1 && s[0] == '&') {
+            var radix = s[1] switch {
+                'H' or 'h' => 16,
+                'O' or 'o' => 8,
+                _ => 0
+            };
+            if (radix == 0) return 0;
+            var value = 0d;
+            var count = 0;
+            for (var i = 2; i < s.Length; i++) {
+                var digit = DigitValue(s[i], radix);
+                if (digit < 0) break;
+                value = value * radix + digit;
+                count++;
+            }
+            return count == 0 ? 0 : value;
+        }
         var index = 0;
-        if (index < s.Length && (s[index] == '+' || s[index] == '-')) index++;
+        var negative = false;
+        if (index < s.Length && (s[index] == '+' || s[index] == '-')) {
+            negative = s[index] == '-';
+            index++;
+            // VB 允许符号与数字之间有空白：Val("- 5") = -5。
+            while (index < s.Length && char.IsWhiteSpace(s[index])) index++;
+        }
         var start = index;
         while (index < s.Length && char.IsDigit(s[index])) index++;
         if (index < s.Length && s[index] == '.') {
@@ -112,8 +143,18 @@ public static class ArgumentLine {
             while (index < s.Length && char.IsDigit(s[index])) index++;
         }
         if (index == start) return 0;
-        return double.TryParse(s.Substring(0, index), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? value
+        return double.TryParse(s.Substring(start, index - start), NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            ? (negative ? -number : number)
             : 0;
+    }
+
+    private static int DigitValue(char c, int radix) {
+        var value = c switch {
+            >= '0' and <= '9' => c - '0',
+            >= 'a' and <= 'f' => c - 'a' + 10,
+            >= 'A' and <= 'F' => c - 'A' + 10,
+            _ => -1
+        };
+        return value >= 0 && value < radix ? value : -1;
     }
 }

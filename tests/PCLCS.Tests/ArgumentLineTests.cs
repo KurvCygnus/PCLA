@@ -104,4 +104,72 @@ public class ArgumentLineTests
         Assert.Equal(new[] { "a", "b" }, result);
         Assert.Equal(new[] { "已去重单个游戏参数：a" }, diagnostics);
     }
+
+    [Fact]
+    public void Split_MultipleSpacesAreIgnored()
+    {
+        Assert.Equal(new[] { "--a", "b" }, ArgumentLine.Split("  --a   b  "));
+    }
+
+    [Fact]
+    public void Split_TrailingBackslashIsKept()
+    {
+        Assert.Equal(new[] { "a", "b\\" }, ArgumentLine.Split("a b\\"));
+    }
+
+    [Fact]
+    public void Split_MergesUnicodeLineEndings()
+    {
+        Assert.Equal(new[] { "a", "b" }, ArgumentLine.Split("a\u2028\u2028b"));
+        Assert.Equal(new[] { "a", "b" }, ArgumentLine.Split("a\f\u0085\u2029b"));
+    }
+
+    [Fact]
+    public void Deduplicate_TrailingKeyWithoutValue()
+    {
+        Assert.Equal(
+            new[] { "--width", "800", "--height" },
+            ArgumentLine.Deduplicate(new[] { "--width", "800", "--height" }, false));
+        Assert.Equal(new[] { "--flag" }, ArgumentLine.Deduplicate(new[] { "--flag" }, true));
+    }
+
+    [Fact]
+    public void Deduplicate_GameTweakClassSameValue()
+    {
+        var diagnostics = new List<string>();
+        var result = ArgumentLine.Deduplicate(new[] { "--tweakClass", "a", "--tweakClass", "a" }, false, diagnostics);
+        Assert.Equal(new[] { "--tweakClass", "a" }, result);
+        Assert.Equal(new[] { "已去重游戏参数对：--tweakClass a" }, diagnostics);
+    }
+
+    [Fact]
+    public void Deduplicate_HexAndOctalValuesAreNotTreatedAsKeys()
+    {
+        Assert.Equal(
+            new[] { "-xPos", "-&H10" },
+            ArgumentLine.Deduplicate(new[] { "-xPos", "23", "-xPos", "-&H10" }, false));
+        Assert.Equal(
+            new[] { "-xPos", "-&O10" },
+            ArgumentLine.Deduplicate(new[] { "-xPos", "23", "-xPos", "-&O10" }, false));
+        Assert.Equal(
+            new[] { "-xPos", "-&h1F" },
+            ArgumentLine.Deduplicate(new[] { "-xPos", "23", "-xPos", "-&h1F" }, false));
+    }
+
+    [Fact]
+    public void Deduplicate_ZeroValuedRadixPrefixIsTreatedAsKey()
+    {
+        Assert.Equal(
+            new[] { "-xPos", "23", "-&H0" },
+            ArgumentLine.Deduplicate(new[] { "-xPos", "23", "-xPos", "-&H0" }, false));
+    }
+
+    [Fact]
+    public void Deduplicate_SignedRadixPrefixIsTreatedAsKey()
+    {
+        // VB 的 Val("-&H10") 为 0，因此 "--&H10" 去掉首个 "-" 后不算数值。
+        Assert.Equal(
+            new[] { "-xPos", "23", "--&H10" },
+            ArgumentLine.Deduplicate(new[] { "-xPos", "23", "-xPos", "--&H10" }, false));
+    }
 }
