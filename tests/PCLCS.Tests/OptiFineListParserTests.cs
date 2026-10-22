@@ -58,6 +58,18 @@ public class OptiFineListParserTests {
     [Fact]
     public void RealBmclapiListParses() {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "optifine-bmclapi.json")));
-        Assert.NotEmpty(OptiFineListParser.ParseBmclapiJson(json));
+        var entries = OptiFineListParser.ParseBmclapiJson(json);
+        Assert.NotEmpty(entries);
+        //* 夹具首条是 1.13.2 HD_U_E7，forge 字段为 "Forge N/A"，应映射为 null 而非字符串。
+        //* display 生成时 "HD_U" 整段被移除（OptiFineListParser.cs:129），只剩 mcversion + patch。
+        var first = entries[0];
+        Assert.Equal("1.13.2 E7", first.DisplayName);
+        Assert.Equal("1.13.2-OptiFine_HD_U_E7", first.InstanceName);
+        Assert.Equal("OptiFine_1.13.2_HD_U_E7.jar", first.FileName);
+        Assert.Null(first.RequiredForgeVersion);
+        //* 选一条带 forge 版本的条目，验证 "Forge #2795" → "2795" 的映射。
+        var withForge = entries.Single(e => e.FileName == "OptiFine_1.12.2_HD_U_E3.jar");
+        Assert.Equal("1.12.2 E3", withForge.DisplayName);
+        Assert.Equal("2795", withForge.RequiredForgeVersion);
     }
 }

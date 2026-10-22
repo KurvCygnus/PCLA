@@ -1,4 +1,3 @@
-using System.IO;
 using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;

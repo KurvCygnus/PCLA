@@ -1,4 +1,3 @@
-using System.IO;
 using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
@@ -68,17 +67,54 @@ public class NeoForgeParserTests {
         Assert.Equal(new[] { "21.1.0-beta.10", "21.1.0-beta.2", "21.1.0" }, entries.Select(e => e.ApiName));
     }
 
-    [Fact]
+    [Fact(Skip = "maven.neoforged.net 在本机不可达，待网络可用后补录真实响应")]
     public void RealNeoForgeFeedsParse() {
+        //* 真实夹具从未录制成功（maven.neoforged.net:443 被墙），本测试在录制成功前保持跳过。
         var latestPath = TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.json"));
         var legacyPath = TestPaths.Fixture(Path.Combine("Download", "neoforge-legacy.json"));
-        if(!File.Exists(latestPath) || !File.Exists(legacyPath)) {
-            //* 录制时 maven.neoforged.net:443 不可达（本机被墙），夹具缺失；
-            //* 按任务要求不伪造内容，缺失时跳过断言（详见 task-5-report.md）。
-            return;
-        }
         var latest = File.ReadAllText(latestPath);
         var legacy = File.ReadAllText(legacyPath);
         Assert.NotEmpty(NeoForgeParser.Parse(latest, legacy));
+    }
+
+    [Fact]
+    public void MinimalFixturesParseExcludeAndSort() {
+        //* 合成夹具（neoforge-*.min.json）：真实响应因 maven.neoforged.net 不可达未录制，
+        //* 用最小可解析形状锁住字段映射与排序，不依赖网络。
+        var latest = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.min.json")));
+        var legacy = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-legacy.min.json")));
+        var entries = NeoForgeParser.Parse(latest, legacy);
+        Assert.Equal(new[] {
+            "26.1.44",
+            "21.0.2",
+            "21.0.0-beta",
+            "20.2.1",
+            "1.20.1-47.2.3",
+            "1.20.1-47.1.83",
+        }, entries.Select(e => e.ApiName));
+        Assert.DoesNotContain(entries, e => e.ApiName == "47.1.82");
+        Assert.Equal(6, entries.Count);
+    }
+
+    [Fact]
+    public void MinimalFixturesMapFields() {
+        var latest = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.min.json")));
+        var legacy = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-legacy.min.json")));
+        var entries = NeoForgeParser.Parse(latest, legacy);
+        var lifted = entries.Single(e => e.ApiName == "1.20.1-47.1.83");
+        Assert.Equal("19.47.1.83", lifted.Version.ToString());
+        Assert.Equal("1.20.1", lifted.Inherit);
+        Assert.Equal("47.1.83", lifted.VersionName);
+        Assert.False(lifted.IsBeta);
+        var plain = entries.Single(e => e.ApiName == "21.0.2");
+        Assert.Equal(new Version(21, 0, 2), plain.Version);
+        Assert.Equal("1.21", plain.Inherit);
+        var beta = entries.Single(e => e.ApiName == "21.0.0-beta");
+        Assert.Equal(new Version(21, 0, 0), beta.Version);
+        Assert.Equal("1.21", beta.Inherit);
+        Assert.True(beta.IsBeta);
+        var snapshot = entries.Single(e => e.ApiName == "26.1.44");
+        Assert.Equal(new Version(26, 1, 44), snapshot.Version);
+        Assert.Equal("26.1.44", snapshot.Inherit);
     }
 }

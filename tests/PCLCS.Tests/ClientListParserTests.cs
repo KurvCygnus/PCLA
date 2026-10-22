@@ -1,4 +1,3 @@
-using System.IO;
 using Newtonsoft.Json.Linq;
 using PCLCS.Minecraft.Download;
 
@@ -58,5 +57,15 @@ public class ClientListParserTests {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "bmclapi-manifest.json")));
         var root = ClientListParser.Parse(json, "BMCLAPI");
         Assert.NotEmpty(ClientListParser.ComputeDrops(root));
+        Assert.Equal("26.3", ((JObject)root["latest"]!)["release"]!.ToString());
+        var versions = (JArray)root["versions"]!;
+        Assert.Equal("26.4-snapshot-5", ((JObject)versions[0]!)["id"]!.ToString());
+        Assert.Equal("https://piston-meta.mojang.com/v1/packages/2ee2d20f6e6a37aae39238fff3286ab879a99ce6/26.4-snapshot-5.json",
+            ((JObject)versions[0]!)["url"]!.ToString());
+        Assert.Equal("rd-132211", ((JObject)versions[versions.Count - 1]!)["id"]!.ToString());
+        var release = versions.Single(v => ((JObject)v!)["id"]!.ToString() == "1.20.1");
+        Assert.Equal("release", ((JObject)release)["type"]!.ToString());
+        Assert.Equal("https://piston-meta.mojang.com/v1/packages/38d412af3b247e485c7f7e50ac25febc4e79ab1d/1.20.1.json",
+            ((JObject)release)["url"]!.ToString());
     }
 }

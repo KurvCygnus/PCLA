@@ -1,4 +1,3 @@
-using System.IO;
 using Newtonsoft.Json.Linq;
 using PCLCS.Minecraft.Download;
 
@@ -14,7 +13,7 @@ public class FabricListParserTests {
         Assert.Same(root, root["game"]!.Root);
         Assert.Same(root, root["loader"]!.Root);
         Assert.Same(root, root["installer"]!.Root);
-        Assert.Equal("1.21.1", ((JArray)root["game"]!)[0]["version"]!.ToString());
+        Assert.Equal("1.21.1", ((JArray)root["game"]!)[0]!["version"]!.ToString());
     }
 
     [Theory]

@@ -1,4 +1,3 @@
-using System.IO;
 using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
@@ -117,6 +116,18 @@ public class ForgeBuildParserTests {
     [Fact]
     public void RealForgeBuildsJsonParses() {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "forge-builds-bmclapi.json")));
-        Assert.NotEmpty(ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
+        var entries = ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null);
+        Assert.NotEmpty(entries);
+        //* 夹具按修改时间倒序，首条是最新的 47.4.27；47.0.1 是数组中最早的 1.20.1 构建。
+        //* 夹具数组按修改时间升序：47.0.1 在首，47.4.27 在末。
+        var newest = entries[entries.Count - 1];
+        Assert.Equal("1.20.1", newest.Inherit);
+        Assert.Equal("installer", newest.Category);
+        Assert.Equal("47.4.27", newest.FileVersion);
+        var oldest = entries[0];
+        Assert.Equal("47.0.1", oldest.VersionName);
+        Assert.Equal("installer", oldest.Category);
+        Assert.Equal("2bdc0e68530daf0af01cae44a05e7f84849bdc6e", oldest.Hash);
+        Assert.All(entries, entry => Assert.False(string.IsNullOrWhiteSpace(entry.Hash)));
     }
 }

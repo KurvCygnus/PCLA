@@ -157,3 +157,10 @@
 - **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:23-30` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1249-1258`。
 - **期望行为**：未知宿主至少保留一个可用候选，`http://piston-*` 与 resources 一样做 https 归一。
 - **处理**：本轮仅记录，不修。
+
+### 6.4 Forge 官方页 IsRecommended 恒为 false
+
+- **现象与影响**：`ForgeBuildParser.ParseOfficialHtml` 解析 1.20.1 真实页面（`tests\PCLCS.Tests\Fixtures\Download\forge-builds.html`，137 个构建）时，所有条目的 `IsRecommended` 全部为 false。表格行内的推荐徽标是 `class="promo-latest promo-recommended  fa"`（`fa` 在末尾、中间双空格），无法被子串 `"fa promo-recommended"` 命中；该子串只命中页面侧栏的 `<i class="fa promo-recommended"></i>Download Recommended` 标签（夹具内偏移 34666，全页仅此一处；表格行内的徽标在偏移 38469）。侧栏命中与否取决于 chunk 切分边界，与构建条目无关，因此每个构建块的判定结果恒为 false。
+- **位置**：`PCLCS\Minecraft\Download\ForgeBuildParser.cs:95` ↔ legacy `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:694`（`Dim IsRecommended As Boolean = VersionCode.Contains("fa promo-recommended")`，同样的子串，缺陷同源）。
+- **期望行为**：判定应基于构建条目自身 chunk 内的推荐徽标（如匹配 `promo-recommended` 而不带 `fa ` 前缀），页面标注 Recommended 的构建（当前为 47.4.27）的 `IsRecommended` 应为 true。
+- **处理**：本轮仅记录，不修。

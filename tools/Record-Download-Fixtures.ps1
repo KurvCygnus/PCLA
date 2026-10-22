@@ -20,12 +20,33 @@ $targets = @(
     @{ Name = 'fabric.json'; Url = 'https://meta.fabricmc.net/v2/versions' }
 )
 
+$failures = [System.Collections.Generic.List[string]]::new()
 foreach ($target in $targets) {
     $path = Join-Path $Output $target.Name
+    $tempPath = "$path.tmp"
     try {
-        Invoke-WebRequest -Uri $target.Url -OutFile $path -TimeoutSec 60 -UseBasicParsing
+        Invoke-WebRequest -Uri $target.Url -OutFile $tempPath -TimeoutSec 60 -UseBasicParsing
+        if ((Get-Item $tempPath).Length -eq 0) {
+            throw "响应为空（0 字节）"
+        }
+        Move-Item -LiteralPath $tempPath -Destination $path -Force
         Write-Host "OK   $($target.Name)  $((Get-Item $path).Length) bytes"
     } catch {
-        Write-Host "FAIL $($target.Name)  $($_.Exception.Message)"
+        if (Test-Path -LiteralPath $tempPath) {
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        }
+        $message = $_.Exception.Message
+        $failures.Add("$($target.Name)  $($target.Url)  $message")
+        Write-Host "FAIL $($target.Name)  $message"
     }
 }
+
+if ($failures.Count -gt 0) {
+    Write-Host ''
+    Write-Host "失败的 URL（共 $($failures.Count) 个）:"
+    foreach ($failure in $failures) {
+        Write-Host "  $failure"
+    }
+    exit 1
+}
+exit 0
