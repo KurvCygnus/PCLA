@@ -63,6 +63,53 @@ public sealed record OptiFineEntry {
 
 /// <summary>OptiFine 版本列表解析。</summary>
 public static class OptiFineListParser {
+    /// <summary>解析 OptiFine 官方下载页。</summary>
+    /// <param name="html">官方下载页的 HTML。</param>
+    /// <exception cref="DownloadSourceException">响应过短、列数不一致、发布日期异常或版本数量不足。</exception>
+    public static IReadOnlyList<OptiFineEntry> ParseOfficialHtml(string html) {
+        if (html.Length < 200) {
+            throw new DownloadSourceException(DownloadFailureKind.TooFewEntries,
+                $"OptiFine 官方源响应只有 {html.Length} 个字符", "OptiFine 官方源", DownloadDiagnostics.Snippet(html));
+        }
+        var forge = Regex.Matches(html, "(?<=colForge'>)[^<]*").Cast<Match>().Select(m => m.Value).ToList();
+        var release = Regex.Matches(html, "(?<=colDate'>)[^<]+").Cast<Match>().Select(m => m.Value).ToList();
+        var names = Regex.Matches(html, "(?<=OptiFine_)[0-9A-Za-z_.]+(?=.jar\")").Cast<Match>().Select(m => m.Value).ToList();
+        if (release.Count != names.Count) {
+            throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
+                $"OptiFine 官方源页面列数不一致：发布时间 {release.Count} 列、文件名 {names.Count} 列",
+                "OptiFine 官方源", DownloadDiagnostics.Snippet(html));
+        }
+        if (forge.Count != names.Count) {
+            throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
+                $"OptiFine 官方源页面列数不一致：Forge 兼容 {forge.Count} 列、文件名 {names.Count} 列",
+                "OptiFine 官方源", DownloadDiagnostics.Snippet(html));
+        }
+        if (release.Count < 10) {
+            throw new DownloadSourceException(DownloadFailureKind.TooFewEntries,
+                $"OptiFine 官方源只解析出 {release.Count} 个版本（至少 10 个）",
+                "OptiFine 官方源", DownloadDiagnostics.Snippet(html));
+        }
+        var entries = new List<OptiFineEntry>();
+        for (var i = 0; i < release.Count; i++) {
+            var name = names[i].Replace("_", " ");
+            var parts = release[i].Split('.');
+            if (parts.Length < 3) {
+                throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
+                    $"OptiFine 官方源的发布日期格式异常：{release[i]}", "OptiFine 官方源", DownloadDiagnostics.Snippet(html));
+            }
+            var required = forge[i].Replace("Forge ", "").Replace("#", "");
+            entries.Add(new OptiFineEntry(
+                name.Replace("HD U ", "").Replace(".0 ", " "),
+                (name.ContainsIgnoreCase("pre") ? "preview_" : "") + "OptiFine_" + name.Replace(" ", "_") + ".jar",
+                name.Split(' ')[0] + "-OptiFine_" + name.AfterFirst(" ").Replace(" ", "_"),
+                name.ContainsIgnoreCase("pre"),
+                name.Split(' ')[0],
+                $"{parts[2]}/{parts[1]}/{parts[0]}",
+                required.Contains("N/A") ? null : required));
+        }
+        return entries;
+    }
+
     /// <summary>解析 BMCLAPI JSON 列表。</summary>
     public static IReadOnlyList<OptiFineEntry> ParseBmclapiJson(string json) {
         JArray array;
