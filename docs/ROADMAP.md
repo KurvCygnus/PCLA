@@ -1,0 +1,67 @@
+# PCLA Roadmap
+
+> 非承诺性清单。条目按"用户价值 × 实现成本"排序，实施前必须单独出 spec。
+
+## 进行中
+
+- 启动参数抽离（已完成，`docs\superpowers\specs\2026-10-21-launch-argument-extraction-design.md`）
+- 下载源与清单解析抽离（计划已批准，`docs\superpowers\plans\2026-10-21-download-metadata-extraction.md`）
+- 重复逻辑与样板代码治理（调研见 `docs\superpowers\research\2026-10-21-duplication-survey.md`）
+
+## 候选项：PCLA MCP（stdio）
+
+**状态**：构想，未排期。
+**一句话**：把启动器已经具备的实例、日志、崩溃规则与社区资源检索能力，以只读 MCP 工具暴露给玩家自己的 Agent。
+
+### 为什么值得做
+
+- 目标用户是真实存在的交叉人群：用 Agent 的玩家，同时需要找 Mod/整合包/光影、排查模组冲突与性能问题。
+- 这些能力 PCL 已经具备，缺的只是机器可调用的接口：实例模型在 `Plain Craft Launcher 2\Modules\Minecraft\ModMinecraft.vb`，崩溃规则在 `Plain Craft Launcher 2\Modules\Minecraft\ModCrash.vb`，资源检索在 `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb`。
+- Agent 直接读日志文件的成本高、准确率低：日志路径随启动模式变化、编码不统一、崩溃结论依赖约 60 条 `String.Contains` 规则。MCP 把这些判断收敛到启动器侧，Agent 只拿结构化结论。
+- 对启动器本体零 UI 侵入：不需要新页面，不需要为非 Agent 用户增加任何可见入口。
+
+### 明确不做
+
+- 不做内置 Agent、对话界面或模型调用。
+- 不做可插拔 Agent Tool 扩展；确实要做时另立设计，且必须按需加载，不占不用者的磁盘。
+- MVP 不做写操作（安装、删除、改配置）。写操作要等只读工具跑顺、权限模型定稿后再议。
+
+### MVP 工具集（只读）
+
+| 工具 | 输入 | 输出 | 复用的现有能力 |
+| --- | --- | --- | --- |
+| `list_instances` | 无 | 实例名、MC 版本、加载器、Java、最后启动时间 | `McInstance` 列表 |
+| `get_instance` | 实例名 | 完整版本/加载器/Mod 列表/内存设置 | `McInstance` + 版本 JSON |
+| `read_log` | 实例名、行数或关键字 | 尾部日志或匹配片段 | `Log*` 文件 |
+| `analyze_crash` | 实例名或日志路径 | 命中规则、置信度、涉及 Mod、建议 | `ModCrash` 规则表 |
+| `search_resources` | 类型、关键词、MC 版本、加载器 | 名称、来源、下载量、兼容性 | `ModDownload` 的 CurseForge/Modrinth 检索 |
+| `check_mod_conflicts` | 实例名 | 重复 Mod、缺失前置、版本不匹配 | 实例 Mod 元数据 |
+
+`analyze_crash` 是价值最高的一项：它把"看日志"变成"拿结论"，也是 Agent 最容易做错的部分。
+
+### 技术形态
+
+- 传输：stdio，JSON-RPC 2.0。MCP 协议本身很薄，不需要引入官方 SDK 或 Node/Python 运行时。
+- 宿主：优先做独立的小型 .NET 8 控制台程序，由用户在 Agent 配置里显式指向；不塞进 WPF 进程，避免 .NET Framework 4.8 与 MCP 生态的版本错位，也避免非用户多背一个常驻进程。
+- 备选：现有 exe 增加 `--mcp` 隐藏开关，直接以控制台模式运行。省一个产物，但要处理 WPF 入口与无窗口生命周期。
+- 配置：首次运行生成只读令牌与实例根目录白名单；所有路径参数都限制在白名单内。
+
+### 风险
+
+- 工具契约是长期负担：一旦公开，字段改名就是破坏性变更。MVP 阶段应标注 `experimental`，并接受一次大改。
+- 日志与账号信息可能含隐私：默认只返回与崩溃相关的片段，不整段回传；路径中的用户名做脱敏。
+- 与 UI 行为漂移：MCP 与启动器必须复用同一套规则与模型，不能各写一份。
+- 受众规模有限：短期是差异化亮点，不是大众功能，排期优先级应低于稳定性与下载层重构。
+
+### 验收信号
+
+- 同一份崩溃日志，Agent 在接入 MCP 后给出的 Mod 定位与人工结论一致率显著高于直接读文件。
+- 找资源从"打开浏览器、搜索、比对版本"缩短为一次工具调用加一次确认。
+- 非 Agent 用户的安装包体积、启动路径、UI 无任何变化。
+
+### 待定问题
+
+- 独立进程还是 `--mcp` 开关。
+- 是否需要把"安装"作为第二阶段写工具，以及确认交互放在启动器还是 Agent 侧。
+- 多实例、便携模式、版本隔离下的根目录发现规则。
+- 是否对外发布工具 schema，供第三方 Agent 客户端适配。
