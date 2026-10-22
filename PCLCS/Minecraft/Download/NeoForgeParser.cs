@@ -60,14 +60,23 @@ public static class NeoForgeParser {
     /// <param name="legacyJson">forge 仓库的 Legacy 版本 JSON。</param>
     /// <exception cref="DownloadSourceException">两个源都没有可用版本。</exception>
     public static IReadOnlyList<NeoForgeEntry> Parse(string latestJson, string legacyJson) {
-        var names = Regex.Matches(legacyJson + latestJson,
-                "(?<=\")(1\\.20\\.1-)?\\d+\\.[^\\.]+\\.\\d+(\\.\\d+)?(-(beta|alpha)(\\.\\d+)?)?(\\+snapshot-\\d+)?(?=\")")
-            .Cast<Match>()
-            .Select(m => m.Value)
-            .Where(name => name != "47.1.82")
-            .Select(name => new NeoForgeEntry(name))
-            .OrderByDescending(entry => entry)
-            .ToList();
+        var names = new List<NeoForgeEntry>();
+        foreach (var name in Regex.Matches(legacyJson + latestJson,
+                     "(?<=\")(1\\.20\\.1-)?\\d+\\.[^\\.]+\\.\\d+(\\.\\d+)?(-(beta|alpha)(\\.\\d+)?)?(\\+snapshot-\\d+)?(?=\")")
+                 .Cast<Match>()
+                 .Select(m => m.Value)
+                 .Where(name => name != "47.1.82")) {
+            try {
+                names.Add(new NeoForgeEntry(name));
+            } catch (DownloadSourceException) {
+                throw;
+            } catch (Exception ex) {
+                throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
+                    $"NeoForge 版本 {name} 的数据解析失败", "NeoForge",
+                    DownloadDiagnostics.Snippet(latestJson + legacyJson), ex);
+            }
+        }
+        names.Sort((left, right) => right.CompareTo(left));
         if (names.Count == 0) {
             throw new DownloadSourceException(DownloadFailureKind.NotFound,
                 "NeoForge 源返回了 0 个可用版本", "NeoForge", DownloadDiagnostics.Snippet(latestJson));

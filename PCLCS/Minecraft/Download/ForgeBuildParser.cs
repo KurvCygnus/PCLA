@@ -169,15 +169,23 @@ public static class ForgeBuildParser {
                 ?? throw new DownloadSourceException(DownloadFailureKind.MissingField,
                     "Forge BMCLAPI 条目缺少 version", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToString()));
             var branch = token["branch"]?.Type == JTokenType.Null ? null : token["branch"]?.ToString();
-            var modified = token["modified"]?.ToObject<DateTime>()
-                ?? throw new DownloadSourceException(DownloadFailureKind.MissingField,
-                    $"Forge BMCLAPI 构建 {version} 缺少 modified", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToString()));
-            entries.Add(new ForgeBuildEntry(version, branch, inherit) {
-                Hash = hash,
-                Category = category,
-                IsRecommended = recommendedVersion == version,
-                ReleaseTime = modified.ToLocalTime().ToString("yyyy/MM/dd HH:mm"),
-            });
+            try {
+                var modified = token["modified"]?.ToObject<DateTime>()
+                    ?? throw new DownloadSourceException(DownloadFailureKind.MissingField,
+                        $"Forge BMCLAPI 构建 {version} 缺少 modified", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToString()));
+                entries.Add(new ForgeBuildEntry(version, branch, inherit) {
+                    Hash = hash,
+                    Category = category,
+                    IsRecommended = recommendedVersion == version,
+                    ReleaseTime = modified.ToLocalTime().ToString("yyyy/MM/dd HH:mm"),
+                });
+            } catch (DownloadSourceException) {
+                throw;
+            } catch (Exception ex) {
+                throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
+                    $"Forge BMCLAPI 构建 {version} 的数据解析失败", "BMCLAPI",
+                    DownloadDiagnostics.Snippet(token.ToString()), ex);
+            }
         }
         if (entries.Count == 0) {
             throw new DownloadSourceException(DownloadFailureKind.NotFound,

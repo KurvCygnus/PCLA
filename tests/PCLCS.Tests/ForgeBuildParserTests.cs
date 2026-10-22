@@ -57,4 +57,49 @@ public class ForgeBuildParserTests {
         var entry = ForgeBuildParser.ParseBmclapiJson(json, "1.8.9", null).Single();
         Assert.Equal("11.15.1.2318-1.8.9", entry.FileVersion);
     }
+
+    [Fact]
+    public void BmclapiInvalidVersionThrowsInvalidPayload() {
+        var json = "[{\"version\":\"not-a-version\",\"branch\":null,\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[{\"category\":\"installer\",\"format\":\"jar\",\"hash\":\"i\"}]}]";
+        var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
+        Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
+        Assert.Equal("BMCLAPI", ex.Source);
+        Assert.Contains("not-a-version", ex.Message);
+    }
+
+    [Fact]
+    public void BmclapiNonStringVersionThrowsInvalidPayload() {
+        var json = "[{\"version\":{\"build\":1},\"branch\":null,\"modified\":\"2024-01-02T03:04:05Z\"}]";
+        var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
+        Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
+        Assert.NotNull(ex.Diagnostic);
+    }
+
+    [Fact]
+    public void BmclapiInvalidModifiedThrowsInvalidPayload() {
+        var json = "[{\"version\":\"47.1.0\",\"branch\":null,\"modified\":\"not-a-date\",\"files\":[]}]";
+        var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
+        Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
+        Assert.Contains("47.1.0", ex.Message);
+    }
+
+    [Fact]
+    public void BmclapiPrefersInstallerEvenWhenItComesFirst() {
+        var json = "[{\"version\":\"47.1.0\",\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[" +
+                   "{\"category\":\"installer\",\"format\":\"jar\",\"hash\":\"i\"}," +
+                   "{\"category\":\"client\",\"format\":\"zip\",\"hash\":\"c\"}]}]";
+        var entry = ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null).Single();
+        Assert.Equal("installer", entry.Category);
+        Assert.Equal("i", entry.Hash);
+    }
+
+    [Fact]
+    public void BmclapiIgnoresFileWithMismatchedFormat() {
+        var json = "[{\"version\":\"47.1.0\",\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[" +
+                   "{\"category\":\"installer\",\"format\":\"zip\",\"hash\":\"bad\"}," +
+                   "{\"category\":\"universal\",\"format\":\"zip\",\"hash\":\"u\"}]}]";
+        var entry = ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null).Single();
+        Assert.Equal("universal", entry.Category);
+        Assert.Equal("u", entry.Hash);
+    }
 }
