@@ -45,4 +45,19 @@ public class OptiFineListParserTests {
         Assert.Equal("1.12.2-OptiFine_HD_U_G5", entry.InstanceName);
         Assert.Equal("14.23.5.2859", entry.RequiredForgeVersion);
     }
+
+    [Fact]
+    public void RealOfficialPageParses() {
+        var html = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "optifine-official.html")));
+        var entries = OptiFineListParser.ParseOfficialHtml(html);
+        Assert.NotEmpty(entries);
+        Assert.All(entries, entry => Assert.Matches("^\\d+\\.", entry.Inherit));
+        Assert.All(entries, entry => Assert.Matches("^\\d{4}/\\d{1,2}/\\d{1,2}$", entry.ReleaseTime));
+    }
+
+    [Fact]
+    public void RealBmclapiListParses() {
+        var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "optifine-bmclapi.json")));
+        Assert.NotEmpty(OptiFineListParser.ParseBmclapiJson(json));
+    }
 }

@@ -1,3 +1,4 @@
+using System.IO;
 using Newtonsoft.Json.Linq;
 using PCLCS.Minecraft.Download;
 
@@ -29,5 +30,16 @@ public class FabricListParserTests {
     public void ParseRejectsInvalidJson() {
         var ex = Assert.Throws<DownloadSourceException>(() => FabricListParser.Parse("{"));
         Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
+    }
+
+    [Fact]
+    public void RealFabricListParses() {
+        var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "fabric.json")));
+        var root = FabricListParser.Parse(json);
+        Assert.NotNull(root["loader"]);
+        Assert.True(((JArray)root["loader"]!).Count > 0);
+        Assert.True(((JArray)root["game"]!).Count > 0);
+        Assert.True(((JArray)root["installer"]!).Count > 0);
+        Assert.All((JArray)root["loader"]!, entry => Assert.NotNull(entry["version"]));
     }
 }

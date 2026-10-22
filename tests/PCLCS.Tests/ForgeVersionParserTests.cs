@@ -26,4 +26,10 @@ public class ForgeVersionParserTests {
         var json = "[\"1.21.1\",\"1.20.1\",\"1.19.2\",\"1.18.2\",\"1.17.1\",\"1.16.5\",\"1.15.2\",\"1.14.4\",\"1.12.2\",\"1.7.10\"]";
         Assert.Equal(10, ForgeVersionParser.ParseBmclapiJson(json).Count);
     }
+
+    [Fact]
+    public void RealForgeIndexParses() {
+        var html = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "forge-index.html")));
+        Assert.Contains("1.2.4", ForgeVersionParser.ParseOfficialHtml(html));
+    }
 }

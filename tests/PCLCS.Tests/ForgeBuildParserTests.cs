@@ -1,3 +1,4 @@
+using System.IO;
 using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
@@ -101,5 +102,21 @@ public class ForgeBuildParserTests {
         var entry = ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null).Single();
         Assert.Equal("universal", entry.Category);
         Assert.Equal("u", entry.Hash);
+    }
+
+    [Fact]
+    public void RealForgeBuildsPageParses() {
+        var html = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "forge-builds.html")));
+        var entries = ForgeBuildParser.ParseOfficialHtml(html, "1.20.1");
+        Assert.NotEmpty(entries);
+        Assert.All(entries, entry => Assert.Equal("1.20.1", entry.Inherit));
+        Assert.Contains(entries, entry => entry.Category is "installer" or "universal" or "client");
+        Assert.All(entries, entry => Assert.Matches("^\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}$", entry.ReleaseTime!));
+    }
+
+    [Fact]
+    public void RealForgeBuildsJsonParses() {
+        var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "forge-builds-bmclapi.json")));
+        Assert.NotEmpty(ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
     }
 }

@@ -1,3 +1,4 @@
+using System.IO;
 using Newtonsoft.Json.Linq;
 using PCLCS.Minecraft.Download;
 
@@ -43,5 +44,19 @@ public class ClientListParserTests {
         var json = JObject.Parse(Manifest("1.20.1", "1.21"));
         Assert.True(ClientListParser.ContainsVersion(json, "1.21"));
         Assert.False(ClientListParser.ContainsVersion(json, "1.21.0"));
+    }
+
+    [Fact]
+    public void RealMojangManifestParses() {
+        var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "mojang-manifest.json")));
+        var root = ClientListParser.Parse(json, "Mojang 官方源");
+        Assert.True(((JArray)root["versions"]!).Count >= 200);
+    }
+
+    [Fact]
+    public void RealBmclapiManifestParses() {
+        var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "bmclapi-manifest.json")));
+        var root = ClientListParser.Parse(json, "BMCLAPI");
+        Assert.NotEmpty(ClientListParser.ComputeDrops(root));
     }
 }

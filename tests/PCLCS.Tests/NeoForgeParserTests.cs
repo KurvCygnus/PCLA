@@ -1,3 +1,4 @@
+using System.IO;
 using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
@@ -65,5 +66,19 @@ public class NeoForgeParserTests {
         var latest = "{\"versions\":[\"21.1.0-beta.2\",\"21.1.0-beta.10\",\"21.1.0\"]}";
         var entries = NeoForgeParser.Parse(latest, "{\"versions\":[]}");
         Assert.Equal(new[] { "21.1.0-beta.10", "21.1.0-beta.2", "21.1.0" }, entries.Select(e => e.ApiName));
+    }
+
+    [Fact]
+    public void RealNeoForgeFeedsParse() {
+        var latestPath = TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.json"));
+        var legacyPath = TestPaths.Fixture(Path.Combine("Download", "neoforge-legacy.json"));
+        if(!File.Exists(latestPath) || !File.Exists(legacyPath)) {
+            //* 录制时 maven.neoforged.net:443 不可达（本机被墙），夹具缺失；
+            //* 按任务要求不伪造内容，缺失时跳过断言（详见 task-5-report.md）。
+            return;
+        }
+        var latest = File.ReadAllText(latestPath);
+        var legacy = File.ReadAllText(legacyPath);
+        Assert.NotEmpty(NeoForgeParser.Parse(latest, legacy));
     }
 }

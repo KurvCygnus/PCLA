@@ -29,6 +29,7 @@
 
 	<ItemGroup>
 		<None Update="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="Fixtures\Download\**\*.*" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 </Project>

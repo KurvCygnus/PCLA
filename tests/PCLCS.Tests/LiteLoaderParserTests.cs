@@ -1,3 +1,4 @@
+using System.IO;
 using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
@@ -52,5 +53,16 @@ public class LiteLoaderParserTests {
         var utc = DateTimeOffset.FromUnixTimeSeconds(timestamp);
         var local = utc.ToLocalTime();
         return local.Add(TimeZoneInfo.Local.GetUtcOffset(utc)).ToString("yyyy/MM/dd HH:mm");
+    }
+
+    [Fact]
+    public void RealLiteLoaderListParses() {
+        var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "liteloader.json")));
+        var entries = LiteLoaderParser.Parse(json);
+        Assert.NotEmpty(entries);
+        Assert.DoesNotContain(entries, entry => entry.Inherit.StartsWith("1.5") || entry.Inherit.StartsWith("1.6"));
+        Assert.All(entries, entry => Assert.Equal(
+            "liteloader-installer-" + entry.Inherit + (entry.Inherit is "1.8" or "1.9" ? ".0" : "") + "-00-SNAPSHOT.jar",
+            entry.FileName));
     }
 }
