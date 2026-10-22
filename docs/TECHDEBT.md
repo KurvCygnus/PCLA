@@ -132,3 +132,28 @@
 - **残留：`ArgumentLine` 的并发状态。** 当前实现没有规则缓存：`Deduplicate` 每次调用新建 `List`，`Split` 无可变静态状态，与 VB 原实现的 `List` + 线性扫描一致，不存在 `Dictionary` 缓存竞态。若以后为规则求值引入缓存，必须使用并发容器（`ConcurrentDictionary`），不要退回普通 `Dictionary`。
 - **已偿还：实机差分。** 2026-10-21 晚用 `D:\MC\.minecraft` 的三个真实实例（Forge 1.20.1 ZombieCraft、Forge 1.20.1-47.4.23、Fabric 1.21.8）各启动一次，全部进入主菜单并完成材质加载。ZombieCraft 的新旧日志参数块各 80 行，逐行比对仅 4 处环境差异（`-Xmx` 设置、离线用户名、两个会话 token），其余参数（`-cp`、Forge 模块参数、`--add-opens`、GC、游戏参数）完全一致；比对同时发现并修复了丢失的 `GC 设置：…` 日志行（`517a028`）。
 - **残留：`McInstance` 仍是上帝类**，`${...}` 展开仍留在 VB（依赖登录态、路径、窗口尺寸与 UI 线程）。
+
+## 6. 下载源映射的既有缺陷（2026-10-21）
+
+以下三条在 `PCLCS\Minecraft\Download\DownloadSources.cs` 与 legacy `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb` 中同样存在。抽离时按"与 legacy 逐字一致"处理，**本轮仅记录，不修**。
+
+### 6.1 `staging-api.modrinth.com` 先被 `api.modrinth.com` 规则命中
+
+- **现象与影响**：`Mod` 按顺序执行 `Replace`，而 `"api.modrinth.com"` 是 `"staging-api.modrinth.com"` 的子串，第一条规则先命中，`https://staging-api.modrinth.com/v2/...` 被改写成 `https://staging-mod.mcimirror.top/modrinth/v2/...`；针对 `staging-api` 的第二条规则永远无法命中。staging API 请求因此指向不存在的主机名，且路径多出 `staging-` 前缀。
+- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:45-46` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1307-1308`。
+- **期望行为**：`staging-api.modrinth.com` 与 `api.modrinth.com` 一样映射到 `mod.mcimirror.top/modrinth`，不产生 `staging-mod.mcimirror.top`。
+- **处理**：本轮仅记录，不修。
+
+### 6.2 modded 库忽略 `preferOfficial`，Forge 官方 Maven 还会产生两个相同候选
+
+- **现象与影响**：`Library` 命中 `minecraftforge`/`fabricmc`/`neoforged` 时直接返回 `{ maven, libraries }`，从不尝试原始地址，`preferOfficial` 在该分支完全无效；`MavenHosts` 只覆盖 `piston-data`/`piston-meta`/`libraries.minecraft.net`，对 `https://maven.minecraftforge.net/...` 两次替换都不命中，`maven` 与 `libraries` 完全相同，调用方会对同一 URL 重试两遍。影响：偏好官方源时仍只走镜像；镜像故障时同一地址重复请求，白白消耗一次超时预算。
+- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:26-30` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1263-1273`。
+- **期望行为**：modded 库在 `preferOfficial` 为真时把原始地址作为首候选，并对候选列表去重。
+- **处理**：本轮仅记录，不修。
+
+### 6.3 三主机之外的资产地址没有备用源
+
+- **现象与影响**：`Assets` 只把 `resources.download.minecraft.net` 归一为 https，再对 `piston-data`/`piston-meta`/`resources` 三个主机生成镜像；其他宿主（自建镜像、第三方 CDN）以及 `http://piston-*` 这类明文地址替换后 `mirror` 与 `original` 相同，`Order` 的 `Union` 去重后只剩一个候选。影响：这些地址没有源切换能力，单点失败即整体失败；`http://piston-*` 还停留在明文 HTTP。
+- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:16-23` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1249-1258`。
+- **期望行为**：未知宿主至少保留一个可用候选，`http://piston-*` 与 resources 一样做 https 归一。
+- **处理**：本轮仅记录，不修。
