@@ -1,3 +1,4 @@
+Imports System.Windows.Automation.Peers
 Imports System.Windows.Markup
 
 <ContentProperty("Inlines")>
@@ -107,6 +108,17 @@ Public Class MyRadioButton
             Logger.Error(ex, "单选按钮勾选改变错误", LogBehavior.Toast)
         End Try
     End Sub
+
+    ''' <summary>
+    ''' 以编程方式选中或取消选中，供 UI Automation 调用。
+    ''' </summary>
+    Public Sub PerformCheck(value As Boolean)
+        SetChecked(value, raiseByMouse:=True, anime:=True)
+    End Sub
+
+    Protected Overrides Function OnCreateAutomationPeer() As AutomationPeer
+        Return New RadioButtonPeer(Me)
+    End Function
 
     Public ReadOnly Property Inlines As InlineCollection
         Get

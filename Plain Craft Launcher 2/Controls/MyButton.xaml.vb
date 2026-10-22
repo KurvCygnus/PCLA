@@ -1,3 +1,4 @@
+Imports System.Windows.Automation.Peers
 Imports System.Windows.Markup
 
 <ContentProperty("Inlines")>
@@ -144,9 +145,17 @@ Public Class MyButton
     Private IsMouseDown As Boolean = False
     Private Sub Button_MouseUp(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonUp
         If Not IsMouseDown Then Return
+        PerformClick()
+    End Sub
+
+    ''' <summary>
+    ''' 以编程方式触发一次点击，供 UI Automation 调用。
+    ''' </summary>
+    Public Sub PerformClick()
         Logger.Info($"按下按钮：{Text}")
-        RaiseEvent Click(sender, e)
-        RaiseCustomEvent() '自定义事件
+        Dim Args As New MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) With {.RoutedEvent = Mouse.MouseUpEvent}
+        RaiseEvent Click(Me, Args)
+        RaiseCustomEvent()
     End Sub
     Private Sub Button_MouseDown(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonDown
         IsMouseDown = True
@@ -172,5 +181,9 @@ Public Class MyButton
         IsMouseDown = False
         AniStart(AaScaleTransform(PanFore, 1 - CType(PanFore.RenderTransform, ScaleTransform).ScaleX, 800,, New AniEaseOutFluent(AniEasePower.Strong)), "MyButton Scale " & Uuid)
     End Sub
+
+    Protected Overrides Function OnCreateAutomationPeer() As AutomationPeer
+        Return New ButtonPeer(Me)
+    End Function
 
 End Class

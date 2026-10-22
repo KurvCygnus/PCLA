@@ -185,6 +185,8 @@
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
+    <Reference Include="UIAutomationProvider" />
+    <Reference Include="UIAutomationTypes" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="Application.xaml">
@@ -469,6 +471,9 @@
     <Compile Include="Controls\MyListItem.xaml.vb">
       <DependentUpon>MyListItem.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\Automation\AutomationPeerBase.vb" />
+    <Compile Include="Controls\Automation\ButtonPeer.vb" />
+    <Compile Include="Controls\Automation\RadioButtonPeer.vb" />
     <Compile Include="Controls\MyButton.xaml.vb">
       <DependentUpon>MyButton.xaml</DependentUpon>
     </Compile>
