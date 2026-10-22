@@ -10,6 +10,12 @@ public sealed class DownloadSourceException : Exception {
     /// <summary>该源是否确定没有可用结果，可以直接切换到下一个源。</summary>
     public bool IsUnavailable => Kind is DownloadFailureKind.NotFound or DownloadFailureKind.TargetVersionMissing;
 
+    /// <summary>创建异常并保留失败分类、下载源与仅用于日志的诊断片段。</summary>
+    /// <param name="kind">失败分类。</param>
+    /// <param name="message">面向用户的消息，不得包含原始响应。</param>
+    /// <param name="source">出错的下载源名称。</param>
+    /// <param name="diagnostic">截断后的响应片段等诊断信息。</param>
+    /// <param name="inner">底层异常。</param>
     public DownloadSourceException(DownloadFailureKind kind, string message, string? source = null,
         string? diagnostic = null, Exception? inner = null) : base(message, inner) {
         Kind = kind;

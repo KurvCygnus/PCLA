@@ -28,4 +28,28 @@ public class DownloadErrorTests {
         Assert.Contains(new string('a', 10), snippet);
         Assert.DoesNotContain(new string('a', 11), snippet);
     }
+
+    [Fact]
+    public void SnippetHandlesEmptyAndNullPayload() {
+        Assert.Equal("响应为空", DownloadDiagnostics.Snippet(""));
+        Assert.Equal("响应为空", DownloadDiagnostics.Snippet(null));
+    }
+
+    [Fact]
+    public void SnippetDefaultsTo512Characters() {
+        var text = new string('a', 600);
+        var snippet = DownloadDiagnostics.Snippet(text);
+        Assert.Contains("长度 600", snippet);
+        Assert.Contains(new string('a', 512), snippet);
+        Assert.DoesNotContain(new string('a', 513), snippet);
+    }
+
+    [Theory]
+    [InlineData(DownloadFailureKind.InvalidPayload)]
+    [InlineData(DownloadFailureKind.TooFewEntries)]
+    [InlineData(DownloadFailureKind.MissingField)]
+    [InlineData(DownloadFailureKind.Unexpected)]
+    public void PayloadFailuresAreNotMarkedUnavailable(DownloadFailureKind kind) {
+        Assert.False(new DownloadSourceException(kind, "无").IsUnavailable);
+    }
 }
