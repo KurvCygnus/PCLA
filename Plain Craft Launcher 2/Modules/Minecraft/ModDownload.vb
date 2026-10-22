@@ -214,15 +214,7 @@ Public Module ModDownload
                 }, Loader.IsForceRestarting)
         End Select
         '提取所有 Drop 序数
-        Dim Drops As New List(Of Integer)
-        For Each Version As JObject In Loader.Output.Value("versions")
-            Dim Id As String = Version("id").ToString
-            If Id.Contains("-") Then Continue For
-            Dim Drop As Integer = McVersion.VersionToDrop(Id)
-            If Drop = 209 Then Continue For
-            Drops.Add(Drop)
-        Next
-        AllDrops = Drops.Distinct.OrderByDescending(Function(d) d).ToList()
+        AllDrops = PCLCS.Minecraft.Download.ClientListParser.ComputeDrops(Loader.Output.Value).ToList
     End Sub
 
     '各个下载源的分加载器
@@ -232,10 +224,9 @@ Public Module ModDownload
     Public DlClientListMojangLoader As New LoaderTask(Of String, DlClientListResult)("DlClientList Mojang", AddressOf DlClientListMojangMain)
     Private Sub DlClientListMojangMain(Loader As LoaderTask(Of String, DlClientListResult))
         Dim StartTime As Long = GetTimeMs()
-        Dim Json As JObject = NetRequestByClientRetry("https://launchermeta.mojang.com/mc/game/version_manifest.json", RequireJson:=True).DeserializeJson()
+        Dim ResultText As String = NetRequestByClientRetry("https://launchermeta.mojang.com/mc/game/version_manifest.json", RequireJson:=True)
         Try
-            Dim Versions As JArray = Json("versions")
-            If Versions.Count < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Json.ToString & "）")
+            Dim Json = PCLCS.Minecraft.Download.ClientListParser.Parse(ResultText, "Mojang 官方源")
             '确定官方源是否可用
             If Not DlPreferMojang Then
                 Dim DeltaTime = GetTimeMs() - StartTime
@@ -272,23 +263,24 @@ Public Module ModDownload
     ''' </summary>
     Public DlClientListBmclapiLoader As New LoaderTask(Of String, DlClientListResult)("DlClientList Bmclapi", AddressOf DlClientListBmclapiMain)
     Private Sub DlClientListBmclapiMain(Loader As LoaderTask(Of String, DlClientListResult))
-        Dim Json As JObject = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/mc/game/version_manifest.json", RequireJson:=True).DeserializeJson()
+        Dim ResultText As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/mc/game/version_manifest.json", RequireJson:=True)
         Try
-            Dim Versions As JArray = Json("versions")
-            If Versions.Count < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Json.ToString & "）")
+            Dim Json = PCLCS.Minecraft.Download.ClientListParser.Parse(ResultText, "BMCLAPI")
             '添加 PCL 特供项
-            If FileUtils.Exists(PathTemp & "Cache\download.json") Then Versions.Merge(FileUtils.ReadAsJson(PathTemp & "Cache\download.json"))
+            If FileUtils.Exists(PathTemp & "Cache\download.json") Then
+                CType(Json("versions"), JArray).Merge(FileUtils.ReadAsJson(PathTemp & "Cache\download.json"))
+            End If
             '检查是否有要求的版本（#5195）
-            If Not String.IsNullOrEmpty(Loader.Input) Then
-                Dim Id = Loader.Input
-                If DlClientListLoader.Output.Value IsNot Nothing AndAlso Not DlClientListLoader.Output.Value("versions").Any(Function(v) v("id") = Id) Then
-                    Throw New Exception("BMCLAPI 源未包含目标版本 " & Id)
-                End If
+            If Not String.IsNullOrEmpty(Loader.Input) AndAlso
+               Not PCLCS.Minecraft.Download.ClientListParser.ContainsVersion(Json, Loader.Input) Then
+                Throw New PCLCS.Minecraft.Download.DownloadSourceException(
+                    PCLCS.Minecraft.Download.DownloadFailureKind.TargetVersionMissing,
+                    $"BMCLAPI 源未包含目标版本 {Loader.Input}", "BMCLAPI")
             End If
             '返回
             Loader.Output = New DlClientListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Json}
         Catch ex As Exception
-            Throw New Exception("Minecraft BMCLAPI 版本列表解析失败（" & Json.ToString & "）", ex)
+            Throw New Exception("Minecraft BMCLAPI 版本列表解析失败（" & ResultText & "）", ex)
         End Try
     End Sub
 
@@ -439,6 +431,10 @@ Public Module ModDownload
                 Entry.InstanceName = Entry.Inherit & "-OptiFine_" & Name(i).AfterFirst(" ").Replace(" ", "_")
                 Versions.Add(Entry)
             Next
+#If CONFIG = "Debug" Then
+            DlParityCompare("OptiFine 官方源", Versions,
+                PCLCS.Minecraft.Download.OptiFineListParser.ParseOfficialHtml(Result))
+#End If
             Loader.Output = New DlOptiFineListResult With {.IsOfficial = True, .SourceName = "OptiFine 官方源", .Value = Versions}
         Catch ex As Exception
             Throw New Exception("OptiFine 官方源版本列表解析失败（" & Result & "）", ex)
@@ -734,6 +730,10 @@ Public Module ModDownload
             Throw New Exception("Forge 官方源版本列表解析失败（" & Result & "）", ex)
         End Try
         If Not Versions.Any() Then Throw New Exception("无")
+#If CONFIG = "Debug" Then
+        DlParityCompare("Forge 官方源构建", Versions,
+            PCLCS.Minecraft.Download.ForgeBuildParser.ParseOfficialHtml(Result, Loader.Input))
+#End If
         Loader.Output = Versions
     End Sub
 
@@ -784,6 +784,10 @@ Public Module ModDownload
                 '添加项
                 Versions.Add(Entry)
             Next
+#If CONFIG = "Debug" Then
+            DlParityCompare("Forge BMCLAPI 构建", Versions,
+                PCLCS.Minecraft.Download.ForgeBuildParser.ParseBmclapiJson(Json.ToString, Loader.Input, Recommended))
+#End If
         Catch ex As Exception
             Throw New Exception("Forge BMCLAPI 版本列表解析失败（" & Json.ToString & "）", ex)
         End Try
@@ -912,6 +916,10 @@ Public Module ModDownload
         Try
             Loader.Output = New DlNeoForgeListResult With {.IsOfficial = True, .SourceName = "NeoForge 官方源",
                 .Value = GetNeoForgeEntries(ResultLatest, ResultLegacy)}
+#If CONFIG = "Debug" Then
+            DlParityCompare("NeoForge 官方源", Loader.Output.Value,
+                PCLCS.Minecraft.Download.NeoForgeParser.Parse(ResultLatest, ResultLegacy))
+#End If
         Catch ex As Exception
             Throw New Exception("NeoForge 官方源版本列表解析失败（" & ResultLatest & vbCrLf & vbCrLf & ResultLegacy & "）", ex)
         End Try
@@ -1383,6 +1391,52 @@ Public Module ModDownload
             If Loader.Key.State = LoadState.Loading Then Loader.Key.Cancel()
         Next
     End Sub
+
+#End Region
+
+#Region "DlParity | 临时差分"
+
+#If CONFIG = "Debug" Then
+    '//* 临时差分：仅在 Debug 产物中比较旧 VB 解析与 C# 解析，验证完成后随旧解析一并删除。
+    '! 新旧条目并非同一类型，成员集合也不同，因此先按成员名求交集再比较，否则成员顺序与独有成员会造成误报。
+    Private Sub DlParityCompare(Of TOld, TNew)(Name As String, OldItems As List(Of TOld), NewItems As IReadOnlyList(Of TNew))
+        Logger.Info($"[Parity] {Name} 旧={OldItems.Count} 新={NewItems.Count}")
+        If OldItems.Count <> NewItems.Count Then Logger.Warn($"[Parity] {Name} 数量不一致")
+        Dim SharedNames As List(Of String) = Nothing
+        For i = 0 To Math.Min(OldItems.Count, NewItems.Count) - 1
+            Dim OldValues = DlParityValues(OldItems(i))
+            Dim NewValues = DlParityValues(NewItems(i))
+            If SharedNames Is Nothing Then
+                SharedNames = OldValues.Keys.Intersect(NewValues.Keys).OrderBy(Function(key) key).ToList()
+                Dim OnlyOld = String.Join(",", OldValues.Keys.Except(NewValues.Keys).OrderBy(Function(key) key))
+                Dim OnlyNew = String.Join(",", NewValues.Keys.Except(OldValues.Keys).OrderBy(Function(key) key))
+                If OnlyOld <> "" OrElse OnlyNew <> "" Then
+                    Logger.Info($"[Parity] {Name} 仅旧侧：{OnlyOld}；仅新侧：{OnlyNew}")
+                End If
+            End If
+            Dim OldText = DlParityDump(OldValues, SharedNames)
+            Dim NewText = DlParityDump(NewValues, SharedNames)
+            If OldText <> NewText Then Logger.Warn($"[Parity] {Name} 第 {i} 项不一致：旧={OldText} 新={NewText}")
+        Next
+    End Sub
+
+    Private Function DlParityValues(Item As Object) As Dictionary(Of String, String)
+        Dim Values As New Dictionary(Of String, String)
+        For Each Field In Item.GetType().GetFields()
+            If Field.Name <> "JsonToken" Then Values(Field.Name) = Convert.ToString(Field.GetValue(Item))
+        Next
+        For Each Prop In Item.GetType().GetProperties()
+            If Prop.CanRead AndAlso Prop.GetIndexParameters().Length = 0 Then
+                Values(Prop.Name) = Convert.ToString(Prop.GetValue(Item))
+            End If
+        Next
+        Return Values
+    End Function
+
+    Private Function DlParityDump(Values As Dictionary(Of String, String), Names As List(Of String)) As String
+        Return String.Join("|", Names.Select(Function(key) $"{key}={Values(key)}"))
+    End Function
+#End If
 
 #End Region
 
