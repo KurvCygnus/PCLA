@@ -79,7 +79,7 @@
 | `PCLCS\Launch\LaunchUtils.cs` | 0 | 3 | 其他(1) / 文档注释(1) | 保留 |
 | `PCLCS\Minecraft\Download\ClientListParser.cs` | 0 | 7 | 可简化/现代化(5) / 未使用/冗余(2) | 保留 |
 | `PCLCS\Minecraft\Download\FabricListParser.cs` | 0 | 2 | 未使用/冗余(2) | 保留 |
-| `PCLCS\Minecraft\Download\ForgeBuildParser.cs` | 0 | 3 | 未使用/冗余(3) | 已修 / 保留 |
+| `PCLCS\Minecraft\Download\ForgeBuildParser.cs` | 0 | 3 | 未使用/冗余(3) | 保留 |
 | `PCLCS\Minecraft\Download\ForgeVersionParser.cs` | 0 | 4 | 未使用/冗余(2) / 可简化/现代化(2) | 保留 |
 | `PCLCS\Minecraft\Download\LiteLoaderParser.cs` | 0 | 2 | 未使用/冗余(2) | 保留 |
 | `PCLCS\Minecraft\Download\NeoForgeParser.cs` | 0 | 4 | 可简化/现代化(3) / 未使用/冗余(1) | 保留 |
@@ -126,7 +126,7 @@
 | `Plain Craft Launcher 2\Controls\MyTextBox.vb` | 0 | 19 | 命名规则(16) / 可简化/现代化(2) | 保留 |
 | `Plain Craft Launcher 2\Controls\MyTextButton.vb` | 0 | 4 | 命名规则(4) | 保留 |
 | `Plain Craft Launcher 2\Controls\MyVirtualizingElement.vb` | 0 | 13 | 命名规则(13) | 保留 |
-| `Plain Craft Launcher 2\FormMain.xaml.vb` | 0 | 87 | 命名规则(71) / 可简化/现代化(11) | 已修 / 保留 |
+| `Plain Craft Launcher 2\FormMain.xaml.vb` | 0 | 87 | 命名规则(71) / 可简化/现代化(11) | 保留 |
 | `Plain Craft Launcher 2\Modules\Base\ModAnimation.vb` | 0 | 209 | 命名规则(209) | 保留 |
 | `Plain Craft Launcher 2\Modules\Base\ModBase.vb` | 0 | 130 | 命名规则(126) / 其他(4) | 保留 |
 | `Plain Craft Launcher 2\Modules\Base\ModLoader.vb` | 0 | 106 | 命名规则(98) / 可简化/现代化(8) | 保留 |
@@ -135,7 +135,7 @@
 | `Plain Craft Launcher 2\Modules\Base\MyBitmap.vb` | 0 | 32 | 命名规则(31) / 其他(1) | 保留 |
 | `Plain Craft Launcher 2\Modules\Base\PclLogger.vb` | 0 | 12 | 命名规则(12) | 保留 |
 | `Plain Craft Launcher 2\Modules\Minecraft\ModCrash.vb` | 0 | 123 | 命名规则(117) / 其他(4) | 保留 |
-| `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb` | 0 | 139 | 命名规则(137) / 未使用/冗余(2) | 已修 / 保留 |
+| `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb` | 0 | 139 | 命名规则(137) / 未使用/冗余(2) | 保留 |
 | `Plain Craft Launcher 2\Modules\Minecraft\ModJava.vb` | 0 | 63 | 命名规则(63) | 保留 |
 | `Plain Craft Launcher 2\Modules\Minecraft\ModLaunch.vb` | 0 | 204 | 命名规则(199) / 未使用/冗余(3) | 保留 |
 | `Plain Craft Launcher 2\Modules\Minecraft\ModMinecraft.vb` | 0 | 243 | 命名规则(236) / 可简化/现代化(3) | 保留 |

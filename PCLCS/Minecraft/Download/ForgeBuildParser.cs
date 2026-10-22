@@ -16,6 +16,7 @@ public sealed class ForgeBuildEntry : IComparable<ForgeBuildEntry> {
         VersionName = version;
         Version = new Version(version);
         Inherit = inherit;
+        Branch = branch;
         FileVersion = branch is null ? version : version + "-" + branch;
     }
 
@@ -27,6 +28,9 @@ public sealed class ForgeBuildEntry : IComparable<ForgeBuildEntry> {
 
     /// <summary>对应的 Minecraft 版本。</summary>
     public string Inherit { get; }
+
+    /// <summary>文件版本的分支后缀，可能是修正后的值；无分支时为 null。</summary>
+    public string? Branch { get; }
 
     /// <summary>发布时间，格式为 yyyy/MM/dd HH:mm。</summary>
     public string? ReleaseTime { get; internal set; }

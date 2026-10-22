@@ -46,7 +46,7 @@
 ### P0-4 全局设置是字符串字典
 
 - 383 处 `Settings.Get/Set` 调用，192 个声明键（`Pages\PageSetup\Settings.vb:7` 起），全部字符串索引；键不存在时抛 `KeyNotFoundException` 并被宽泛捕获（`Settings.vb:282-295`）。
-- 同一键在 `ModDownload.vb:199,393,499,648,883,1008,1107` 重复读取 7 次，任何一处拼写错误都只会静默落回默认值。
+- 同一键在 `ModDownload.vb:199,370,442,571,701,791,859` 重复读取 7 次，任何一处拼写错误都只会静默落回默认值（2026-10-22 下载清单抽离后仍是 7 次读取，只统一了读取后的 `SourcePolicy.GetPlan` 调用）。
 - 迁移逻辑没有 schema 版本，全部是 `UpgradeSub` 里的代码分支（`FormMain.xaml.vb:477-556`）。
 - 方向：用 `MeloongCore.Shared.General.Config`（`PCLCS\Configs.cs:4-17` 已有用法）建强类型模型，`Settings` 只保留兼容读写。
 
@@ -68,8 +68,8 @@
 
 ### 2.1 网络与下载
 
-- 重试是乘法关系：`NetRequestByClientRetry`（`ModNet.vb:44-88`：10 s → 30 s → 4 s，429 固定睡 10 s）之上还有 `DlModRequest` 的源列表重试（`ModDownload.vb:1176-1209`）和 `DlSourceLoader` 的竞速循环（`:1317-1380`），一次逻辑请求可能放大成几十次。
-- 无 DTO：所有响应都是 `JObject`/`JToken`，schema 漂移表现为 `NullReferenceException` 或"不是有效的 json 文件"。
+- 重试是乘法关系：`NetRequestByClientRetry`（`ModNet.vb:44-88`：10 s → 30 s → 4 s，429 固定睡 10 s）之上还有 `DlModRequest` 的源列表重试（`ModDownload.vb:903-930`）和 `DlSourceLoader` 的竞速循环（`:999-1066`），一次逻辑请求可能放大成几十次。
+- 无 DTO：下载清单已有类型化解析器（`PCLCS\Minecraft\Download\*Parser.cs`），其余响应都是 `JObject`/`JToken`，schema 漂移表现为 `NullReferenceException` 或“不是有效的 json 文件”。
 - 无代理抽象：代码里没有 `IWebProxy`，只能吃系统代理；凭据只有 `x-api-key` 一种头部注入（`ModSecret.vb:26-38`）。
 - 依赖 `CacheCow.Client` 的 `FileStore`（`ModNet.vb:226-229`）与 `.NET Framework` 绑定；全局 TLS 回调把 `Sender` 强转成 `HttpWebRequest`（`:1916-1931`），对 `HttpClient` 已无效，且是进程级安全口子。
 - 临时文件随机名 + 会话启动清空（`:1806-1815`），崩溃即留下孤儿文件；没有跨进程续传。
@@ -135,32 +135,40 @@
 
 ## 6. 下载源映射的既有缺陷（2026-10-21）
 
-以下三条在 `PCLCS\Minecraft\Download\DownloadSources.cs` 与 legacy `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb` 中同样存在。抽离时按"与 legacy 逐字一致"处理，**本轮仅记录，不修**。
+以下四条是抽离时按“与 legacy 逐字一致”保留的既有行为，**本轮仅记录，不修**；legacy 解析代码已随抽离删除，位置以现行实现为准。
 
 ### 6.1 `staging-api.modrinth.com` 先被 `api.modrinth.com` 规则命中
 
 - **现象与影响**：`Mod` 按顺序执行 `Replace`，而 `"api.modrinth.com"` 是 `"staging-api.modrinth.com"` 的子串，第一条规则先命中，`https://staging-api.modrinth.com/v2/...` 被改写成 `https://staging-mod.mcimirror.top/modrinth/v2/...`；针对 `staging-api` 的第二条规则永远无法命中。staging API 请求因此指向不存在的主机名，且路径多出 `staging-` 前缀。
-- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:60-61` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1307-1308`。
+- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:60-61`；legacy `ModDownload.vb` 的对应实现已随抽离删除。
 - **期望行为**：`staging-api.modrinth.com` 与 `api.modrinth.com` 一样映射到 `mod.mcimirror.top/modrinth`，不产生 `staging-mod.mcimirror.top`。
 - **处理**：本轮仅记录，不修。
 
 ### 6.2 modded 库忽略 `preferOfficial`，Forge 官方 Maven 还会产生两个相同候选
 
 - **现象与影响**：`Library` 命中 `minecraftforge`/`fabricmc`/`neoforged` 时直接返回 `{ maven, libraries }`，从不尝试原始地址，`preferOfficial` 在该分支完全无效；`MavenHosts` 只覆盖 `piston-data`/`piston-meta`/`libraries.minecraft.net`，对 `https://maven.minecraftforge.net/...` 两次替换都不命中，`maven` 与 `libraries` 完全相同，调用方会对同一 URL 重试两遍。影响：`preferOfficial` 的 true 分支完全无效；对 `maven.minecraftforge.net` 这类外部宿主，两个候选都是官方地址、镜像根本不在候选里；镜像故障时同一地址还会重复请求，白白消耗一次超时预算。
-- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:36-40` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1263-1273`。
+- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:36-40`；legacy `ModDownload.vb` 的对应实现已随抽离删除（`DlSourceLibraryGet` 现在只做转调）。
 - **期望行为**：modded 库在 `preferOfficial` 为真时把原始地址作为首候选，并对候选列表去重。
 - **处理**：本轮仅记录，不修。
 
 ### 6.3 三主机之外的资产地址没有备用源
 
 - **现象与影响**：`Assets` 只把 `resources.download.minecraft.net` 归一为 https，再对 `piston-data`/`piston-meta`/`resources` 三个主机生成镜像；其他宿主（自建镜像、第三方 CDN）以及 `http://piston-*` 这类明文地址替换后 `mirror` 与 `original` 相同，`Order` 的 `Union` 去重后只剩一个候选。影响：这些地址没有源切换能力，单点失败即整体失败；`http://piston-*` 还停留在明文 HTTP。
-- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:23-30` ↔ `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:1249-1258`。
+- **位置**：`PCLCS\Minecraft\Download\DownloadSources.cs:23-30`；legacy `ModDownload.vb` 的对应实现已随抽离删除。
 - **期望行为**：未知宿主至少保留一个可用候选，`http://piston-*` 与 resources 一样做 https 归一。
 - **处理**：本轮仅记录，不修。
 
 ### 6.4 Forge 官方页 IsRecommended 恒为 false
 
 - **现象与影响**：`ForgeBuildParser.ParseOfficialHtml` 解析 1.20.1 真实页面（`tests\PCLCS.Tests\Fixtures\Download\forge-builds.html`，137 个构建）时，所有条目的 `IsRecommended` 全部为 false。表格行内的推荐徽标是 `class="promo-latest promo-recommended  fa"`（`fa` 在末尾、中间双空格），无法被子串 `"fa promo-recommended"` 命中；该子串只命中页面侧栏的 `<i class="fa promo-recommended"></i>Download Recommended` 标签（夹具内偏移 34666，全页仅此一处；表格行内的徽标在偏移 38469）。侧栏命中与否取决于 chunk 切分边界，与构建条目无关，因此每个构建块的判定结果恒为 false。
-- **位置**：`PCLCS\Minecraft\Download\ForgeBuildParser.cs:95` ↔ legacy `Plain Craft Launcher 2\Modules\Minecraft\ModDownload.vb:694`（`Dim IsRecommended As Boolean = VersionCode.Contains("fa promo-recommended")`，同样的子串，缺陷同源）。
+- **位置**：`PCLCS\Minecraft\Download\ForgeBuildParser.cs:99`；legacy `ModDownload.vb:694` 的同样子串判定已随旧解析删除，缺陷同源。
 - **期望行为**：判定应基于构建条目自身 chunk 内的推荐徽标（如匹配 `promo-recommended` 而不带 `fa ` 前缀），页面标注 Recommended 的构建（当前为 47.4.27）的 `IsRecommended` 应为 true。
 - **处理**：本轮仅记录，不修。
+
+## 7. 下载清单抽离的偿还与残留（2026-10-22）
+
+- **已偿还：七类清单解析的重复实现。** 客户端、OptiFine、Forge、NeoForge、LiteLoader、Fabric 共七类清单的 HTML/JSON 解析从 `ModDownload.vb` 移入 `PCLCS\Minecraft\Download\*Parser.cs`，`ModDownload.vb` 从 1443 行降到 1099 行；旧的正则常量（`RegexSearch`/`RegexSeek`）与临时差分区（`DlParity`）全部删除，每个解析器都有对应的 `tests\PCLCS.Tests\*ParserTests.cs`。
+- **已偿还：`TimeSplit` 死代码。** Forge BMCLAPI 构建解析里的 `TimeSplit` 计算从未被使用，已随旧解析删除。
+- **残留：NeoForge BMCLAPI 误标官方源。** `DlNeoForgeListBmclapiMain` 仍写 `.IsOfficial = True`，上层无法区分镜像与官方；修复涉及 UI 来源标注，留待单独评估。
+- **残留：Forge 构建分支正则未转义。** `PCLCS\Minecraft\Download\ForgeBuildParser.cs:82` 用 `$"(?<=-{name}-)..."` 拼正则，`name`（如 `47.1.0`）未 `Regex.Escape`，且 `[a-z]+.[a-z]{3}` 的 `.` 未转义；当前构建号只含数字与点，未触发误判，换成含正则元字符的版本名会失配。
+- **残留：LiteLoader 的 `OfficialError` 无写入点。** `ModDownload.vb:752` 声明了 `DlLiteLoaderListResult.OfficialError`，全仓库没有任何赋值，恒为 `Nothing`；它是旧“官方源错误备用”方案的遗留字段，可随下次 UI 收敛删除。

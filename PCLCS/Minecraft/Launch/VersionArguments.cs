@@ -124,6 +124,9 @@ public static class VersionArguments {
                     }
                     break;
                 }
+                default:
+                    warn?.Invoke($"忽略无法识别的参数项类型 {token.Type}");
+                    break;
             }
         }
     }

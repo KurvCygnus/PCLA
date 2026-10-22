@@ -196,23 +196,8 @@ Public Module ModDownload
     ''' </summary>
     Public DlClientListLoader As New LoaderTask(Of String, DlClientListResult)("DlClientList Main", AddressOf DlClientListMain)
     Private Sub DlClientListMain(Loader As LoaderTask(Of String, DlClientListResult))
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListMojangLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListMojangLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListMojangLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of String, DlClientListResult), Integer)(DlClientListBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlClientListMojangLoader, DlClientListBmclapiLoader), Loader.IsForceRestarting)
         '提取所有 Drop 序数
         AllDrops = PCLCS.Minecraft.Download.ClientListParser.ComputeDrops(Loader.Output.Value).ToList
     End Sub
@@ -382,23 +367,8 @@ Public Module ModDownload
     ''' </summary>
     Public DlOptiFineListLoader As New LoaderTask(Of Integer, DlOptiFineListResult)("DlOptiFineList Main", AddressOf DlOptiFineListMain)
     Private Sub DlOptiFineListMain(Loader As LoaderTask(Of Integer, DlOptiFineListResult))
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListOfficialLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListOfficialLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListOfficialLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlOptiFineListResult), Integer)(DlOptiFineListBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlOptiFineListOfficialLoader, DlOptiFineListBmclapiLoader), Loader.IsForceRestarting)
     End Sub
 
     ''' <summary>
@@ -407,38 +377,20 @@ Public Module ModDownload
     Public DlOptiFineListOfficialLoader As New LoaderTask(Of Integer, DlOptiFineListResult)("DlOptiFineList Official", AddressOf DlOptiFineListOfficialMain)
     Private Sub DlOptiFineListOfficialMain(Loader As LoaderTask(Of Integer, DlOptiFineListResult))
         Dim Result As String = NetRequestByClientRetry("https://optifine.net/downloads", Encoding:=Encoding.Default)
-        If Result.Length < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Result & "）")
-        Try
-            '获取所有版本信息
-            Dim Forge As List(Of String) = Result.RegexSearch("(?<=colForge'>)[^<]*").ToList
-            Dim ReleaseTime As List(Of String) = Result.RegexSearch("(?<=colDate'>)[^<]+").ToList
-            Dim Name As List(Of String) = Result.RegexSearch("(?<=OptiFine_)[0-9A-Za-z_.]+(?=.jar"")").ToList
-            If Not ReleaseTime.Count = Name.Count Then Throw New Exception("版本与发布时间数据无法对应")
-            If Not Forge.Count = Name.Count Then Throw New Exception("版本与 Forge 兼容数据无法对应")
-            If ReleaseTime.Count < 10 Then Throw New Exception("获取到的版本数量不足（" & Result & "）")
-            '转化为列表输出
-            Dim Versions As New List(Of DlOptiFineListEntry)
-            For i = 0 To ReleaseTime.Count - 1
-                Name(i) = Name(i).Replace("_", " ")
-                Dim Entry As New DlOptiFineListEntry With {
-                    .DisplayName = Name(i).Replace("HD U ", "").Replace(".0 ", " "),
-                    .ReleaseTime = {ReleaseTime(i).Split(".")(2), ReleaseTime(i).Split(".")(1), ReleaseTime(i).Split(".")(0)}.Join("/"c),
-                    .IsPreview = Name(i).ContainsIgnoreCase("pre"),
-                    .Inherit = Name(i).ToString.Split(" ")(0),
-                    .FileName = If(Name(i).ContainsIgnoreCase("pre"), "preview_", "") & "OptiFine_" & Name(i).Replace(" ", "_") & ".jar",
-                    .RequiredForgeVersion = Forge(i).Replace("Forge ", "").Replace("#", "")}
-                If Entry.RequiredForgeVersion.Contains("N/A") Then Entry.RequiredForgeVersion = Nothing
-                Entry.InstanceName = Entry.Inherit & "-OptiFine_" & Name(i).AfterFirst(" ").Replace(" ", "_")
-                Versions.Add(Entry)
-            Next
-#If CONFIG = "Debug" Then
-            DlParityCompare("OptiFine 官方源", Versions,
-                PCLCS.Minecraft.Download.OptiFineListParser.ParseOfficialHtml(Result))
-#End If
-            Loader.Output = New DlOptiFineListResult With {.IsOfficial = True, .SourceName = "OptiFine 官方源", .Value = Versions}
-        Catch ex As Exception
-            Throw New Exception("OptiFine 官方源版本列表解析失败（" & Result & "）", ex)
-        End Try
+        Dim Parsed = PCLCS.Minecraft.Download.OptiFineListParser.ParseOfficialHtml(Result)
+        Dim Versions As New List(Of DlOptiFineListEntry)
+        For Each Entry In Parsed
+            Versions.Add(New DlOptiFineListEntry With {
+                .DisplayName = Entry.DisplayName,
+                .FileName = Entry.FileName,
+                .InstanceName = Entry.InstanceName,
+                .IsPreview = Entry.IsPreview,
+                .Inherit = Entry.Inherit,
+                .ReleaseTime = Entry.ReleaseTime,
+                .RequiredForgeVersion = Entry.RequiredForgeVersion
+            })
+        Next
+        Loader.Output = New DlOptiFineListResult With {.IsOfficial = True, .SourceName = "OptiFine 官方源", .Value = Versions}
     End Sub
 
     ''' <summary>
@@ -446,26 +398,21 @@ Public Module ModDownload
     ''' </summary>
     Public DlOptiFineListBmclapiLoader As New LoaderTask(Of Integer, DlOptiFineListResult)("DlOptiFineList Bmclapi", AddressOf DlOptiFineListBmclapiMain)
     Private Sub DlOptiFineListBmclapiMain(Loader As LoaderTask(Of Integer, DlOptiFineListResult))
-        Dim Json As JArray = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/optifine/versionList", RequireJson:=True).DeserializeJson()
-        Try
-            Dim Versions As New List(Of DlOptiFineListEntry)
-            For Each Token As JObject In Json
-                Dim Entry As New DlOptiFineListEntry With {
-                    .DisplayName = (Token("mcversion").ToString & Token("type").ToString.Replace("HD_U", "").Replace("_", " ") & " " & Token("patch").ToString).Replace(".0 ", " "),
-                    .ReleaseTime = "",
-                    .IsPreview = Token("patch").ToString.ContainsIgnoreCase("pre"),
-                    .Inherit = Token("mcversion").ToString,
-                    .FileName = Token("filename").ToString,
-                    .RequiredForgeVersion = If(Token("forge"), "").ToString.Replace("Forge ", "").Replace("#", "")
-                }
-                If Entry.RequiredForgeVersion.Contains("N/A") Then Entry.RequiredForgeVersion = Nothing
-                Entry.InstanceName = Entry.Inherit & "-OptiFine_" & (Token("type").ToString & " " & Token("patch").ToString).Replace(".0 ", " ").Replace(" ", "_").Replace(Entry.Inherit & "_", "")
-                Versions.Add(Entry)
-            Next
-            Loader.Output = New DlOptiFineListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Versions}
-        Catch ex As Exception
-            Throw New Exception("OptiFine BMCLAPI 版本列表解析失败（" & Json.ToString & "）", ex)
-        End Try
+        Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/optifine/versionList", RequireJson:=True)
+        Dim Parsed = PCLCS.Minecraft.Download.OptiFineListParser.ParseBmclapiJson(Result)
+        Dim Versions As New List(Of DlOptiFineListEntry)
+        For Each Entry In Parsed
+            Versions.Add(New DlOptiFineListEntry With {
+                .DisplayName = Entry.DisplayName,
+                .FileName = Entry.FileName,
+                .InstanceName = Entry.InstanceName,
+                .IsPreview = Entry.IsPreview,
+                .Inherit = Entry.Inherit,
+                .ReleaseTime = Entry.ReleaseTime,
+                .RequiredForgeVersion = Entry.RequiredForgeVersion
+            })
+        Next
+        Loader.Output = New DlOptiFineListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Versions}
     End Sub
 
 #End Region
@@ -492,23 +439,8 @@ Public Module ModDownload
     ''' </summary>
     Public DlForgeListLoader As New LoaderTask(Of Integer, DlForgeListResult)("DlForgeList Main", AddressOf DlForgeListMain)
     Private Sub DlForgeListMain(Loader As LoaderTask(Of Integer, DlForgeListResult))
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListOfficialLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListOfficialLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListOfficialLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlForgeListResult), Integer)(DlForgeListBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlForgeListOfficialLoader, DlForgeListBmclapiLoader), Loader.IsForceRestarting)
     End Sub
 
     ''' <summary>
@@ -517,12 +449,8 @@ Public Module ModDownload
     Public DlForgeListOfficialLoader As New LoaderTask(Of Integer, DlForgeListResult)("DlForgeList Official", AddressOf DlForgeListOfficialMain)
     Private Sub DlForgeListOfficialMain(Loader As LoaderTask(Of Integer, DlForgeListResult))
         Dim Result As String = NetRequestByClientRetry("https://files.minecraftforge.net/maven/net/minecraftforge/forge/index_1.2.4.html", Encoding:=Encoding.Default, Accept:="text/html", SimulateBrowserHeaders:=True)
-        If Result.Length < 200 Then Throw New Exception("获取到的版本列表长度不足（" & Result & "）")
-        '获取所有版本信息
-        Dim Names As List(Of String) = Result.RegexSearch("(?<=a href=""index_)[0-9.]+((_pre|[_-]snapshot[_-]?)[0-9]?)?(?=.html)").ToList
-        Names.Add("1.2.4") '1.2.4 不会被匹配上
-        If Names.Count < 10 Then Throw New Exception("获取到的版本数量不足（" & Result & "）")
-        Loader.Output = New DlForgeListResult With {.IsOfficial = True, .SourceName = "Forge 官方源", .Value = Names}
+        Loader.Output = New DlForgeListResult With {.IsOfficial = True, .SourceName = "Forge 官方源",
+            .Value = PCLCS.Minecraft.Download.ForgeVersionParser.ParseOfficialHtml(Result).ToList}
     End Sub
 
     ''' <summary>
@@ -530,11 +458,10 @@ Public Module ModDownload
     ''' </summary>
     Public DlForgeListBmclapiLoader As New LoaderTask(Of Integer, DlForgeListResult)("DlForgeList Bmclapi", AddressOf DlForgeListBmclapiMain)
     Private Sub DlForgeListBmclapiMain(Loader As LoaderTask(Of Integer, DlForgeListResult))
-        Dim Result As JArray = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/forge/minecraft",
-                                                       Encoding:=Encoding.Default, RequireJson:=True).DeserializeJson()
-        Dim Names As List(Of String) = Result.Select(Function(v) v.ToString).ToList
-        If Names.Count < 10 Then Throw New Exception("获取到的版本数量不足")
-        Loader.Output = New DlForgeListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Names}
+        Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/forge/minecraft",
+                                                       Encoding:=Encoding.Default, RequireJson:=True)
+        Loader.Output = New DlForgeListResult With {.IsOfficial = False, .SourceName = "BMCLAPI",
+            .Value = PCLCS.Minecraft.Download.ForgeVersionParser.ParseBmclapiJson(Result).ToList}
     End Sub
 
 #End Region
@@ -641,23 +568,8 @@ Public Module ModDownload
     Public Sub DlForgeVersionMain(Loader As LoaderTask(Of String, List(Of DlForgeVersionEntry)))
         Dim DlForgeVersionOfficialLoader As New LoaderTask(Of String, List(Of DlForgeVersionEntry))("DlForgeVersion Official", AddressOf DlForgeVersionOfficialMain)
         Dim DlForgeVersionBmclapiLoader As New LoaderTask(Of String, List(Of DlForgeVersionEntry))("DlForgeVersion Bmclapi", AddressOf DlForgeVersionBmclapiMain)
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionOfficialLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionOfficialLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionOfficialLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of String, List(Of DlForgeVersionEntry)), Integer)(DlForgeVersionBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlForgeVersionOfficialLoader, DlForgeVersionBmclapiLoader), Loader.IsForceRestarting)
     End Sub
 
     ''' <summary>
@@ -669,130 +581,32 @@ Public Module ModDownload
             Result = NetRequestByLoader("https://files.minecraftforge.net/maven/net/minecraftforge/forge/index_" &
                                           Loader.Input.Replace("-", "_") & '兼容 Forge 1.7.10-pre4，#4057
                                           ".html", SimulateBrowserHeaders:=True)
-        Catch ex As Exception
-            If ex.GetDisplay(False).Contains("(404)") Then
-                Throw New Exception("无")
-            Else
-                Throw
-            End If
+        Catch ex As HttpRequestCodeException
+            If ex.StatusCode <> HttpStatusCode.NotFound Then Throw
+            Throw New PCLCS.Minecraft.Download.DownloadSourceException(
+                PCLCS.Minecraft.Download.DownloadFailureKind.NotFound, "官方源没有该版本的构建列表", "Forge 官方源")
         End Try
-        If Result.Length < 1000 Then Throw New Exception("获取到的版本列表长度不足（" & Result & "）")
-        Dim Versions As New List(Of DlForgeVersionEntry)
-        Try
-            '分割版本信息
-            Dim VersionCodes = Result.Substring(0, Result.LastIndexOfF("</table>")).Split("<td class=""download-version")
-            '获取所有版本信息
-            For i = 1 To VersionCodes.Count - 1
-                Dim VersionCode = VersionCodes(i)
-                Try
-                    '基础信息获取
-                    Dim Name As String = VersionCode.RegexSeek("(?<=[^(0-9)]+)[0-9\.]+")
-                    Dim IsRecommended As Boolean = VersionCode.Contains("fa promo-recommended")
-                    Dim Inherit As String = Loader.Input
-                    '分支获取
-                    Dim Branch As String = VersionCode.RegexSeek($"(?<=-{Name}-)[^-""]+(?=-[a-z]+.[a-z]{{3}})")
-                    If String.IsNullOrWhiteSpace(Branch) Then Branch = Nothing
-                    '发布时间获取
-                    Dim ReleaseTimeOriginal = VersionCode.RegexSeek("(?<=""download-time"" title="")[^""]+")
-                    Dim ReleaseTimeSplit = ReleaseTimeOriginal.Split(" -:".ToCharArray) '原格式："2021-02-15 03:24:02"
-                    Dim ReleaseDate As New Date(ReleaseTimeSplit(0), ReleaseTimeSplit(1), ReleaseTimeSplit(2), '年月日
-                                                ReleaseTimeSplit(3), ReleaseTimeSplit(4), ReleaseTimeSplit(5), '时分秒
-                                                0, DateTimeKind.Utc) '以 UTC 时间作为标准
-                    Dim ReleaseTime As String = ReleaseDate.ToLocalTime.ToString("yyyy'/'MM'/'dd HH':'mm") '时区与格式转换
-                    '分类与 MD5 获取
-                    Dim MD5 As String, Category As String
-                    If VersionCode.Contains("classifier-installer""") Then
-                        '类型为 installer.jar，支持范围 ~753 (~ 1.6.1 部分), 738~684 (1.5.2 全部)
-                        VersionCode = VersionCode.Substring(VersionCode.IndexOfF("installer.jar"))
-                        MD5 = VersionCode.RegexSeek("(?<=MD5:</strong> )[^<]+")
-                        Category = "installer"
-                    ElseIf VersionCode.Contains("classifier-universal""") Then
-                        '类型为 universal.zip，支持范围 751~449 (1.6.1 部分), 682~183 (1.5.1 ~ 1.3.2 部分)
-                        VersionCode = VersionCode.Substring(VersionCode.IndexOfF("universal.zip"))
-                        MD5 = VersionCode.RegexSeek("(?<=MD5:</strong> )[^<]+")
-                        Category = "universal"
-                    ElseIf VersionCode.Contains("client.zip") Then
-                        '类型为 client.zip，支持范围 182~ (1.3.2 部分 ~)
-                        VersionCode = VersionCode.Substring(VersionCode.IndexOfF("client.zip"))
-                        MD5 = VersionCode.RegexSeek("(?<=MD5:</strong> )[^<]+")
-                        Category = "client"
-                    Else
-                        '没有任何下载（1.6.4 有一部分这种情况）
-                        Continue For
-                    End If
-                    '添加进列表
-                    Versions.Add(New DlForgeVersionEntry(Name, Branch, Inherit) With {.Category = Category, .IsRecommended = IsRecommended, .Hash = MD5.ReplaceLineEndings(""), .ReleaseTime = ReleaseTime})
-                Catch ex As Exception
-                    Throw New Exception("Forge 官方源版本信息提取失败（" & VersionCode & "）", ex)
-                End Try
-            Next
-        Catch ex As Exception
-            Throw New Exception("Forge 官方源版本列表解析失败（" & Result & "）", ex)
-        End Try
-        If Not Versions.Any() Then Throw New Exception("无")
-#If CONFIG = "Debug" Then
-        DlParityCompare("Forge 官方源构建", Versions,
-            PCLCS.Minecraft.Download.ForgeBuildParser.ParseOfficialHtml(Result, Loader.Input))
-#End If
-        Loader.Output = Versions
+        Loader.Output = PCLCS.Minecraft.Download.ForgeBuildParser.ParseOfficialHtml(Result, Loader.Input).
+            Select(Function(Entry) New DlForgeVersionEntry(Entry.VersionName, Entry.Branch, Entry.Inherit) With {
+                .Category = Entry.Category,
+                .IsRecommended = Entry.IsRecommended,
+                .Hash = Entry.Hash,
+                .ReleaseTime = Entry.ReleaseTime}).ToList
     End Sub
 
     ''' <summary>
     ''' Forge 版本列表，BMCLAPI。
     ''' </summary>
     Public Sub DlForgeVersionBmclapiMain(Loader As LoaderTask(Of String, List(Of DlForgeVersionEntry)))
-        Dim Json As JArray = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/forge/minecraft/" &
-            Loader.Input.Replace("-", "_"), RequireJson:=True).DeserializeJson() '兼容 Forge 1.7.10-pre4，#4057
-        Dim Versions As New List(Of DlForgeVersionEntry)
-        Try
-            Dim Recommended As String = McDownloadForgeRecommendedGet(Loader.Input)
-            For Each Token As JObject In Json
-                '分类与 Hash 获取
-                Dim Hash As String = Nothing, Category As String = "unknown", Proi As Integer = -1
-                For Each File As JObject In Token("files")
-                    Select Case File("category").ToString
-                        Case "installer"
-                            If File("format").ToString = "jar" Then
-                                '类型为 installer.jar，支持范围 ~753 (~ 1.6.1 部分), 738~684 (1.5.2 全部)
-                                Hash = File("hash")
-                                Category = "installer"
-                                Proi = 2
-                            End If
-                        Case "universal"
-                            If Proi <= 1 AndAlso File("format").ToString = "zip" Then
-                                '类型为 universal.zip，支持范围 751~449 (1.6.1 部分), 682~183 (1.5.1 ~ 1.3.2 部分)
-                                Hash = File("hash")
-                                Category = "universal"
-                                Proi = 1
-                            End If
-                        Case "client"
-                            If Proi <= 0 AndAlso File("format").ToString = "zip" Then
-                                '类型为 client.zip，支持范围 182~ (1.3.2 部分 ~)
-                                Hash = File("hash")
-                                Category = "client"
-                                Proi = 0
-                            End If
-                    End Select
-                Next
-                '获取 Entry
-                Dim Branch As String = Token("branch")
-                Dim Name As String = Token("version")
-                '基础信息获取
-                Dim Entry = New DlForgeVersionEntry(Name, Branch, Loader.Input) With {.Hash = Hash, .Category = Category, .IsRecommended = Recommended = Name}
-                Dim TimeSplit = Token("modified").ToString.Split("-"c, "T"c, ":"c, "."c, " "c, "/"c)
-                Entry.ReleaseTime = Token("modified").ToObject(Of Date).ToLocalTime.ToString("yyyy'/'MM'/'dd HH':'mm")
-                '添加项
-                Versions.Add(Entry)
-            Next
-#If CONFIG = "Debug" Then
-            DlParityCompare("Forge BMCLAPI 构建", Versions,
-                PCLCS.Minecraft.Download.ForgeBuildParser.ParseBmclapiJson(Json.ToString, Loader.Input, Recommended))
-#End If
-        Catch ex As Exception
-            Throw New Exception("Forge BMCLAPI 版本列表解析失败（" & Json.ToString & "）", ex)
-        End Try
-        If Not Versions.Any() Then Throw New Exception("无")
-        Loader.Output = Versions
+        Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/forge/minecraft/" &
+            Loader.Input.Replace("-", "_"), RequireJson:=True) '兼容 Forge 1.7.10-pre4，#4057
+        Dim Recommended As String = McDownloadForgeRecommendedGet(Loader.Input)
+        Loader.Output = PCLCS.Minecraft.Download.ForgeBuildParser.ParseBmclapiJson(Result, Loader.Input, Recommended).
+            Select(Function(Entry) New DlForgeVersionEntry(Entry.VersionName, Entry.Branch, Entry.Inherit) With {
+                .Category = Entry.Category,
+                .IsRecommended = Entry.IsRecommended,
+                .Hash = Entry.Hash,
+                .ReleaseTime = Entry.ReleaseTime}).ToList
     End Sub
 
 #End Region
@@ -884,23 +698,8 @@ Public Module ModDownload
     ''' </summary>
     Public DlNeoForgeListLoader As New LoaderTask(Of Integer, DlNeoForgeListResult)("DlNeoForgeList Main", AddressOf DlNeoForgeListMain)
     Private Sub DlNeoForgeListMain(Loader As LoaderTask(Of Integer, DlNeoForgeListResult))
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListOfficialLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListOfficialLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListOfficialLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlNeoForgeListResult), Integer)(DlNeoForgeListBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlNeoForgeListOfficialLoader, DlNeoForgeListBmclapiLoader), Loader.IsForceRestarting)
     End Sub
 
     ''' <summary>
@@ -911,18 +710,9 @@ Public Module ModDownload
         '获取版本列表 JSON
         Dim ResultLatest As String = NetRequestByClientRetry("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge", RequireJson:=True)
         Dim ResultLegacy As String = NetRequestByClientRetry("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/forge", RequireJson:=True)
-        If ResultLatest.Length < 100 OrElse ResultLegacy.Length < 100 Then Throw New Exception("获取到的版本列表长度不足（" & ResultLatest & "）")
-        '解析
-        Try
-            Loader.Output = New DlNeoForgeListResult With {.IsOfficial = True, .SourceName = "NeoForge 官方源",
-                .Value = GetNeoForgeEntries(ResultLatest, ResultLegacy)}
-#If CONFIG = "Debug" Then
-            DlParityCompare("NeoForge 官方源", Loader.Output.Value,
-                PCLCS.Minecraft.Download.NeoForgeParser.Parse(ResultLatest, ResultLegacy))
-#End If
-        Catch ex As Exception
-            Throw New Exception("NeoForge 官方源版本列表解析失败（" & ResultLatest & vbCrLf & vbCrLf & ResultLegacy & "）", ex)
-        End Try
+        Loader.Output = New DlNeoForgeListResult With {.IsOfficial = True, .SourceName = "NeoForge 官方源",
+            .Value = PCLCS.Minecraft.Download.NeoForgeParser.Parse(ResultLatest, ResultLegacy).
+                Select(Function(Entry) New DlNeoForgeListEntry(Entry.ApiName)).ToList}
     End Sub
 
     ''' <summary>
@@ -933,26 +723,11 @@ Public Module ModDownload
         '获取版本列表 JSON
         Dim ResultLatest As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/neoforge/meta/api/maven/details/releases/net/neoforged/neoforge", RequireJson:=True)
         Dim ResultLegacy As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/neoforge/meta/api/maven/details/releases/net/neoforged/forge", RequireJson:=True)
-        If ResultLatest.Length < 100 OrElse ResultLegacy.Length < 100 Then Throw New Exception("获取到的版本列表长度不足（" & ResultLatest & "）")
-        '解析
-        Try
-            Loader.Output = New DlNeoForgeListResult With {.IsOfficial = True, .SourceName = "BMCLAPI",
-                .Value = GetNeoForgeEntries(ResultLatest, ResultLegacy)}
-        Catch ex As Exception
-            Throw New Exception("NeoForge BMCLAPI 版本列表解析失败（" & ResultLatest & vbCrLf & vbCrLf & ResultLegacy & "）", ex)
-        End Try
+        '//? 既存缺陷：BMCLAPI 源也标记为官方数据，会误导上层对来源的判断；修复需要单独评估 UI 影响。
+        Loader.Output = New DlNeoForgeListResult With {.IsOfficial = True, .SourceName = "BMCLAPI",
+            .Value = PCLCS.Minecraft.Download.NeoForgeParser.Parse(ResultLatest, ResultLegacy).
+                Select(Function(Entry) New DlNeoForgeListEntry(Entry.ApiName)).ToList}
     End Sub
-
-    Private Function GetNeoForgeEntries(LatestJson As String, LatestLegacyJson As String) As List(Of DlNeoForgeListEntry)
-        Dim VersionNames = (LatestLegacyJson & LatestJson).RegexSearch(
-            "(?<="")(1\.20\.1-)?\d+\.[^\.]+\.\d+(\.\d+)?(-(beta|alpha)(\.\d+)?)?(\+snapshot-\d+)?(?="")")
-        Dim Versions = VersionNames.
-            Where(Function(name) name <> "47.1.82"). '这个版本虽然在版本列表中，但不能下载
-            Select(Function(name) New DlNeoForgeListEntry(name)).
-            OrderByDescending(Function(a) a).ToList
-        If Not Versions.Any() Then Throw New Exception("无")
-        Return Versions
-    End Function
 
 #End Region
 
@@ -1013,23 +788,8 @@ Public Module ModDownload
     ''' </summary>
     Public DlLiteLoaderListLoader As New LoaderTask(Of Integer, DlLiteLoaderListResult)("DlLiteLoaderList Main", AddressOf DlLiteLoaderListMain)
     Private Sub DlLiteLoaderListMain(Loader As LoaderTask(Of Integer, DlLiteLoaderListResult))
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListOfficialLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListOfficialLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListOfficialLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlLiteLoaderListResult), Integer)(DlLiteLoaderListBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlLiteLoaderListOfficialLoader, DlLiteLoaderListBmclapiLoader), Loader.IsForceRestarting)
     End Sub
 
     ''' <summary>
@@ -1037,27 +797,19 @@ Public Module ModDownload
     ''' </summary>
     Public DlLiteLoaderListOfficialLoader As New LoaderTask(Of Integer, DlLiteLoaderListResult)("DlLiteLoaderList Official", AddressOf DlLiteLoaderListOfficialMain)
     Private Sub DlLiteLoaderListOfficialMain(Loader As LoaderTask(Of Integer, DlLiteLoaderListResult))
-        Dim Result As JObject = NetRequestByClientRetry("https://dl.liteloader.com/versions/versions.json", RequireJson:=True).DeserializeJson()
-        Try
-            Dim Json As JObject = Result("versions")
-            Dim Versions As New List(Of DlLiteLoaderListEntry)
-            For Each Pair As KeyValuePair(Of String, JToken) In Json
-                If Pair.Key.StartsWithF("1.6") OrElse Pair.Key.StartsWithF("1.5") Then Continue For
-                Dim RealEntry As JToken = If(Pair.Value("artefacts"), Pair.Value("snapshots"))("com.mumfrey:liteloader")("latest")
-                Versions.Add(New DlLiteLoaderListEntry With {
-                             .Inherit = Pair.Key,
-                             .IsLegacy = Pair.Key.Split(".")(1) < 8,
-                             .IsPreview = RealEntry("stream").ToString.Lower = "snapshot",
-                             .FileName = "liteloader-installer-" & Pair.Key & If(Pair.Key = "1.8" OrElse Pair.Key = "1.9", ".0", "") & "-00-SNAPSHOT.jar",
-                             .MD5 = RealEntry("md5"),
-                             .ReleaseTime = GetLocalTime(GetDate(RealEntry("timestamp"))).ToString("yyyy'/'MM'/'dd HH':'mm"),
-                             .JsonToken = RealEntry
-                         })
-            Next
-            Loader.Output = New DlLiteLoaderListResult With {.IsOfficial = True, .SourceName = "LiteLoader 官方源", .Value = Versions}
-        Catch ex As Exception
-            Throw New Exception("LiteLoader 官方源版本列表解析失败（" & Result.ToString & "）", ex)
-        End Try
+        Dim Result As String = NetRequestByClientRetry("https://dl.liteloader.com/versions/versions.json", RequireJson:=True)
+        Dim Versions As New List(Of DlLiteLoaderListEntry)
+        For Each Entry In PCLCS.Minecraft.Download.LiteLoaderParser.Parse(Result)
+            Versions.Add(New DlLiteLoaderListEntry With {
+                .FileName = Entry.FileName,
+                .IsPreview = Entry.IsPreview,
+                .Inherit = Entry.Inherit,
+                .IsLegacy = Entry.IsLegacy,
+                .ReleaseTime = Entry.ReleaseTime,
+                .MD5 = Entry.MD5,
+                .JsonToken = Entry.JsonToken})
+        Next
+        Loader.Output = New DlLiteLoaderListResult With {.IsOfficial = True, .SourceName = "LiteLoader 官方源", .Value = Versions}
     End Sub
 
     ''' <summary>
@@ -1065,27 +817,19 @@ Public Module ModDownload
     ''' </summary>
     Public DlLiteLoaderListBmclapiLoader As New LoaderTask(Of Integer, DlLiteLoaderListResult)("DlLiteLoaderList Bmclapi", AddressOf DlLiteLoaderListBmclapiMain)
     Private Sub DlLiteLoaderListBmclapiMain(Loader As LoaderTask(Of Integer, DlLiteLoaderListResult))
-        Dim Result As JObject = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/maven/com/mumfrey/liteloader/versions.json", RequireJson:=True).DeserializeJson()
-        Try
-            Dim Json As JObject = Result("versions")
-            Dim Versions As New List(Of DlLiteLoaderListEntry)
-            For Each Pair As KeyValuePair(Of String, JToken) In Json
-                If Pair.Key.StartsWithF("1.6") OrElse Pair.Key.StartsWithF("1.5") Then Continue For
-                Dim RealEntry As JToken = If(Pair.Value("artefacts"), Pair.Value("snapshots"))("com.mumfrey:liteloader")("latest")
-                Versions.Add(New DlLiteLoaderListEntry With {
-                             .Inherit = Pair.Key,
-                             .IsLegacy = Pair.Key.Split(".")(1) < 8,
-                             .IsPreview = RealEntry("stream").ToString.Lower = "snapshot",
-                             .FileName = "liteloader-installer-" & Pair.Key & If(Pair.Key = "1.8" OrElse Pair.Key = "1.9", ".0", "") & "-00-SNAPSHOT.jar",
-                             .MD5 = RealEntry("md5"),
-                             .ReleaseTime = GetLocalTime(GetDate(RealEntry("timestamp"))).ToString("yyyy'/'MM'/'dd HH':'mm"),
-                             .JsonToken = RealEntry
-                         })
-            Next
-            Loader.Output = New DlLiteLoaderListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Versions}
-        Catch ex As Exception
-            Throw New Exception("LiteLoader BMCLAPI 版本列表解析失败（" & Result.ToString & "）", ex)
-        End Try
+        Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/maven/com/mumfrey/liteloader/versions.json", RequireJson:=True)
+        Dim Versions As New List(Of DlLiteLoaderListEntry)
+        For Each Entry In PCLCS.Minecraft.Download.LiteLoaderParser.Parse(Result)
+            Versions.Add(New DlLiteLoaderListEntry With {
+                .FileName = Entry.FileName,
+                .IsPreview = Entry.IsPreview,
+                .Inherit = Entry.Inherit,
+                .IsLegacy = Entry.IsLegacy,
+                .ReleaseTime = Entry.ReleaseTime,
+                .MD5 = Entry.MD5,
+                .JsonToken = Entry.JsonToken})
+        Next
+        Loader.Output = New DlLiteLoaderListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Versions}
     End Sub
 
 #End Region
@@ -1112,23 +856,8 @@ Public Module ModDownload
     ''' </summary>
     Public DlFabricListLoader As New LoaderTask(Of Integer, DlFabricListResult)("DlFabricList Main", AddressOf DlFabricListMain)
     Private Sub DlFabricListMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
-        Select Case Settings.Get(Of Integer)("ToolDownloadVersion")
-            Case 0
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListBmclapiLoader, 30),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListOfficialLoader, 30 + 60)
-                }, Loader.IsForceRestarting)
-            Case 1
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListOfficialLoader, 5),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListBmclapiLoader, 5 + 30)
-                }, Loader.IsForceRestarting)
-            Case Else
-                DlSourceLoader(Loader, New List(Of KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)) From {
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListOfficialLoader, 60),
-                    New KeyValuePair(Of LoaderTask(Of Integer, DlFabricListResult), Integer)(DlFabricListBmclapiLoader, 60 + 60)
-                }, Loader.IsForceRestarting)
-        End Select
+        Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
+        DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlFabricListOfficialLoader, DlFabricListBmclapiLoader), Loader.IsForceRestarting)
     End Sub
 
     ''' <summary>
@@ -1136,14 +865,9 @@ Public Module ModDownload
     ''' </summary>
     Public DlFabricListOfficialLoader As New LoaderTask(Of Integer, DlFabricListResult)("DlFabricList Official", AddressOf DlFabricListOfficialMain)
     Private Sub DlFabricListOfficialMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
-        Dim Result As JObject = NetRequestByClientRetry("https://meta.fabricmc.net/v2/versions", RequireJson:=True).DeserializeJson()
-        Try
-            Dim Output = New DlFabricListResult With {.IsOfficial = True, .SourceName = "Fabric 官方源", .Value = Result}
-            If Output.Value("game") Is Nothing OrElse Output.Value("loader") Is Nothing OrElse Output.Value("installer") Is Nothing Then Throw New Exception("获取到的列表缺乏必要项")
-            Loader.Output = Output
-        Catch ex As Exception
-            Throw New Exception("Fabric 官方源版本列表解析失败（" & Result.ToString & "）", ex)
-        End Try
+        Dim Result As String = NetRequestByClientRetry("https://meta.fabricmc.net/v2/versions", RequireJson:=True)
+        Loader.Output = New DlFabricListResult With {.IsOfficial = True, .SourceName = "Fabric 官方源",
+            .Value = PCLCS.Minecraft.Download.FabricListParser.Parse(Result)}
     End Sub
 
     ''' <summary>
@@ -1151,14 +875,9 @@ Public Module ModDownload
     ''' </summary>
     Public DlFabricListBmclapiLoader As New LoaderTask(Of Integer, DlFabricListResult)("DlFabricList Bmclapi", AddressOf DlFabricListBmclapiMain)
     Private Sub DlFabricListBmclapiMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
-        Dim Result As JObject = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/fabric-meta/v2/versions", RequireJson:=True).DeserializeJson()
-        Try
-            Dim Output = New DlFabricListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Result}
-            If Output.Value("game") Is Nothing OrElse Output.Value("loader") Is Nothing OrElse Output.Value("installer") Is Nothing Then Throw New Exception("获取到的列表缺乏必要项")
-            Loader.Output = Output
-        Catch ex As Exception
-            Throw New Exception("Fabric BMCLAPI 版本列表解析失败（" & Result.ToString & "）", ex)
-        End Try
+        Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/fabric-meta/v2/versions", RequireJson:=True)
+        Loader.Output = New DlFabricListResult With {.IsOfficial = False, .SourceName = "BMCLAPI",
+            .Value = PCLCS.Minecraft.Download.FabricListParser.Parse(Result)}
     End Sub
 
     ''' <summary>
@@ -1233,65 +952,34 @@ Public Module ModDownload
     ''' 下载文件（而非获取版本列表）的时候，根据是否优先使用官方源决定使用 Url 的顺序。
     ''' </summary>
     Public Function DlSourceOrder(OfficialUrls As IEnumerable(Of String), MirrorUrls As IEnumerable(Of String)) As IEnumerable(Of String)
-        Return If(DlSourcePreferMojang, OfficialUrls.Union(MirrorUrls), MirrorUrls.Union(OfficialUrls))
+        Return PCLCS.Minecraft.Download.DownloadSources.Order(OfficialUrls, MirrorUrls, DlSourcePreferMojang)
     End Function
     ''' <summary>
     ''' 获取版本列表（而非下载文件）的时候，是否优先使用官方源。
     ''' </summary>
     Public ReadOnly Property DlVersionListPreferMojang As Boolean
         Get
-            Return Settings.Get(Of Integer)("ToolDownloadVersion") = 2 OrElse (Settings.Get(Of Integer)("ToolDownloadVersion") = 1 AndAlso DlPreferMojang)
+            Return PCLCS.Minecraft.Download.SourcePolicy.PreferMojangForVersionList(Settings.Get(Of Integer)("ToolDownloadVersion"), DlPreferMojang)
         End Get
     End Property
     ''' <summary>
     ''' 获取版本列表（而非下载文件）的时候，根据是否优先使用官方源决定使用 Url 的顺序。
     ''' </summary>
     Public Function DlVersionListOrder(OfficialUrls As IEnumerable(Of String), MirrorUrls As IEnumerable(Of String)) As IEnumerable(Of String)
-        Return If(DlVersionListPreferMojang, OfficialUrls.Union(MirrorUrls), MirrorUrls.Union(OfficialUrls))
+        Return PCLCS.Minecraft.Download.DownloadSources.Order(OfficialUrls, MirrorUrls, DlVersionListPreferMojang)
     End Function
-
 
     ''' <summary>
     ''' 下载 Assets 文件。
     ''' </summary>
     Public Function DlSourceAssetsGet(Original As String) As IEnumerable(Of String)
-        Original = Original.Replace("http://resources.download.minecraft.net", "https://resources.download.minecraft.net")
-        Return DlSourceOrder(
-            {Original},
-            {Original.
-                Replace("https://piston-data.mojang.com", "https://bmclapi2.bangbang93.com/assets").
-                Replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com/assets").
-                Replace("https://resources.download.minecraft.net", "https://bmclapi2.bangbang93.com/assets")
-            })
+        Return PCLCS.Minecraft.Download.DownloadSources.Assets(Original, DlSourcePreferMojang)
     End Function
     ''' <summary>
     ''' 下载 Libraries 文件。
     ''' </summary>
     Public Function DlSourceLibraryGet(Original As String) As IEnumerable(Of String)
-        If {"minecraftforge", "fabricmc", "neoforged"}.Any(Function(k) Original.Contains(k)) Then '不添加原版源
-            Return {
-                Original.
-                    Replace("https://piston-data.mojang.com", "https://bmclapi2.bangbang93.com/maven").
-                    Replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com/maven").
-                    Replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/maven"),
-                Original.
-                    Replace("https://piston-data.mojang.com", "https://bmclapi2.bangbang93.com/libraries").
-                    Replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com/libraries").
-                    Replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/libraries")
-            }
-        Else
-            Return DlSourceOrder(
-                {Original},
-                {Original.
-                    Replace("https://piston-data.mojang.com", "https://bmclapi2.bangbang93.com/maven").
-                    Replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com/maven").
-                    Replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/maven"),
-                 Original.
-                    Replace("https://piston-data.mojang.com", "https://bmclapi2.bangbang93.com/libraries").
-                    Replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com/libraries").
-                    Replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/libraries")
-                })
-        End If
+        Return PCLCS.Minecraft.Download.DownloadSources.Library(Original, DlSourcePreferMojang)
     End Function
     ''' <summary>
     ''' 下载 Launcher 或 Meta 文件。
@@ -1299,26 +987,12 @@ Public Module ModDownload
     ''' </summary>
     Public Function DlSourceLauncherOrMetaGet(Original As String) As IEnumerable(Of String)
         If Original Is Nothing Then Throw New Exception("无对应的 json 下载地址")
-        Return DlSourceOrder(
-            {Original},
-            {Original.
-                Replace("https://piston-data.mojang.com", "https://bmclapi2.bangbang93.com").
-                Replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com").
-                Replace("https://launcher.mojang.com", "https://bmclapi2.bangbang93.com").
-                Replace("https://launchermeta.mojang.com", "https://bmclapi2.bangbang93.com")
-            })
+        Return PCLCS.Minecraft.Download.DownloadSources.LauncherOrMeta(Original, DlSourcePreferMojang)
     End Function
 
     'Mod 下载源
     Public Function DlSourceModGet(Original As String) As String
-        Return Original.
-            Replace("api.modrinth.com", "mod.mcimirror.top/modrinth").
-            Replace("staging-api.modrinth.com", "mod.mcimirror.top/modrinth").
-            Replace("cdn.modrinth.com", "mod.mcimirror.top").
-            Replace("api.curseforge.com", "mod.mcimirror.top/curseforge").
-            Replace("edge.forgecdn.net", "mod.mcimirror.top").
-            Replace("mediafilez.forgecdn.net", "mod.mcimirror.top").
-            Replace("media.forgecdn.net", "mod.mcimirror.top")
+        Return PCLCS.Minecraft.Download.DownloadSources.Mod(Original)
     End Function
 
     'Loader 自动切换
@@ -1365,12 +1039,13 @@ Public Module ModDownload
                     For ii = 0 To LoaderList.Count - 1
                         LoaderList(ii).Key.Input = Nothing '重置输入，以免以同样的输入“重试加载”时直接失败
                         If LoaderList(ii).Key.Error IsNot Nothing Then
-                            If ErrorInfo Is Nothing OrElse LoaderList(ii).Key.Error.Message = "无" Then
+                            If ErrorInfo Is Nothing OrElse IsUnavailableSourceError(LoaderList(ii).Key.Error) Then
                                 ErrorInfo = LoaderList(ii).Key.Error
                             End If
                         End If
                     Next
-                    If ErrorInfo Is Nothing Then ErrorInfo = New TimeoutException("下载源连接超时")
+                    If ErrorInfo Is Nothing Then ErrorInfo = New PCLCS.Minecraft.Download.DownloadSourceException(
+                        PCLCS.Minecraft.Download.DownloadFailureKind.Timeout, "下载源连接超时")
                     DlSourceLoaderCancel(LoaderList)
                     Throw ErrorInfo
                 End If
@@ -1392,51 +1067,32 @@ Public Module ModDownload
         Next
     End Sub
 
-#End Region
-
-#Region "DlParity | 临时差分"
-
-#If CONFIG = "Debug" Then
-    '//* 临时差分：仅在 Debug 产物中比较旧 VB 解析与 C# 解析，验证完成后随旧解析一并删除。
-    '! 新旧条目并非同一类型，成员集合也不同，因此先按成员名求交集再比较，否则成员顺序与独有成员会造成误报。
-    Private Sub DlParityCompare(Of TOld, TNew)(Name As String, OldItems As List(Of TOld), NewItems As IReadOnlyList(Of TNew))
-        Logger.Info($"[Parity] {Name} 旧={OldItems.Count} 新={NewItems.Count}")
-        If OldItems.Count <> NewItems.Count Then Logger.Warn($"[Parity] {Name} 数量不一致")
-        Dim SharedNames As List(Of String) = Nothing
-        For i = 0 To Math.Min(OldItems.Count, NewItems.Count) - 1
-            Dim OldValues = DlParityValues(OldItems(i))
-            Dim NewValues = DlParityValues(NewItems(i))
-            If SharedNames Is Nothing Then
-                SharedNames = OldValues.Keys.Intersect(NewValues.Keys).OrderBy(Function(key) key).ToList()
-                Dim OnlyOld = String.Join(",", OldValues.Keys.Except(NewValues.Keys).OrderBy(Function(key) key))
-                Dim OnlyNew = String.Join(",", NewValues.Keys.Except(OldValues.Keys).OrderBy(Function(key) key))
-                If OnlyOld <> "" OrElse OnlyNew <> "" Then
-                    Logger.Info($"[Parity] {Name} 仅旧侧：{OnlyOld}；仅新侧：{OnlyNew}")
-                End If
+    ''' <summary>
+    ''' 判断异常链中是否包含“该下载源没有目标数据”的错误，这类错误比网络错误更能说明失败原因。
+    ''' </summary>
+    Private Function IsUnavailableSourceError(ErrorInfo As Exception) As Boolean
+        Dim Current As Exception = ErrorInfo
+        Do While Current IsNot Nothing
+            If TypeOf Current Is PCLCS.Minecraft.Download.DownloadSourceException Then
+                Return CType(Current, PCLCS.Minecraft.Download.DownloadSourceException).IsUnavailable
             End If
-            Dim OldText = DlParityDump(OldValues, SharedNames)
-            Dim NewText = DlParityDump(NewValues, SharedNames)
-            If OldText <> NewText Then Logger.Warn($"[Parity] {Name} 第 {i} 项不一致：旧={OldText} 新={NewText}")
-        Next
-    End Sub
-
-    Private Function DlParityValues(Item As Object) As Dictionary(Of String, String)
-        Dim Values As New Dictionary(Of String, String)
-        For Each Field In Item.GetType().GetFields()
-            If Field.Name <> "JsonToken" Then Values(Field.Name) = Convert.ToString(Field.GetValue(Item))
-        Next
-        For Each Prop In Item.GetType().GetProperties()
-            If Prop.CanRead AndAlso Prop.GetIndexParameters().Length = 0 Then
-                Values(Prop.Name) = Convert.ToString(Prop.GetValue(Item))
-            End If
-        Next
-        Return Values
+            Current = Current.InnerException
+        Loop
+        Return False
     End Function
 
-    Private Function DlParityDump(Values As Dictionary(Of String, String), Names As List(Of String)) As String
-        Return String.Join("|", Names.Select(Function(key) $"{key}={Values(key)}"))
+    ''' <summary>
+    ''' 按策略把官方源与镜像源排列为加载器列表，超时来自 <see cref="PCLCS.Minecraft.Download.SourcePlan"/>。
+    ''' </summary>
+    Private Function DlSourceLoaderList(Of TInput, TOutput)(
+        Plan As PCLCS.Minecraft.Download.SourcePlan,
+        Official As LoaderTask(Of TInput, TOutput),
+        Bmclapi As LoaderTask(Of TInput, TOutput)) As List(Of KeyValuePair(Of LoaderTask(Of TInput, TOutput), Integer))
+        Return New List(Of KeyValuePair(Of LoaderTask(Of TInput, TOutput), Integer)) From {
+            New KeyValuePair(Of LoaderTask(Of TInput, TOutput), Integer)(If(Plan.OfficialFirst, Official, Bmclapi), Plan.FirstSeconds),
+            New KeyValuePair(Of LoaderTask(Of TInput, TOutput), Integer)(If(Plan.OfficialFirst, Bmclapi, Official), Plan.SecondSeconds)
+        }
     End Function
-#End If
 
 #End Region
 

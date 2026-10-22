@@ -1,4 +1,4 @@
-# PCLA 架构说明
+﻿# PCLA 架构说明
 
 > 基线：上游 PCL 2.99.0.0（提交 `6b9a50d`），行号以当前分支为准。本文描述"代码实际是什么样"，目标形态与技术债见 `docs/TECHDEBT.md`。
 
@@ -95,7 +95,7 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - UA 与鉴权头由 `SecretHeadersSign` 统一注入（`Modules\ModSecret.vb:26-38`）：UA 为 `PCL2/{版本}.{构建类型}`，`api.curseforge.com` 与 `forgecdn.net` 附加 `x-api-key`（值来自环境变量 `PCL_CURSEFORGE_API_KEY`）。`{CDN}` 占位符在本分支只是被删除（`:19-22`）。
 - 下载引擎 `NetFile`（`ModNet.vb:579-1301`）：256 KiB 分片、多线程抢占最大分片、Range 请求；不支持 Range 的源自动降级单线程（`:964-971,1078-1099`）。临时文件在 `%Temp%\PCL\Download\*.tmp`，会话启动时整目录清空（`:1806-1815`），因此没有跨进程续传。
 - 并发与限速：线程数 = `ToolDownloadThread + 1`，速度上限由 `ToolDownloadSpeed` 档位换算（`:311-339`）；BMCLAPI 额外每线程延迟 100 ms，且 `pcl2-server`/`meloong.com`/`bmclapi`/`github.com`/`optifine.net`/`momot.rs` 强制单线程（`:853-854`）。
-- 镜像：Mojang 元数据/资源/库走 BMCLAPI 或官方源（`ModDownload.vb:1249-1302`）；CurseForge/Modrinth 走 `mod.mcimirror.top`（`:1305-1314`）；多源通过 `DlSourceLoader` 竞速（`:1317-1380`）。
+- 镜像：Mojang 元数据/资源/库走 BMCLAPI 或官方源（`ModDownload.vb:954-1000`）；CurseForge/Modrinth 走 `mod.mcimirror.top`（`:994`）；多源通过 `DlSourceLoader` 竞速（`:999-1066`）。下载源与清单解析细节见 §6.3。
 - 资源 API：CurseForge `api.curseforge.com/v1/mods/search`（`Modules\Resource\ResourceSearcher.vb:73-91`）与 Modrinth `/v2/search`（`:96-111`），页大小 40；中文查询先查本地 MCWiki 词条映射成英文关键词（`:184-288`）；响应全程 `JObject`/`JToken`，无 DTO。
 
 ### 5.4 登录与凭据
@@ -121,7 +121,16 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 磁盘布局：`versions\{名称}\{名称}.json|.jar`、`{名称}-natives\`、`libraries\`、`assets\indexes|objects`、`runtime\{组件}\`，PCL 自身状态写在 `PCL\Setup.ini` 与 `PCL\config.json`。
 - 修改已装实例用临时目录构建后 `McInstallCommit`（`ModDownloadLib.vb:2067-2111`）做 manifest 差量提交。
 
-### 6.3 启动
+### 6.3 下载清单与下载源
+
+- 清单解析全部在 C#（`PCLCS\Minecraft\Download\`）：客户端清单 `ClientListParser`（`ComputeDrops`/`ContainsVersion`/`NormalizeId`）、OptiFine `OptiFineListParser`（官方 HTML / BMCLAPI JSON）、Forge 版本 `ForgeVersionParser`、Forge 构建 `ForgeBuildParser`（官方 HTML / BMCLAPI JSON，含 1.7.10/1.8.9 分支修正）、NeoForge `NeoForgeParser`、LiteLoader `LiteLoaderParser`、Fabric `FabricListParser`。VB 只负责网络请求、读取设置与字段映射。
+- 解析失败统一抛 `DownloadSourceException`（`PCLCS\Minecraft\Download\DownloadSourceException.cs`）：`Kind` 取 `DownloadFailureKind`（NotFound/InvalidPayload/TooFewEntries/MissingField/TargetVersionMissing/Timeout/Unexpected），`IsUnavailable` 只覆盖 NotFound 与 TargetVersionMissing。Forge 官方构建页的 404 由 `HttpRequestCodeException.StatusCode = HttpStatusCode.NotFound` 识别。
+- 地址映射在 `DownloadSources`（`PCLCS\Minecraft\Download\DownloadSources.cs`）：`Order`/`Assets`/`Library`/`LauncherOrMeta`/`Mod`，与旧 VB 规则逐字一致——资源统一 https，modded 库只给 BMCLAPI 的 maven/libraries 两个候选，Mod 域名改为 `mod.mcimirror.top`。
+- 版本列表与文件下载使用不同设置：`SourcePolicy.GetPlan(ToolDownloadVersion)` 返回 `SourcePlan(OfficialFirst, FirstSeconds, SecondSeconds)`，0 → 镜像先 30/90 s，1 → 官方先 5/35 s，其余 → 官方先 60/120 s；`PreferMojangForVersionList` 决定版本列表是否官方优先，`DlSourcePreferMojang` 决定文件下载是否官方优先。
+- VB 侧 `DlSourceLoader`（`ModDownload.vb:999`）按计划顺序启动两个源竞速，先完成者胜出并取消另一个；全部失败时用 `IsUnavailableSourceError`（`:1073`）优先保留“源没有目标数据”类错误，再抛出原始异常。`DlSourceLoaderList`（`:1087`）是七个主加载器共用的列表构造器。
+- 七个主加载器（`DlClientListMain`、`DlOptiFineListMain`、`DlForgeListMain`、`DlForgeVersionMain`、`DlNeoForgeListMain`、`DlLiteLoaderListMain`、`DlFabricListMain`）只做三件事：读 `ToolDownloadVersion` 得到 `SourcePlan`、调用 `DlSourceLoader`、把 C# 结果映射回 `Dl*Entry`。
+
+### 6.4 启动
 
 - `McLaunchStart`（`ModLaunch.vb:31-206`）组装加载器链：Java → 登录 → 补文件 → 参数 → natives → 预执行 → 自定义命令 → 启动 → 等窗口 → 结束，权重见 `:122-145`。
 - JVM 参数 `McLaunchArgumentsJVM`（`:1221-1347`）：继承链合并、`-Xmx`、GC 策略、Authlib/Nide 注入、JLW、log4j 缓解参数、编码参数。
@@ -130,13 +139,13 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 进程 `McLaunchRun`（`:1953-2001`）：启动 `java.exe`（注释说明 `javaw` 有问题 #6263），把 `appdata` 环境变量指向所选 MC 目录，工作目录为版本隔离目录，重定向 stdout/stderr。
 - 监控 `Watcher`（`ModWatcher.vb:58-394`）：状态机 `Loading/Running/Crashed/Ended/Canceled`，用 `EnumWindows` 找游戏窗口，崩溃判定基于日志关键字。
 
-### 6.4 Java
+### 6.5 Java
 
 - `Java` 类型与探测在 `PCLCS\Java.cs:6-77`：执行 `java.exe -XshowSettings:properties -version`，15 s 超时，解析版本、位数与编码；候选目录约 20 个硬编码位置加 `JDK_HOME`/`JAVA_HOME`（`:136-168`），排序偏好 Java 21（`:124`）。
 - 版本需求表 `GetJavaRequirement`（`Modules\Minecraft\ModJava.vb:128-273`）：按 MC 版本、日期与加载器分别收紧区间（如 Forge 34.0.0-36.2.25 要求 Java 8u320 以下）。
 - 缺失时从 Mojang `java-runtime` 清单下载到 `.minecraft\runtime\{组件}`（`:379-382,545-551`）。
 
-### 6.5 整合包与崩溃分析
+### 6.6 整合包与崩溃分析
 
 - 五种格式：CurseForge `manifest.json`、Modrinth `modrinth.index.json`、HMCL `mcbbs.packmeta`、MultiMC `mmc-pack.json`、MCBBS；入口 `ModpackInstall`（`ModModpack.vb:31`），按压缩包内文件名嗅探（`:44-72`），overrides 复制到版本目录并写入 `VersionArgumentIndie`（`:126-143`）。
 - 崩溃分析 `CrashAnalyzer`（`ModCrash.vb:1`）：收集最近 3 分钟的 crash-report 与 latest.log（`:21-85`），按文件类型截取头尾窗口（`:214-264`），再用约 60 条 `String.Contains` 规则匹配原因（`:474-584`），最后做 Mixin/模组名归因（`:589-670`）。规则即产品知识，没有测试夹具。
