@@ -6,6 +6,7 @@ namespace PCLCS.Minecraft.Download;
 /// <param name="SecondSeconds">次源的绝对截止秒数，自请求开始计时。</param>
 public readonly record struct SourcePlan(bool OfficialFirst, int FirstSeconds, int SecondSeconds);
 
+/// <summary>下载源的顺序与超时策略，把设置项映射为 <see cref="SourcePlan"/> 与版本列表偏好。</summary>
 public static class SourcePolicy {
     /// <summary>按 ToolDownloadVersion 取源顺序与超时，数值来自 legacy 的 DlSource 超时表。</summary>
     /// <param name="toolDownloadVersion">设置项 ToolDownloadVersion：0 为镜像优先 30/90，1 为官方优先 5/35，2 及其他为官方优先 60/120。</param>
