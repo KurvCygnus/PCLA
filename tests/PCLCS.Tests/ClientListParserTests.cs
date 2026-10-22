@@ -24,11 +24,11 @@ public class ClientListParserTests {
 
     [Fact]
     public void DropsSkipSnapshotsAndUnknownDrops() {
-        var json = JObject.Parse(Manifest("1.20.1", "1.20.2-pre1", "1.21", "1.21"));
+        //* 快照 "1.21-pre1" 含连字符会被跳过，其 Drop 210 与正式版不同；
+        //* "unknown" 经 NameToVersion 落到 9999.0.0，VersionToDrop 返回 209，会被排除。
+        var json = JObject.Parse(Manifest("1.12.2", "1.20.1", "1.20.1", "1.21-pre1", "unknown"));
         var drops = ClientListParser.ComputeDrops(json);
-        Assert.Equal(drops.OrderByDescending(d => d), drops);
-        Assert.Equal(drops.Distinct(), drops);
-        Assert.DoesNotContain(209, drops);
+        Assert.Equal(new[] { 200, 120 }, drops);
     }
 
     [Fact]
