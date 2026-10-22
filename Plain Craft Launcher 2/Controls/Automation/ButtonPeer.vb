@@ -12,6 +12,12 @@ Public Class ButtonPeer
         MyBase.New(owner, AutomationControlType.Button, Function() owner.Text)
     End Sub
 
+    '//* UIA 只识别 GetPattern 返回的模式接口，仅 Implements 不会把模式暴露给客户端。
+    Public Overrides Function GetPattern(patternInterface As PatternInterface) As Object
+        If patternInterface = PatternInterface.Invoke Then Return Me
+        Return MyBase.GetPattern(patternInterface)
+    End Function
+
     Public Sub Invoke() Implements IInvokeProvider.Invoke
         Dim Button = DirectCast(Owner, MyButton)
         If Not Button.IsEnabled Then Return

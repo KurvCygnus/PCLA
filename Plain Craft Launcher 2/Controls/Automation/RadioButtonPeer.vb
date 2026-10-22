@@ -14,6 +14,12 @@ Public Class RadioButtonPeer
         MyBase.New(owner, AutomationControlType.RadioButton, Function() owner.Text)
     End Sub
 
+    '//* UIA 只识别 GetPattern 返回的模式接口，仅 Implements 不会把模式暴露给客户端。
+    Public Overrides Function GetPattern(patternInterface As PatternInterface) As Object
+        If patternInterface = PatternInterface.Invoke OrElse patternInterface = PatternInterface.Toggle Then Return Me
+        Return MyBase.GetPattern(patternInterface)
+    End Function
+
     Public Sub Invoke() Implements IInvokeProvider.Invoke
         Dim Button = DirectCast(Owner, MyRadioButton)
         If Not Button.IsEnabled Then Return
