@@ -91,6 +91,7 @@ Public Module ModDownloadLib
             End Select
             '建立控件
             Dim NewItem As New MyListItem With {.Logo = Logo, .SnapsToDevicePixels = True, .Title = Entry("id").ToString, .Height = 42, .Type = MyListItem.CheckType.Clickable, .Tag = Entry}
+            System.Windows.Automation.AutomationProperties.SetAutomationId(NewItem, $"Download.Version.{Entry("id")}")
             If Entry("lore") Is Nothing Then
                 NewItem.Info = Entry("releaseTime").Value(Of Date).ToString("yyyy'/'MM'/'dd HH':'mm")
             Else

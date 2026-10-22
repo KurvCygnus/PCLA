@@ -474,6 +474,7 @@
     <Compile Include="Controls\Automation\AutomationPeerBase.vb" />
     <Compile Include="Controls\Automation\ButtonPeer.vb" />
     <Compile Include="Controls\Automation\RadioButtonPeer.vb" />
+    <Compile Include="Controls\Automation\ListItemPeer.vb" />
     <Compile Include="Controls\MyButton.xaml.vb">
       <DependentUpon>MyButton.xaml</DependentUpon>
     </Compile>

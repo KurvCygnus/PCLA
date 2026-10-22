@@ -1,3 +1,4 @@
+Imports System.Windows.Automation.Peers
 Imports System.Windows.Markup
 
 <ContentProperty("Inlines")>
@@ -505,11 +506,23 @@ Public Class MyListItem
     '触发点击事件
     Private Sub Button_MouseUp(sender As Object, e As MouseButtonEventArgs) Handles Me.PreviewMouseLeftButtonUp
         If Not IsMouseDown Then Return
-        RaiseEvent Click(sender, e)
+        PerformActivate(e)
+    End Sub
+
+    ''' <summary>
+    ''' 以编程方式触发一次点击，供 UI Automation 调用。
+    ''' </summary>
+    Public Sub PerformActivate()
+        Dim Args As New MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) With {.RoutedEvent = Mouse.MouseUpEvent}
+        PerformActivate(Args)
+    End Sub
+
+    Private Sub PerformActivate(e As MouseButtonEventArgs)
+        RaiseEvent Click(Me, e)
         If e.Handled Then Return
         '触发自定义事件
-        If CustomEventService.GetEventType(sender) <> CustomEvent.EventType.None OrElse
-           CustomEventService.GetEvents(sender).Events.Count > 0 Then
+        If CustomEventService.GetEventType(Me) <> CustomEvent.EventType.None OrElse
+           CustomEventService.GetEvents(Me).Events.Count > 0 Then
             RaiseCustomEvent()
             e.Handled = True
         End If
@@ -653,6 +666,10 @@ Public Class MyListItem
     End Sub
     Public Overrides Function ToString() As String
         Return Title
+    End Function
+
+    Protected Overrides Function OnCreateAutomationPeer() As AutomationPeer
+        Return New ListItemPeer(Me)
     End Function
 
 End Class
