@@ -79,7 +79,6 @@
 | `PCLCS\Launch\LaunchUtils.cs` | 0 | 3 | 其他(1) / 文档注释(1) | 保留 |
 | `PCLCS\Minecraft\Download\ClientListParser.cs` | 0 | 7 | 可简化/现代化(5) / 未使用/冗余(2) | 保留 |
 | `PCLCS\Minecraft\Download\FabricListParser.cs` | 0 | 2 | 未使用/冗余(2) | 保留 |
-| `PCLCS\Minecraft\Download\ForgeBuildParser.cs` | 0 | 3 | 未使用/冗余(3) | 保留 |
 | `PCLCS\Minecraft\Download\ForgeVersionParser.cs` | 0 | 4 | 未使用/冗余(2) / 可简化/现代化(2) | 保留 |
 | `PCLCS\Minecraft\Download\LiteLoaderParser.cs` | 0 | 2 | 未使用/冗余(2) | 保留 |
 | `PCLCS\Minecraft\Download\NeoForgeParser.cs` | 0 | 4 | 可简化/现代化(3) / 未使用/冗余(1) | 保留 |

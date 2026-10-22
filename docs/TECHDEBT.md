@@ -1,4 +1,4 @@
-# PCLA 技术债清单
+﻿# PCLA 技术债清单
 
 > 基线：上游 PCL 2.99.0.0（`6b9a50d`）+ PCLA 分支改动（`88c6613`）。所有条目均给出仓库内证据；标注"已核实"的条目经过本机实际验证，"已否证"的条目保留结论以免重复排查。
 >
@@ -130,7 +130,7 @@
 - **已偿还：启动参数逻辑不可测。** 版本 JSON 规则判定、JVM/游戏参数收集、参数行拆分与去重、GC 策略已移入 `PCLCS\Minecraft\Launch\`（`VersionArgumentRules.cs`、`VersionArguments.cs`、`ArgumentLine.cs`、`GcPolicy.cs`），由 `tests\PCLCS.Tests` 的 79 项单测覆盖；VB 侧只保留适配层、设置读取与 `${...}` 展开。`ModLaunch.vb` 降至 2081 行。
 - **已偿还：合并 JSON 的输入顺序。** `CollectJvm` / `CollectGame` 原先反向遍历继承链（父级先、选中版本后），与 VB 的追加顺序不符：VB 先输出选中版本的合并 JSON（数组内部祖先→子），再沿 `InheritName` 逐级追加父级。JVM 去重保留首次出现，两种顺序的最终值恰好一致；游戏参数去重由后者覆盖，跨层重复键会取到父级值。现已改为按 `chain` 正序遍历，并由 `tests\PCLCS.Tests\MergedJsonTests.cs` 用合并 JSON fixture 锁定最终列表与父级覆盖语义。
 - **残留：`ArgumentLine` 的并发状态。** 当前实现没有规则缓存：`Deduplicate` 每次调用新建 `List`，`Split` 无可变静态状态，与 VB 原实现的 `List` + 线性扫描一致，不存在 `Dictionary` 缓存竞态。若以后为规则求值引入缓存，必须使用并发容器（`ConcurrentDictionary`），不要退回普通 `Dictionary`。
-- **已偿还：实机差分。** 2026-10-21 晚用 `D:\MC\.minecraft` 的三个真实实例（Forge 1.20.1 ZombieCraft、Forge 1.20.1-47.4.23、Fabric 1.21.8）各启动一次，全部进入主菜单并完成材质加载。ZombieCraft 的新旧日志参数块各 80 行，逐行比对仅 4 处环境差异（`-Xmx` 设置、离线用户名、两个会话 token），其余参数（`-cp`、Forge 模块参数、`--add-opens`、GC、游戏参数）完全一致；比对同时发现并修复了丢失的 `GC 设置：…` 日志行（`517a028`）。
+- **已偿还：实机差分。** 2026-10-21 晚用 `本机 MC 目录` 的三个真实实例（Forge 1.20.1 ZombieCraft、Forge 1.20.1-47.4.23、Fabric 1.21.8）各启动一次，全部进入主菜单并完成材质加载。ZombieCraft 的新旧日志参数块各 80 行，逐行比对仅 4 处环境差异（`-Xmx` 设置、离线用户名、两个会话 token），其余参数（`-cp`、Forge 模块参数、`--add-opens`、GC、游戏参数）完全一致；比对同时发现并修复了丢失的 `GC 设置：…` 日志行（`517a028`）。
 - **残留：`McInstance` 仍是上帝类**，`${...}` 展开仍留在 VB（依赖登录态、路径、窗口尺寸与 UI 线程）。
 
 ## 6. 下载源映射的既有缺陷（2026-10-21）
@@ -172,3 +172,5 @@
 - **残留：NeoForge BMCLAPI 误标官方源。** `DlNeoForgeListBmclapiMain` 仍写 `.IsOfficial = True`，上层无法区分镜像与官方；修复涉及 UI 来源标注，留待单独评估。
 - **残留：Forge 构建分支正则未转义。** `PCLCS\Minecraft\Download\ForgeBuildParser.cs:82` 用 `$"(?<=-{name}-)..."` 拼正则，`name`（如 `47.1.0`）未 `Regex.Escape`，且 `[a-z]+.[a-z]{3}` 的 `.` 未转义；当前构建号只含数字与点，未触发误判，换成含正则元字符的版本名会失配。
 - **残留：LiteLoader 的 `OfficialError` 无写入点。** `ModDownload.vb:752` 声明了 `DlLiteLoaderListResult.OfficialError`，全仓库没有任何赋值，恒为 `Nothing`；它是旧“官方源错误备用”方案的遗留字段，可随下次 UI 收敛删除。
+- **残留：Forge/NeoForge 的 VB 构造器重复解析。** `DlForgeVersionEntry.New`（`ModDownload.vb:550-562`）与 `DlNeoForgeListEntry.New`（`ModDownload.vb:668-695`）在 C# 解析器已经做过分支修正/版本推导之后又各算一遍。修正幂等，当前行为安全；风险是今后只改 C# 一侧时 VB 副本会静默过期。待 UI 收敛时改为逐字段直传，与其余五类加载器一致。
+- **残留：BMCLAPI 客户端清单异常拼接完整响应体。** `ModDownload.vb:268` 把 `ResultText` 整段拼进用户可见异常消息。旧代码同样拼接 `Json.ToString`，属保真保留；后续可改用 `DownloadDiagnostics.Snippet` 截断。
