@@ -145,16 +145,20 @@ Public Class MyButton
     Private IsMouseDown As Boolean = False
     Private Sub Button_MouseUp(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonUp
         If Not IsMouseDown Then Return
-        PerformClick()
+        PerformClick(e)
     End Sub
 
     ''' <summary>
     ''' 以编程方式触发一次点击，供 UI Automation 调用。
     ''' </summary>
     Public Sub PerformClick()
-        Logger.Info($"按下按钮：{Text}")
         Dim Args As New MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) With {.RoutedEvent = Mouse.MouseUpEvent}
-        RaiseEvent Click(Me, Args)
+        PerformClick(Args)
+    End Sub
+
+    Private Sub PerformClick(e As MouseButtonEventArgs)
+        Logger.Info($"按下按钮：{Text}")
+        RaiseEvent Click(Me, e)
         RaiseCustomEvent()
     End Sub
     Private Sub Button_MouseDown(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonDown

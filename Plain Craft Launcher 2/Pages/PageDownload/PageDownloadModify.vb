@@ -303,7 +303,7 @@ Public Class PageDownloadModify
         If ReadIni(Task.Input.PathVersion & "PCL\Setup.ini", "LogoCustom", False) Then
             CustomLogo = If(Task.Input.Logo.EndsWithF("PCL\Logo.png"), Task.Input.PathVersion & "PCL\Logo.png", Task.Input.Logo)
         End If
-        Dim Item = McDownloadListItem(VanillaData, Nothing, False).Init()
+        Dim Item = McDownloadListItem(VanillaData, Nothing, False, "Download.Version.Modify").Init()
         VanillaName = Item.Title
         VanillaIcon = Item.Logo
         LabMinecraftVersion.Text = VanillaName
@@ -584,7 +584,8 @@ Public Class PageDownloadModify
             IsRestoringComponents = True
             Try
                 PendingComponents.Clear()
-                MinecraftSelected(McDownloadListItem(DirectCast(Button.Tag, JObject), Nothing, False).Init(), Nothing)
+                MinecraftSelected(McDownloadListItem(DirectCast(Button.Tag, JObject), Nothing, False,
+                                                     "Download.Version.Modify").Init(), Nothing)
                 If ForgeVersionLoader IsNot Nothing Then LoadForge.State = ForgeVersionLoader
                 '恢复初始的组件
                 SelectedOptiFine = TryCast(BtnOptiFineRestore.Tag, DlOptiFineListEntry)

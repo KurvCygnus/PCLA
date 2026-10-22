@@ -513,6 +513,8 @@ Public Class MyListItem
     ''' 以编程方式触发一次点击，供 UI Automation 调用。
     ''' </summary>
     Public Sub PerformActivate()
+        '//* 与鼠标路径一致：Type 为 None 的列表项不响应激活
+        If Type = CheckType.None Then Return
         Dim Args As New MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) With {.RoutedEvent = Mouse.MouseUpEvent}
         PerformActivate(Args)
     End Sub

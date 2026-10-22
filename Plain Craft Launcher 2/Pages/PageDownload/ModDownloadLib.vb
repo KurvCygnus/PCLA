@@ -74,7 +74,12 @@ Public Module ModDownloadLib
 
 #Region "Minecraft 下载菜单"
 
-    Public Function McDownloadListItem(Entry As JObject, OnClick As MyListItem.ClickEventHandler, IsSaveOnly As Boolean) As MyVirtualizingElement(Of MyListItem)
+    '//* IdScope 按卡片分区，避免置顶卡与分类卡中的同一版本行产生重复 AutomationId
+    Public Function McDownloadListItem(
+        Entry As JObject,
+        OnClick As MyListItem.ClickEventHandler,
+        IsSaveOnly As Boolean,
+        Optional IdScope As String = "Download.Version") As MyVirtualizingElement(Of MyListItem)
         Return New MyVirtualizingElement(Of MyListItem)(
         Function()
             '确定图标
@@ -91,7 +96,7 @@ Public Module ModDownloadLib
             End Select
             '建立控件
             Dim NewItem As New MyListItem With {.Logo = Logo, .SnapsToDevicePixels = True, .Title = Entry("id").ToString, .Height = 42, .Type = MyListItem.CheckType.Clickable, .Tag = Entry}
-            System.Windows.Automation.AutomationProperties.SetAutomationId(NewItem, $"Download.Version.{Entry("id")}")
+            System.Windows.Automation.AutomationProperties.SetAutomationId(NewItem, $"{IdScope}.{Entry("id")}")
             If Entry("lore") Is Nothing Then
                 NewItem.Info = Entry("releaseTime").Value(Of Date).ToString("yyyy'/'MM'/'dd HH':'mm")
             Else

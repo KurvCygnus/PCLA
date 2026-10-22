@@ -456,6 +456,13 @@ Public Class PageDownloadInstall
             Dim Dict As New Dictionary(Of String, List(Of JObject)) From {
                 {"正式版", New List(Of JObject)}, {"预览版", New List(Of JObject)}, {"远古版", New List(Of JObject)}, {"愚人节版", New List(Of JObject)}
             }
+            '//* 分类卡的版本行 ID 前缀，与置顶卡区分
+            Dim VersionIdScopes As New Dictionary(Of String, String) From {
+                {"正式版", "Download.Version.Release"},
+                {"预览版", "Download.Version.Snapshot"},
+                {"远古版", "Download.Version.Old"},
+                {"愚人节版", "Download.Version.AprilFools"}
+            }
             For Each Version As JObject In MinecraftVersions
                 '确定分类
                 Dim Type As String = Version("type")
@@ -521,19 +528,20 @@ Public Class PageDownloadInstall
             CardInfo.Children.Add(PanInfo)
             CardInfo.SwapControl = PanInfo
             CardInfo.SetContentBuilder(PinnedVersions, '使用 Lambda 转发点击事件，避免 #535
-                Function(Version) McDownloadListItem(Version, Sub(sender, e) MinecraftSelected(sender, e), False))
+                Function(Version) McDownloadListItem(Version, Sub(sender, e) MinecraftSelected(sender, e), False, "Download.Version.Latest"))
             CardInfo.BuildContent()
             PanMinecraft.Children.Insert(0, CardInfo)
             '添加其他版本
             For Each Pair As KeyValuePair(Of String, List(Of JObject)) In Dict
                 If Not Pair.Value.Any() Then Continue For
                 '增加卡片
+                Dim VersionIdScope As String = VersionIdScopes(Pair.Key)
                 Dim NewCard As New MyCard With {.Title = Pair.Key, .Margin = New Thickness(0, 0, 0, 15)}
                 Dim NewStack As New StackPanel With {.Margin = New Thickness(20, MyCard.SwapedHeight, 18, 0), .VerticalAlignment = VerticalAlignment.Top, .RenderTransform = New TranslateTransform(0, 0)}
                 NewCard.Children.Add(NewStack)
                 NewCard.SwapControl = NewStack
                 NewCard.SetContentBuilder(Pair.Value,
-                    Function(Version) McDownloadListItem(Version, Sub(sender, e) MinecraftSelected(sender, e), False))
+                    Function(Version) McDownloadListItem(Version, Sub(sender, e) MinecraftSelected(sender, e), False, VersionIdScope))
                 NewCard.IsSwapped = True
                 PanMinecraft.Children.Add(NewCard)
             Next
