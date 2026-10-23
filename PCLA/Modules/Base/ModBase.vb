@@ -28,16 +28,6 @@ Public Module ModBase
            If(VersionChannel = "nightly", "每夜版",
               If(VersionChannel = "debug", "调试版", "快照版")))
 
-    '旧版本模型的兼容层：其余代码仍按旧名字引用，全部切换后删除
-    Public Const VersionBaseName As String = VersionFull
-    Public Const VersionCode As Integer = ProtocolVersion
-    Public ReadOnly BuildTypeDisplay As String = BuildChannelDisplay
-    Public NotInheritable Class BuildTypes
-        Public Const Debug As BuildChannel = BuildChannel.Debug
-        Public Const Release As BuildChannel = BuildChannel.Release
-        Public Const Snapshot As BuildChannel = BuildChannel.Snapshot
-    End Class
-
     ''' <summary>
     ''' 主窗口句柄。
     ''' </summary>

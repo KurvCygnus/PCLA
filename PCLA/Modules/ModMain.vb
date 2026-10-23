@@ -642,11 +642,11 @@ NextFile:
     ''' 尝试解压内置帮助文件。
     ''' </summary>
     Public Sub HelpTryExtract()
-        If Settings.Get(Of Integer)("SystemHelpVersion") <> VersionCode OrElse Not FileUtils.Exists(PathTemp & "Help\启动器\备份设置.xaml") Then
+        If Settings.Get(Of Integer)("SystemHelpVersion") <> HelpVersion OrElse Not FileUtils.Exists(PathTemp & "Help\启动器\备份设置.xaml") Then
             DirectoryUtils.Delete(PathTemp & "Help")
             ExtractResources(PathTemp & "Cache\Help.zip", "Help")
             FileUtils.ExtractToDirectory(PathTemp & "Cache\Help.zip", PathTemp & "Help")
-            Settings.Set("SystemHelpVersion", VersionCode)
+            Settings.Set("SystemHelpVersion", HelpVersion)
             Logger.Info($"已解压内置帮助文件，目前状态：{FileUtils.Exists(PathTemp + "Help\启动器\备份设置.xaml")}")
         End If
     End Sub
@@ -830,10 +830,10 @@ NextFile:
             Return EscapeHandler(s)
         End Function
         '基础
-        Text = Text.Replace("{pcl_version}", Replacer(VersionBaseName))
-        Text = Text.Replace("{pcl_version_code}", Replacer(VersionCode))
-        Text = Text.Replace("{pcl_version_branch}", Replacer(BuildTypeDisplay))
-        Text = Text.Replace("{pcl_build_type}", Replacer(BuildType.ToString))
+        Text = Text.Replace("{pcl_version}", Replacer(VersionFull))
+        Text = Text.Replace("{pcl_version_code}", Replacer(ProtocolVersion))
+        Text = Text.Replace("{pcl_version_branch}", Replacer(BuildChannelDisplay))
+        Text = Text.Replace("{pcl_build_type}", Replacer(BuildChannelDisplay))
         Text = Text.Replace("{pcl_branch}", Replacer(VersionBranchMain))
         Text = Text.Replace("{identify}", Replacer(Identify))
         Text = Text.Replace("{path}", Replacer(Paths.Base))
@@ -984,7 +984,7 @@ NextFile:
 
     '遥测
     Public Sub Telemetry([Event] As String, ParamArray Datas As String())
-        If BuildType = BuildTypes.Debug Then Return '开发版不上传遥测
+        If BuildType = BuildChannel.Debug Then Return '开发版不上传遥测
         If Not Settings.Get(Of Boolean)("SystemSystemTelemetry") Then Return '用户关闭了遥测
         If Not ClsBaseUrl.StartsWithF("http") Then Return '开源版没有设置遥测地址
         RunInNewThread(

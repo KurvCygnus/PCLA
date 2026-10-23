@@ -27,8 +27,8 @@ Public Class PageOtherHelp
             '获取全部分类
             Dim Types As New List(Of String)
             For Each Item As HelpEntry In HelpItems
-                If BuildType = BuildTypes.Release AndAlso Not Item.ShowInPublic Then Continue For
-                If BuildType <> BuildTypes.Release AndAlso Not Item.ShowInSnapshot Then Continue For
+                If BuildType = BuildChannel.Release AndAlso Not Item.ShowInPublic Then Continue For
+                If BuildType <> BuildChannel.Release AndAlso Not Item.ShowInSnapshot Then Continue For
                 For Each Type In Item.Types
                     If Not Types.Contains(Type) Then Types.Add(Type)
                 Next
@@ -43,8 +43,8 @@ Public Class PageOtherHelp
                 '确认所属该分类的项目
                 Dim TypeItems As New List(Of HelpEntry)
                 For Each Item In HelpItems
-                    If BuildType = BuildTypes.Release AndAlso Not Item.ShowInPublic Then Continue For
-                    If BuildType <> BuildTypes.Release AndAlso Not Item.ShowInSnapshot Then Continue For
+                    If BuildType = BuildChannel.Release AndAlso Not Item.ShowInPublic Then Continue For
+                    If BuildType <> BuildChannel.Release AndAlso Not Item.ShowInSnapshot Then Continue For
                     If Item.Types.Contains(Type) Then TypeItems.Add(Item)
                 Next
                 '增加卡片
@@ -132,8 +132,8 @@ Public Class PageOtherHelp
             '构造请求
             Dim QueryList As New List(Of SearchEntry(Of HelpEntry))
             For Each Entry As HelpEntry In HelpLoader.Output
-                If Not Entry.ShowInSearch OrElse (BuildType = BuildTypes.Release AndAlso Not Entry.ShowInPublic) Then Continue For
-                If Not Entry.ShowInSearch OrElse (BuildType <> BuildTypes.Release AndAlso Not Entry.ShowInSnapshot) Then Continue For
+                If Not Entry.ShowInSearch OrElse (BuildType = BuildChannel.Release AndAlso Not Entry.ShowInPublic) Then Continue For
+                If Not Entry.ShowInSearch OrElse (BuildType <> BuildChannel.Release AndAlso Not Entry.ShowInSnapshot) Then Continue For
                 QueryList.Add(New SearchEntry(Of HelpEntry) With {
                     .Item = Entry,
                     .SearchSource = New List(Of SearchSource) From {

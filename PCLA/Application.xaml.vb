@@ -25,7 +25,7 @@ Public Class Application
             '提升主线程优先级
             Thread.CurrentThread.Priority = ThreadPriority.Highest
             '执行开发版测试
-            If BuildType = BuildTypes.Debug Then
+            If BuildType = BuildChannel.Debug Then
                 Try
                     ModDevelop.Start()
                 Catch ex As Exception
@@ -121,12 +121,8 @@ RetryCacheCheck:
                 FrmStart.Show(False, True)
             End If
             '基础信息
-            Logger.Info($"程序版本：{VersionDisplay} ({VersionCode}{If(CommitHash = "", "", $"，#{CommitHash}")})")
-            If BuildType = BuildTypes.Snapshot Then
-                Logger.Info($"识别码：{Identify}{If(ThemeCheckOne(9), "，已解锁反馈主题", "，未解锁反馈主题")}")
-            Else
-                Logger.Info($"识别码：{Identify}")
-            End If
+            Logger.Info($"程序版本：{VersionDisplay} ({ProtocolVersion}, {BuildChannelDisplay}{If(CommitHash = "", "", $", #{CommitHash}")})")
+            Logger.Info($"识别码：{Identify}")
             Logger.Info($"程序路径：{PathExe}")
             Logger.Info($"系统编码：{Encoding.Default.HeaderName} ({Encoding.Default.CodePage}, GBK={IsGBKEncoding})")
             Logger.Info($"管理员权限：{WindowsUtils.HasAdminRole()}")
@@ -158,7 +154,7 @@ RetryCacheCheck:
     ''' 如果已在运行，则将其窗口拖出来并播放提示音，然后结束当前进程。
     ''' </summary>
     Private Shared Sub WaitingMutex(e As StartupEventArgs)
-        If BuildType = BuildTypes.Debug Then Return
+        If BuildType = BuildChannel.Debug Then Return
         Try
             Dim MutexCreatedNew As Boolean
             PclMutex = New Mutex(True, PCLCS.Startup.LauncherIdentity.MutexName, MutexCreatedNew)

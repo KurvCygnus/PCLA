@@ -28,12 +28,12 @@ Friend Module ModSecret
             If Url.Contains("baidupcs.com") OrElse Url.Contains("baidu.com") Then
                 Req.Headers.Add("User-Agent", "LogStatistic")  '#4951
             ElseIf SimulateBrowserHeaders Then
-                Req.Headers.Add("User-Agent", $"PCL2/{VersionBaseName}.{CInt(BuildType)} Mozilla/5.0 AppleWebKit/537.36 Chrome/63.0.3239.132 Safari/537.36")
+                Req.Headers.Add("User-Agent", $"PCL2/{ProtocolVersion}.{ChannelCode} Mozilla/5.0 AppleWebKit/537.36 Chrome/63.0.3239.132 Safari/537.36")
             Else
-                Req.Headers.Add("User-Agent", $"PCL2/{VersionBaseName}.{CInt(BuildType)}")
+                Req.Headers.Add("User-Agent", $"PCL2/{ProtocolVersion}.{ChannelCode}")
             End If
         End If
-        If Not SimulateBrowserHeaders Then Req.Headers.Add("Referer", $"http://{VersionCode}.open.pcl2.server/")
+        If Not SimulateBrowserHeaders Then Req.Headers.Add("Referer", $"http://{ProtocolVersion}.open.pcl2.server/")
         If Url.Contains("api.curseforge.com") OrElse Url.Contains("forgecdn.net") Then Req.Headers.Add("x-api-key", CurseForgeAPIKey)
     End Sub
 

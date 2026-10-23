@@ -24,7 +24,7 @@ Public Class PageInstanceExport
         AniControlEnabled += 1
         If Not PathUtils.IsSame(CurrentInstance, PageInstanceLeft.Instance.PathVersion) Then RefreshAll() '切换到了另一个版本，重置页面
         CustomEventService.SetEventData(BtnAdvancedHelp,
-            If(BuildType = BuildTypes.Release, "指南/整合包制作 - Public.json", "指南/整合包制作 - Snapshot.json"))
+            If(BuildType = BuildChannel.Release, "指南/整合包制作 - Public.json", "指南/整合包制作 - Snapshot.json"))
         AniControlEnabled -= 1
     End Sub
     Public Sub RefreshAll() Implements IRefreshable.Refresh
@@ -475,7 +475,7 @@ Public Class PageInstanceExport
 
 #Region "准备 PCL 文件"
 
-        If BuildType <> BuildTypes.Release AndAlso IncludePCL Then
+        If BuildType <> BuildChannel.Release AndAlso IncludePCL Then
             Loaders.Add(New LoaderTask(Of Integer, Integer)("下载 PCL 正式版",
             Sub(Loader As LoaderTask(Of Integer, Integer))
                 DownloadLatestPCL(Loader)
@@ -566,7 +566,7 @@ Public Class PageInstanceExport
             If DirectoryUtils.Exists(TargetInstance.PathVersion & "PCL\") Then DirectoryUtils.Copy(TargetInstance.PathVersion & "PCL\", OverridesFolder & "PCL\")
             WriteIni(OverridesFolder & "PCL\Setup.ini", "IsStar", False)
             '复制 PCL 本体（正式版）
-            If BuildType = BuildTypes.Release AndAlso IncludePCL Then FileUtils.Copy(PathExe, CacheFolder & "Plain Craft Launcher.exe")
+            If BuildType = BuildChannel.Release AndAlso IncludePCL Then FileUtils.Copy(PathExe, CacheFolder & "Plain Craft Launcher.exe")
             '复制 PCL 个性化内容
             If IncludePCLCustom Then
                 If DirectoryUtils.Exists(Paths.BaseThenName & "Pictures\") Then DirectoryUtils.Copy(Paths.BaseThenName & "Pictures\", CacheFolder & "PCL\Pictures\")

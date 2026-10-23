@@ -435,7 +435,7 @@ Public Class PageLinkMain
         Dim DisableReason = ServerConfig("Link")?("DisableReason2")?.ToString
         If Not String.IsNullOrEmpty(DisableReason) Then Throw New Exception("$" & DisableReason) 'TODO: 可能不会显示错误原因？
         If CType(ServerConfig("Link"), JObject).ContainsKey("MinVersionCode") AndAlso
-           VersionCode < ServerConfig("Link")("MinVersionCode").ToObject(Of Integer) Then
+           ProtocolVersion < ServerConfig("Link")("MinVersionCode").ToObject(Of Integer) Then
             Throw New Exception("$你的 PCL 版本太老了，请在更新 PCL 之后再联机！")
         End If
     End Sub

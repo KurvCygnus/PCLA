@@ -8,7 +8,7 @@ Public Class PageLaunchRight
         PanLog.Visibility = ModeDebug.ToVisibility
         '快照版提示
         PanHint.Visibility =
-            (BuildType <> BuildTypes.Release AndAlso VersionBranchMain = "Official" AndAlso
+            (BuildType <> BuildChannel.Release AndAlso VersionBranchMain = "Official" AndAlso
              CurrentRank < DonationRank.Rank23 AndAlso Not Settings.Get(Of Boolean)("HintSnapshot")).ToVisibility
     End Sub
 

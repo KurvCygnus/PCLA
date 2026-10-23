@@ -20,7 +20,7 @@ Public Class PclLogger
             Case LogBehavior.None
                 '啥也不干
             Case LogBehavior.ToastIfDebug
-                If BuildType = BuildTypes.Debug OrElse ModeDebug Then Hint("[调试模式] " & BriefText, HintType.Blue, False)
+                If BuildType = BuildChannel.Debug OrElse ModeDebug Then Hint("[调试模式] " & BriefText, HintType.Blue, False)
             Case LogBehavior.Toast
                 Hint(BriefText, HintType.Red, False)
             Case LogBehavior.Alert

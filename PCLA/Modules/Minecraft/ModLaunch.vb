@@ -245,7 +245,7 @@ NextInner:
         RunInUiWait(Sub() CheckResult = McLoginAble(McLoginInput()))
         If CheckResult <> "" Then Throw New ArgumentException(CheckResult)
         '求赞助
-        If BuildType = BuildTypes.Release AndAlso CurrentLaunchOptions?.SaveBatch Is Nothing Then '保存脚本时不提示
+        If BuildType = BuildChannel.Release AndAlso CurrentLaunchOptions?.SaveBatch Is Nothing Then '保存脚本时不提示
             RunInNewThread(
             Sub()
                 Select Case Settings.Get(Of Integer)("SystemLaunchCount")
@@ -1434,7 +1434,7 @@ Retry:
         Yield ("${libraries_directory}", PathUtils.ToShortPath(McFolderSelected & "libraries"))
         Yield ("${pure_directory}", PathUtils.RemoveSlashSuffix(PathPure.Value)) '由 PCL 添加，这会允许在分割参数并去重后再替换路径，防止路径中的特殊字符影响参数分割和去重
         Yield ("${launcher_name}", "PCL")
-        Yield ("${launcher_version}", VersionCode)
+        Yield ("${launcher_version}", ProtocolVersion)
         Yield ("${version_name}", McInstanceSelected.Name)
         Yield ("${game_directory}", PathUtils.ToShortPath(Left(McInstanceSelected.PathIndie, McInstanceSelected.PathIndie.Count - 1)))
         Yield ("${assets_root}", PathUtils.ToShortPath(McFolderSelected & "assets"))
@@ -2009,7 +2009,7 @@ IgnoreCustomSkin:
         '输出信息
         McLaunchLog("")
         McLaunchLog("~ 基础参数 ~")
-        McLaunchLog("PCL 版本：" & VersionDisplay & " (" & VersionCode & ")")
+        McLaunchLog("PCLA 版本：" & VersionDisplay & " (" & ProtocolVersion & ")")
         McLaunchLog($"游戏版本：{McInstanceSelected.VersionDisplayName}（{McInstanceSelected.Version.Vanilla}，Drop {McInstanceSelected.Version.Drop}{If(McInstanceSelected.Version.Reliable, "", "，无法完全确定")}）")
         McLaunchLog("资源版本：" & McAssetsGetIndexName(McInstanceSelected))
         McLaunchLog("版本继承：" & If(McInstanceSelected.InheritName = "", "无", McInstanceSelected.InheritName))
