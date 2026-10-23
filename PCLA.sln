@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.2.32616.157
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "Plain Craft Launcher 2", "Plain Craft Launcher 2\Plain Craft Launcher 2.vbproj", "{4499F2D2-18EF-4238-B1F0-7BD547AFF925}"
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "PCLA", "PCLA\PCLA.vbproj", "{4499F2D2-18EF-4238-B1F0-7BD547AFF925}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PCLCS", "PCLCS\PCLCS.csproj", "{32DE4AAF-F4D6-42C5-9604-19236DE96C69}"
 EndProject
@@ -34,12 +34,6 @@ Global
 		{32DE4AAF-F4D6-42C5-9604-19236DE96C69}.Release|Any CPU.Build.0 = Release|Any CPU
 		{32DE4AAF-F4D6-42C5-9604-19236DE96C69}.Snapshot|Any CPU.ActiveCfg = Snapshot|Any CPU
 		{32DE4AAF-F4D6-42C5-9604-19236DE96C69}.Snapshot|Any CPU.Build.0 = Snapshot|Any CPU
-		{AFB035DA-CB49-49CE-B96F-581BF8368CCF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AFB035DA-CB49-49CE-B96F-581BF8368CCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AFB035DA-CB49-49CE-B96F-581BF8368CCF}.Release|Any CPU.ActiveCfg = Debug|Any CPU
-		{AFB035DA-CB49-49CE-B96F-581BF8368CCF}.Release|Any CPU.Build.0 = Debug|Any CPU
-		{AFB035DA-CB49-49CE-B96F-581BF8368CCF}.Snapshot|Any CPU.ActiveCfg = Debug|Any CPU
-		{AFB035DA-CB49-49CE-B96F-581BF8368CCF}.Snapshot|Any CPU.Build.0 = Debug|Any CPU
 		{D22BBF3C-2177-0208-4E29-8466AA41AC6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D22BBF3C-2177-0208-4E29-8466AA41AC6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D22BBF3C-2177-0208-4E29-8466AA41AC6F}.Release|Any CPU.ActiveCfg = Release|Any CPU

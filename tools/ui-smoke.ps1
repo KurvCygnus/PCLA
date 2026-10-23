@@ -6,7 +6,7 @@
     依赖 winapp CLI。运行前会通过同意门请求桌面操作授权。
 #>
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\Plain Craft Launcher 2\bin\Plain Craft Launcher 2.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\PCLA\bin\PCLA.exe'),
     [string]$ConsentGate = (Join-Path $env:USERPROFILE '.config\opencode\tools\Show-ConsentGate.ps1'),
     [int]$TimeoutSec = 60
 )

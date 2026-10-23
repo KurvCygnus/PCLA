@@ -13,15 +13,15 @@ PCLA 是 [Plain Craft Launcher 2](https://github.com/Meloong-Git/PCL)（PCL / PC
 ```powershell
 git clone --recurse-submodules https://github.com/KurvCygnus/PCLA.git
 $msbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
-& $msbuild "Plain Craft Launcher 2.sln" -t:Restore -p:Configuration=Release
-& $msbuild "Plain Craft Launcher 2.sln" -t:Rebuild -p:Configuration=Release -m:2
+& $msbuild "PCLA.sln" -t:Restore -p:Configuration=Release
+& $msbuild "PCLA.sln" -t:Rebuild -p:Configuration=Release -m:2
 ```
 
-产物位于 `Plain Craft Launcher 2\bin\Plain Craft Launcher 2.exe`。
+产物位于 `PCLA\bin\PCLA.exe`。
 
 ## 凭据
 
-微软 OAuth 的 Client ID 与 CurseForge API Key 不写入源码，构建后通过环境变量提供（读取位置：`Plain Craft Launcher 2\Modules\ModSecret.vb`）：
+微软 OAuth 的 Client ID 与 CurseForge API Key 不写入源码，构建后通过环境变量提供（读取位置：`PCLA\Modules\ModSecret.vb`）：
 
 | 变量 | 用途 |
 | --- | --- |
@@ -30,7 +30,7 @@ $msbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSB
 
 ## 许可证
 
-- `Plain Craft Launcher 2\` 目录继续遵循 [LICENCE](LICENCE)（《PCL 分发有限许可》与《PCL 存储库合理使用指南》）
+- `PCLA\` 目录继续遵循 [LICENCE](LICENCE)（《PCL 分发有限许可》与《PCL 存储库合理使用指南》）
 - `MeloongCore\` 为上游子模块，遵循其自身许可证
 
 ## 致谢
