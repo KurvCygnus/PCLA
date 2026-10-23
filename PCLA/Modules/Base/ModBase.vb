@@ -53,7 +53,7 @@ Public Module ModBase
     ''' <summary>
     ''' 程序的缓存文件夹路径，以 \ 结尾。
     ''' </summary>
-    Public PathTemp As String = PathUtils.AddSlashSuffix(If(Settings.Get(Of String)("SystemSystemCache") = "", Path.GetTempPath() & "PCL\", Settings.Get(Of String)("SystemSystemCache")).Replace("/", "\"))
+    Public PathTemp As String = PathUtils.AddSlashSuffix(If(Settings.Get(Of String)("SystemSystemCache") = "", Path.GetTempPath() & PCLCS.Startup.LauncherIdentity.FolderName & "\", Settings.Get(Of String)("SystemSystemCache")).Replace("/", "\"))
     ''' <summary>
     ''' 当前程序的语言。
     ''' </summary>
@@ -479,7 +479,7 @@ Public Module ModBase
     ''' </summary>
     ''' <param name="FileName">文件完整路径或简写文件名。简写将会使用“ApplicationName\文件名.ini”作为路径。</param>
     Public Sub IniClearCache(FileName As String)
-        If Not FileName.Contains(":\") Then FileName = $"{Paths.Base}PCL\{FileName}.ini"
+        If Not FileName.Contains(":\") Then FileName = $"{Paths.BaseThenName}{FileName}.ini"
         IniCache.Remove(FileName)
     End Sub
     ''' <summary>
@@ -490,7 +490,7 @@ Public Module ModBase
     Private Function IniGetContent(FileName As String) As ConcurrentDictionary(Of String, String)
         Try
             '还原文件路径
-            If Not FileName.Contains(":\") Then FileName = $"{Paths.Base}PCL\{FileName}.ini"
+            If Not FileName.Contains(":\") Then FileName = $"{Paths.BaseThenName}{FileName}.ini"
             '检索缓存
             Dim Cache As ConcurrentDictionary(Of String, String) = Nothing
             If IniCache.TryGetValue(FileName, Cache) Then Return Cache
@@ -564,7 +564,7 @@ Public Module ModBase
                 FileContent.Append(Pair.Value)
                 FileContent.Append(vbCrLf)
             Next
-            If Not FileName.Contains(":\") Then FileName = $"{Paths.Base}PCL\{FileName}.ini"
+            If Not FileName.Contains(":\") Then FileName = $"{Paths.BaseThenName}{FileName}.ini"
             '处理相对路径
             FileName = If(FileName.Contains(":\"), FileName, Paths.Base & FileName)
             FileUtils.Write(FileName, FileContent.ToString)
@@ -797,13 +797,13 @@ Public Module ModBase
     Public PathPure As New Lazy(Of String)(
     Function()
         If Paths.Base.IsAsciiOnly() Then
-            Return Paths.Base & "PCL\"
+            Return Paths.BaseThenName
         ElseIf Paths.AppDataThenName.IsAsciiOnly() Then
             Return Paths.AppDataThenName
         ElseIf PathTemp.IsAsciiOnly() Then
             Return PathTemp
         Else
-            Return OsDrive & "ProgramData\PCL\"
+            Return OsDrive & "ProgramData\" & PCLCS.Startup.LauncherIdentity.FolderName & "\"
         End If
     End Function)
 

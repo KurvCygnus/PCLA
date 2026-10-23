@@ -439,12 +439,6 @@ Public Class FormMain
             Catch ex As Exception
                 Logger.Error(ex, "初始化加载池运行失败")
             End Try
-            '清理自动更新文件
-            Try
-                FileUtils.Delete(Paths.Base & "PCL\Plain Craft Launcher 2.exe")
-            Catch ex As Exception
-                Logger.Warn(ex, "清理自动更新文件失败")
-            End Try
             '上报
             Telemetry("启动")
         End Sub, "初始化", ThreadPriority.Lowest)
@@ -621,7 +615,7 @@ Public Class FormMain
                 FeedbackInfo()
                 Logger.Info("请在 https://github.com/Meloong-Git/PCL/issues 提交错误报告，以便于作者解决此问题！")
                 IsLogShown = True
-                StartProcess(Paths.Base & "PCL\Log1.txt")
+                StartProcess(Paths.BaseThenName & "Log1.txt")
             End If
             Thread.Sleep(500) '防止 PCL 在记事本打开前就被掐掉
         End If
@@ -776,7 +770,7 @@ Public Class FormMain
                     FrmSetupUI.PanLogoChange.Visibility = Visibility.Visible
                 End If
                 Try
-                    ImageTitleLogo.Source = Paths.Base & "PCL\Logo.png"
+                    ImageTitleLogo.Source = Paths.BaseThenName & "Logo.png"
                 Catch ex As Exception
                     ImageTitleLogo.Source = Nothing
                     Logger.Error(ex, "显示标题栏图片失败", LogBehavior.Alert)
@@ -1047,12 +1041,12 @@ Public Class FormMain
             Dim Extension As String = PathUtils.GetExtension(FilePath)
             If Extension = "xaml" Then
                 Logger.Info("文件后缀为 XAML，作为主页加载")
-                If FileUtils.Exists(Paths.Base & "PCL\Custom.xaml") Then
+                If FileUtils.Exists(Paths.BaseThenName & "Custom.xaml") Then
                     If MyMsgBox("已存在一个主页文件，是否要将它覆盖？", "覆盖确认", "覆盖", "取消") = 2 Then
                         Return
                     End If
                 End If
-                FileUtils.Copy(FilePath, Paths.Base & "PCL\Custom.xaml")
+                FileUtils.Copy(FilePath, Paths.BaseThenName & "Custom.xaml")
                 RunInUi(
                 Sub()
                     Settings.Set("UiCustomType", 1)

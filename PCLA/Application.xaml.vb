@@ -7,7 +7,7 @@ Public Class Application
     Private Sub Application_Startup(sender As Object, e As StartupEventArgs) Handles Me.Startup
         Try
             '核心初始化
-            MeloongCore.Main.Init("PCL")
+            MeloongCore.Main.Init(PCLCS.Startup.LauncherIdentity.FolderName)
             MeloongCore.Wpf.Main.Init()
             If Not (e.Args.Contains("--update") OrElse e.Args.Contains("--gpu") OrElse e.Args.Contains("--memory")) Then '若是通过命令行调用，则不检查单例、不轮换日志（#9137）
                 WaitingMutex(e)
@@ -68,11 +68,11 @@ Public Class Application
             End If
             '初始化文件结构
             Try
-                DirectoryUtils.Create(Paths.Base & "PCL\Pictures\")
-                DirectoryUtils.Create(Paths.Base & "PCL\Musics\")
-                CheckPermissionWithException(Paths.Base & "PCL\")
+                DirectoryUtils.Create(Paths.BaseThenName & "Pictures\")
+                DirectoryUtils.Create(Paths.BaseThenName & "Musics\")
+                CheckPermissionWithException(Paths.BaseThenName)
             Catch ex As Exception
-                MsgBox($"PCL 没有对当前文件夹的权限（{Paths.Base}PCL\），请尝试：" & vbCrLf &
+                MsgBox($"PCL 没有对当前文件夹的权限（{Paths.BaseThenName}），请尝试：" & vbCrLf &
                   "1. 将 PCL 移动到其他文件夹" & If(PathUtils.GetDiskName(Paths.Base) = "C"c, "，例如 C 盘和桌面以外的其他位置。", "。") & vbCrLf &
                   "2. 删除当前目录中的 PCL 文件夹，然后再试。" & vbCrLf &
                   "3. 右键 PCL 选择属性，打开 兼容性 中的 以管理员身份运行此程序。",
@@ -84,12 +84,12 @@ RetryCacheCheck:
                 DirectoryUtils.Create(PathTemp)
                 CheckPermissionWithException(PathTemp)
             Catch ex As Exception
-                If PathUtils.IsSame(PathTemp, Path.GetTempPath() & "PCL\") Then
+                If PathUtils.IsSame(PathTemp, Path.GetTempPath() & PCLCS.Startup.LauncherIdentity.FolderName & "\") Then
                     MyMsgBox("PCL 无法访问缓存文件夹，可能导致程序出错或无法正常使用！" & vbCrLf & vbCrLf & "错误原因：" & ex.GetDisplay(True), "缓存文件夹不可用")
                 Else
                     MyMsgBox("手动设置的缓存文件夹不可用，PCL 将使用默认缓存文件夹。" & vbCrLf & vbCrLf & "错误原因：" & ex.GetDisplay(True), "缓存文件夹不可用")
                     Settings.Set("SystemSystemCache", "")
-                    PathTemp = Path.GetTempPath() & "PCL\"
+                    PathTemp = Path.GetTempPath() & PCLCS.Startup.LauncherIdentity.FolderName & "\"
                     GoTo RetryCacheCheck
                 End If
             End Try
@@ -152,7 +152,7 @@ RetryCacheCheck:
         If BuildType = BuildTypes.Debug Then Return
         Try
             Dim MutexCreatedNew As Boolean
-            PclMutex = New Mutex(True, "PCL_SingletonMutex", MutexCreatedNew)
+            PclMutex = New Mutex(True, PCLCS.Startup.LauncherIdentity.MutexName, MutexCreatedNew)
             If MutexCreatedNew Then Return
             Logger.Warn("已有一个 PCL 实例正在运行")
             '等待已有的 PCL 退出
@@ -164,8 +164,7 @@ RetryCacheCheck:
                 End Try
             End If
             '将已有的 PCL 窗口拖出来
-            Dim WindowHwnd As IntPtr = FindWindow(Nothing, "Plain Craft Launcher　")
-            If WindowHwnd = IntPtr.Zero Then WindowHwnd = FindWindow(Nothing, "Plain Craft Launcher 2　")
+            Dim WindowHwnd As IntPtr = FindWindow(Nothing, PCLCS.Startup.LauncherIdentity.DisplayName & "　")
             If WindowHwnd <> IntPtr.Zero Then ShowWindowToTop(WindowHwnd)
             '播放提示音并退出
             Beep()
