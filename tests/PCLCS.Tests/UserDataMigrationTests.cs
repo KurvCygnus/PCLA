@@ -51,13 +51,13 @@ public class UserDataMigrationTests {
     }
 
     /// <summary>
-    /// 模拟复制到一半就中断：向暂存路径写入残缺内容后抛异常。
+    /// 模拟复制到一半就中断：向暂存路径写入残缺内容后抛异常，并记录收到的暂存路径。
     /// </summary>
     private sealed class TornCopyFileSystem : IFileSystem {
         private readonly PhysicalFileSystem _inner = new();
 
         public bool Fail { get; set; } = true;
-        public bool SawExistingStaging { get; private set; }
+        public string? LastStagingPath { get; private set; }
 
         public bool DirectoryExists(string path) => _inner.DirectoryExists(path);
         public bool FileExists(string path) => _inner.FileExists(path);
@@ -66,7 +66,7 @@ public class UserDataMigrationTests {
         public IEnumerable<string> EnumerateDirectories(string path) => _inner.EnumerateDirectories(path);
 
         public void Copy(string source, string destination) {
-            SawExistingStaging |= File.Exists(destination);
+            LastStagingPath = destination;
             if (Fail) {
                 File.WriteAllText(destination, "torn");
                 throw new IOException("模拟复制中断");
@@ -85,12 +85,19 @@ public class UserDataMigrationTests {
     private sealed class MoveFailingFileSystem : IFileSystem {
         private readonly PhysicalFileSystem _inner = new();
 
+        public string? LastStagingPath { get; private set; }
+
         public bool DirectoryExists(string path) => _inner.DirectoryExists(path);
         public bool FileExists(string path) => _inner.FileExists(path);
         public void CreateDirectory(string path) => _inner.CreateDirectory(path);
         public IEnumerable<string> EnumerateFiles(string path) => _inner.EnumerateFiles(path);
         public IEnumerable<string> EnumerateDirectories(string path) => _inner.EnumerateDirectories(path);
-        public void Copy(string source, string destination) => _inner.Copy(source, destination);
+
+        public void Copy(string source, string destination) {
+            LastStagingPath = destination;
+            _inner.Copy(source, destination);
+        }
+
         public void Move(string source, string destination) => throw new IOException("模拟移动失败");
         public void DeleteFile(string path) => _inner.DeleteFile(path);
         public void WriteAllText(string path, string text) => _inner.WriteAllText(path, text);
@@ -180,6 +187,55 @@ public class UserDataMigrationTests {
     }
 
     [Fact]
+    public void ExistingTargetAndStagingLookalikeBothSurvive() {
+        var (root, options) = CreateRoot();
+        try {
+            var source = Path.Combine(options.AppDataRoot, "PCL");
+            var target = Path.Combine(options.AppDataRoot, "PCLA");
+            Directory.CreateDirectory(source);
+            Directory.CreateDirectory(target);
+            File.WriteAllText(Path.Combine(source, "foo"), "source-foo");
+            File.WriteAllText(Path.Combine(target, "foo"), "target-foo");
+            File.WriteAllText(Path.Combine(target, "foo.pcla-tmp"), "lookalike");
+
+            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+
+            Assert.Empty(warnings);
+            Assert.Equal("target-foo", File.ReadAllText(Path.Combine(target, "foo")));
+            Assert.Equal("lookalike", File.ReadAllText(Path.Combine(target, "foo.pcla-tmp")));
+            Assert.Equal("source-foo", File.ReadAllText(Path.Combine(source, "foo")));
+            Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
+    public void SourceFilesWithStagingLookalikeNamesBothMigrate() {
+        var (root, options) = CreateRoot();
+        try {
+            var source = Path.Combine(options.AppDataRoot, "PCL");
+            Directory.CreateDirectory(source);
+            File.WriteAllText(Path.Combine(source, "foo"), "a");
+            File.WriteAllText(Path.Combine(source, "foo.pcla-tmp"), "b");
+            var target = Path.Combine(options.AppDataRoot, "PCLA");
+
+            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+
+            Assert.Empty(warnings);
+            Assert.Equal("a", File.ReadAllText(Path.Combine(target, "foo")));
+            Assert.Equal("b", File.ReadAllText(Path.Combine(target, "foo.pcla-tmp")));
+            Assert.True(File.Exists(Path.Combine(source, "foo")));
+            Assert.True(File.Exists(Path.Combine(source, "foo.pcla-tmp")));
+            Assert.Equal(new[] { "foo", "foo.pcla-tmp" },
+                Directory.EnumerateFiles(target)
+                    .Select(path => Path.GetFileName(path))
+                    .Where(name => name != options.FilesMarker)
+                    .OrderBy(name => name, StringComparer.Ordinal));
+        }
+        finally { Cleanup(root); }
+    }
+
+    [Fact]
     public void SkipsLogsCacheOldExeAndLatest() {
         var (root, options) = CreateRoot();
         try {
@@ -237,25 +293,30 @@ public class UserDataMigrationTests {
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
             var target = Path.Combine(options.AppDataRoot, "PCLA");
-            var staging = Path.Combine(target, "options.txt.pcla-tmp");
+            var torn = new TornCopyFileSystem();
 
-            var warnings = UserDataMigration.Run(new TornCopyFileSystem(), new InMemoryRegistry(), options);
+            var warnings = UserDataMigration.Run(torn, new InMemoryRegistry(), options);
 
             Assert.Contains(warnings, warning => warning.Contains("用户数据"));
+            var firstStaging = torn.LastStagingPath
+                ?? throw new InvalidOperationException("未捕获首次暂存路径");
+            Assert.StartsWith(Path.Combine(target, "options.txt"), firstStaging);
+            Assert.EndsWith(".tmp", firstStaging);
+            Assert.False(File.Exists(firstStaging));
             Assert.False(File.Exists(Path.Combine(target, ".pcla-import-files")));
             Assert.False(File.Exists(Path.Combine(target, "options.txt")));
-            Assert.False(File.Exists(staging));
+            Assert.Empty(Directory.EnumerateFiles(target));
 
-            // 模拟进程被强制终止、来不及清理暂存文件的情况。
-            File.WriteAllText(staging, "torn");
             var retry = new TornCopyFileSystem { Fail = false };
 
             var secondWarnings = UserDataMigration.Run(retry, new InMemoryRegistry(), options);
 
             Assert.Empty(secondWarnings);
-            Assert.False(retry.SawExistingStaging);
+            var retryStaging = retry.LastStagingPath
+                ?? throw new InvalidOperationException("未捕获重试暂存路径");
+            Assert.NotEqual(firstStaging, retryStaging);
+            Assert.False(File.Exists(retryStaging));
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
-            Assert.False(File.Exists(staging));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
         }
         finally { Cleanup(root); }
@@ -269,11 +330,13 @@ public class UserDataMigrationTests {
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
             var target = Path.Combine(options.AppDataRoot, "PCLA");
-            var staging = Path.Combine(target, "options.txt.pcla-tmp");
+            var moveFail = new MoveFailingFileSystem();
 
-            var warnings = UserDataMigration.Run(new MoveFailingFileSystem(), new InMemoryRegistry(), options);
+            var warnings = UserDataMigration.Run(moveFail, new InMemoryRegistry(), options);
 
             Assert.Contains(warnings, warning => warning.Contains("用户数据"));
+            var staging = moveFail.LastStagingPath
+                ?? throw new InvalidOperationException("未捕获暂存路径");
             Assert.False(File.Exists(Path.Combine(target, ".pcla-import-files")));
             Assert.False(File.Exists(Path.Combine(target, "options.txt")));
             Assert.False(File.Exists(staging));
@@ -407,7 +470,7 @@ public class UserDataMigrationTests {
 
             Assert.Contains(warnings, warning => warning.Contains("用户数据"));
             Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
-            Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", "options.txt.pcla-tmp")));
+            Assert.Empty(Directory.EnumerateFiles(Path.Combine(options.AppDataRoot, "PCLA")));
         }
         finally { Cleanup(root); }
     }

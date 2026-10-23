@@ -59,11 +59,11 @@ public sealed class MigrationOptions {
 /// </summary>
 /// <remarks>
 /// 每个区块只在第一次成功时导入：标记写入后不再扫描旧目录。因此首次启动 PCLA 前应先关闭旧版 PCL，
-/// 首次启动之后才写入旧版 PCL 的数据不会被导入。文件先复制到 <c>.pcla-tmp</c> 暂存名，
-/// 成功后再改名为目标文件，避免把写了一半的内容当成完整数据。
+/// 首次启动之后才写入旧版 PCL 的数据不会被导入。文件先复制到以目标名开头、带随机串的 <c>.tmp</c>
+/// 暂存名，成功后再改名为目标文件，避免把写了一半的内容当成完整数据。进程被强制终止时可能留下
+/// 这种随机名暂存文件；迁移不会清理它们，因为无法证明它们属于迁移而不是用户数据。
 /// </remarks>
 public static class UserDataMigration {
-    private const string StagingSuffix = ".pcla-tmp";
 
     /// <summary>
     /// 使用真实文件系统、当前用户注册表与默认选项执行迁移。
@@ -135,12 +135,12 @@ public static class UserDataMigration {
     }
 
     private static void CopyAtomically(IFileSystem fs, string source, string destination) {
-        var staging = destination + StagingSuffix;
-        // 上次异常退出可能留下暂存文件；先清理掉，本次复制才能重新建立完整内容。
-        if (fs.FileExists(staging)) fs.DeleteFile(staging);
         // 目标文件已经存在就视为完整数据（包括用户或开发环境预先创建的文件），绝不覆盖。
         if (fs.FileExists(destination)) return;
         fs.CreateDirectory(Path.GetDirectoryName(destination)!);
+        // 每次复制使用唯一暂存名：不会与用户文件（包括 foo.pcla-tmp 这类名字）冲突，
+        // 也不需要删除任何预先存在的路径。崩溃残留的随机名文件不会影响后续重试。
+        var staging = destination + ".pcla-" + Guid.NewGuid().ToString("N") + ".tmp";
         try {
             fs.Copy(source, staging);
             fs.Move(staging, destination);
@@ -156,7 +156,7 @@ public static class UserDataMigration {
             if (fs.FileExists(path)) fs.DeleteFile(path);
         }
         catch (Exception) {
-            // 清理失败不能掩盖原始异常；残留的暂存文件会在下次启动时先被删除。
+            // 清理失败不能掩盖原始异常；随机名暂存文件不会影响后续重试。
         }
     }
 
