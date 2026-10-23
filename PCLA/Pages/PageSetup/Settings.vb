@@ -24,6 +24,7 @@ Public Class Settings
         New Setting("HintSnapshot", False, Source:=Sources.Registry),
         New Setting("SystemEulaVersion", 0, Source:=Sources.Registry),
         New Setting("SystemCount", 0, Source:=Sources.Registry, Encrypted:=True),
+        New Setting("SystemPclaSkinMigrated", False, Source:=Sources.Registry),
         New Setting("SystemLaunchCount", 0, Source:=Sources.Registry, Encrypted:=True),
         New Setting("SystemHighestSavedBetaVersionReg", 0, Source:=Sources.Registry, Encrypted:=True),
         New Setting("SystemHighestBetaVersionReg", 0, Source:=Sources.Registry, Encrypted:=True),

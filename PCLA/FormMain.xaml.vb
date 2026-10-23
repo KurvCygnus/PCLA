@@ -26,6 +26,19 @@ Public Class FormMain
                 Settings.Set("LaunchArgumentIndieV2", Settings.GetDefault("LaunchArgumentIndieV2"))
             End If
         End If
+        '旧版自定义皮肤（一次性）
+        If Not Settings.Get(Of Boolean)("SystemPclaSkinMigrated") Then
+            Try
+                If Not FileUtils.Exists(Paths.AppDataThenName & "CustomSkin.png") AndAlso
+                   FileUtils.Exists(Paths.Base & "PCL\CustomSkin.png") Then
+                    FileUtils.Copy(Paths.Base & "PCL\CustomSkin.png", Paths.AppDataThenName & "CustomSkin.png")
+                    Logger.Info("已迁移旧版自定义皮肤")
+                End If
+                Settings.Set("SystemPclaSkinMigrated", True)
+            Catch ex As Exception
+                Logger.Warn(ex, "迁移旧版自定义皮肤失败")
+            End Try
+        End If
         '刷新主题
         ThemeRefresh()
         '注册拖拽事件（不能直接加 Handles，否则没用；#6340）
