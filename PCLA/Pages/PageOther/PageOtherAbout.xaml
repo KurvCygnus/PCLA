@@ -12,21 +12,28 @@
                         <RowDefinition Height="45" />
                         <RowDefinition Height="45" />
                         <RowDefinition Height="45" />
+                        <RowDefinition Height="45" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="40" />
                         <ColumnDefinition />
                         <ColumnDefinition Width="150" />
                     </Grid.ColumnDefinitions>
-                    <local:MyListItem IsHitTestVisible="False" Title="龙腾猫跃" Margin="-5,0,15,0" Info="Plain Craft Launcher 的开发者！" Grid.Row="0" Grid.Column="1" />
-                    <local:MyListItem IsHitTestVisible="False" Title="HerobrineXia" Margin="-5,0,15,0" Info="Plain Craft Launcher 的协力开发者！" Grid.Row="1" Grid.Column="1" />
-                    <local:MyListItem IsHitTestVisible="False" Title="Plain Craft Launcher 2" Margin="-5,0,15,0" Info="当前版本：%VERSION%（%VERSIONCODE%.%BRANCH%）" Grid.Row="2" Grid.Column="1" x:Name="ItemAboutPcl" />
+                    <local:MyListItem IsHitTestVisible="False" Title="龙腾猫跃" Margin="-5,0,15,0"
+                                      Info="PCL 原作者" Grid.Row="0" Grid.Column="1" />
+                    <local:MyListItem IsHitTestVisible="False" Title="PCLA Contributors" Margin="-5,0,15,0"
+                                      Info="KurvCygnus" Grid.Row="1" Grid.Column="1" />
+                    <local:MyListItem IsHitTestVisible="False" Title="Plain Craft Launcher (PCL) Alternative"
+                                      Margin="-5,0,15,0" Info="当前版本：%VERSION%（%BRANCH%）"
+                                      Grid.Row="2" Grid.Column="1" x:Name="ItemAboutPcl" />
+                    <local:MyListItem IsHitTestVisible="False" Title="问题反馈" Margin="-5,0,15,0"
+                                      Info="GitHub Issues" Grid.Row="3" Grid.Column="1" />
                     <Image Source="/PCLA;component/Images/Heads/LTCat.jpg" Grid.Row="0" Margin="3">
                         <Image.Clip>
                             <EllipseGeometry Center="17 17" RadiusX="17" RadiusY="17" />
                         </Image.Clip>
                     </Image>
-                    <Image Source="/PCLA;component/Images/Heads/HerobrineXia.png" Grid.Row="1" Margin="3">
+                    <Image Source="/PCLA;component/Images/Heads/Logo.png" Grid.Row="1" Margin="3">
                         <Image.Clip>
                             <EllipseGeometry Center="17 17" RadiusX="17" RadiusY="17" />
                         </Image.Clip>
@@ -36,10 +43,22 @@
                             <EllipseGeometry Center="17 17" RadiusX="17" RadiusY="17" />
                         </Image.Clip>
                     </Image>
+                    <Image Source="/PCLA;component/Images/Heads/Logo.png" Grid.Row="3" Margin="3">
+                        <Image.Clip>
+                            <EllipseGeometry Center="17 17" RadiusX="17" RadiusY="17" />
+                        </Image.Clip>
+                    </Image>
                     <local:MyButton Text="赞助 PCL !" Grid.Column="2" Grid.Row="0" Height="35" ColorType="Highlight"
-                                    local:CustomEventService.EventType="打开网页" local:CustomEventService.EventData="https://meloong.com/afd/a/LTCat" />
-                    <local:MyButton Text="检查更新" Grid.Column="2" Grid.Row="2" Height="35" 
+                                    local:CustomEventService.EventType="打开网页"
+                                    local:CustomEventService.EventData="https://meloong.com/afd/a/LTCat" />
+                    <local:MyButton Text="GitHub 主页" Grid.Column="2" Grid.Row="1" Height="35"
+                                    local:CustomEventService.EventType="打开网页"
+                                    local:CustomEventService.EventData="https://github.com/KurvCygnus" />
+                    <local:MyButton Text="打开发布页" Grid.Column="2" Grid.Row="2" Height="35"
                                     x:Name="BtnAboutUpdate" />
+                    <local:MyButton Text="提交 Issue" Grid.Column="2" Grid.Row="3" Height="35"
+                                    local:CustomEventService.EventType="打开网页"
+                                    local:CustomEventService.EventData="https://github.com/KurvCygnus/PCLA/issues" />
                 </Grid>
             </local:MyCard>
             <local:MyCard Margin="0,0,0,15" Title="特别鸣谢">
@@ -517,33 +536,19 @@
                         <TextBlock Margin="0,1.5,6,0" Text="我是pipikeng我喂自己袋盐" />
                         <TextBlock Margin="0,1.5,6,0" Text="人族人亚族人属智人种晚期智人亚种" />
                     </WrapPanel>
-                    <Grid Height="35">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                        </Grid.ColumnDefinitions>
-                        <local:MyButton x:Name="BtnDonateOutput" Grid.Column="0" MinWidth="140" Text="生成土豆码" Padding="13,0" Margin="0,0,20,0" HorizontalAlignment="Left" ColorType="Highlight" Visibility="Collapsed" />
-                        <local:MyButton x:Name="BtnDonateDonate" Grid.Column="0" MinWidth="140" Text="赞助作者" Padding="13,0" Margin="0,0,20,0" HorizontalAlignment="Left" ColorType="Highlight" local:CustomEventService.EventType="打开网页" local:CustomEventService.EventData="https://meloong.com/afd/a/LTCat" />
-                        <local:MyButton x:Name="BtnDonateCopy" Grid.Column="1" MinWidth="140" Text="复制识别码" Padding="13,0" Margin="0,0,20,0" HorizontalAlignment="Left" />
-                        <local:MyButton x:Name="BtnDonateInput" Grid.Column="2" MinWidth="140" Text="输入土豆码" Padding="13,0" Margin="0,0,20,0" HorizontalAlignment="Left" />
-                    </Grid>
                 </StackPanel>
             </local:MyCard>
             <local:MyCard Margin="0,0,0,15" Title="法律信息" IsSwapped="True" CanSwap="True">
                 <StackPanel Margin="25,39,23,20">
                     <TextBlock Text="匿名数据收集" TextWrapping="Wrap" Margin="0,6,0,4" FontWeight="Bold" />
-                    <TextBlock Margin="0,0,0,2" LineHeight="17" Text="当下载失败、PCL 出错、游戏崩溃等事件时，PCL 会匿名上报信息，以通知龙猫 “哦吼，出错了”，让龙猫能更好地修 Bug……（PCL 不会上传或收集任何个人信息，包括上报的东西里面也没有！）&#xa;你可以在 设置 → 其他 → 启动器 中关闭上报，不过龙猫就不知道你遇到了什么 Bug 了……&#xa;详情：https://github.com/Meloong-Git/PCL/discussions/7036" TextWrapping="Wrap" />
+                    <TextBlock Margin="0,0,0,2" LineHeight="17" Text="本发行版不收集匿名使用数据；设置中不再提供遥测开关。PCLA 不运营服务器，不接收启动器数据。" TextWrapping="Wrap" />
                     <TextBlock Text="隐私声明与个人信息保护政策" TextWrapping="Wrap" Margin="0,10,0,4" FontWeight="Bold" />
-                    <TextBlock Margin="0,0,0,2" LineHeight="17" Text="PCL 没有收集个人信息，所以这里其实啥都不用写……&#xa;留个这个其实只是为了让你知道 PCL 没有收集个人信息，诶嘿。" TextWrapping="Wrap" />
+                    <TextBlock Margin="0,0,0,2" LineHeight="17" Text="PCL 没有收集个人信息，所以这里其实啥都不用写……&#xa;留个这个其实只是为了让你知道 PCL 没有收集个人信息，诶嘿。&#xa;PCLA 不运营服务器，不接收启动器数据。" TextWrapping="Wrap" />
                     <TextBlock Text="其他信息" TextWrapping="Wrap" Margin="0,10,0,4" FontWeight="Bold" />
-                    <TextBlock Margin="0,0,0,2" LineHeight="17" Text="Copyright © 成都瓜皮龙科技有限公司&#13;计算机软件著作权登记号：2020SR0875133&#13;违法违规行为举报投诉邮箱：admin@meloong.com&#13;非 MINECRAFT 官方产品。未经 MOJANG 或 MICROSOFT 批准，也不与 MOJANG 或 MICROSOFT 关联。" TextWrapping="Wrap" />
+                    <TextBlock Margin="0,0,0,2" LineHeight="17" Text="Copyright © 成都瓜皮龙科技有限公司&#13;计算机软件著作权登记号：2020SR0875133&#13;违法违规行为举报投诉邮箱：admin@meloong.com&#13;非 MINECRAFT 官方产品。未经 MOJANG 或 MICROSOFT 批准，也不与 MOJANG 或 MICROSOFT 关联。&#13;PCLA 是第三方修改版，与龙腾猫跃及 PCL 官方无隶属关系。PCLA 修改部分 © PCLA Contributors。" TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" Height="35" HorizontalAlignment="Left" Margin="0,12,0,0">
-                        <local:MyButton Text="用户协议与免责声明" Width="170" Padding="13,0" Margin="0,0,20,0" ColorType="Highlight" 
-                                        local:CustomEventService.EventType="打开网页" local:CustomEventService.EventData="https://shimo.im/docs/rGrd8pY8xWkt6ryW#anchor-RnU9" />
-                        <local:MyButton Text="PCL 分发有限许可" Width="170" Padding="13,0" Margin="0,0,20,0" 
-                                        local:CustomEventService.EventType="打开网页" local:CustomEventService.EventData="https://shimo.im/docs/rGrd8pY8xWkt6ryW#anchor-X0bo" />
-                        <local:MyButton Text="开源代码" Width="140" Padding="13,0" local:CustomEventService.EventType="打开网页" local:CustomEventService.EventData="https://github.com/Hex-Dragon/PCL2" />
+                        <local:MyButton Text="PCL 分发有限许可" Width="170" Padding="13,0" Margin="0,0,20,0" x:Name="BtnAboutLicence" />
+                        <local:MyButton Text="开源代码" Width="140" Padding="13,0" local:CustomEventService.EventType="打开网页" local:CustomEventService.EventData="https://github.com/KurvCygnus/PCLA" />
                     </StackPanel>
                 </StackPanel>
             </local:MyCard>

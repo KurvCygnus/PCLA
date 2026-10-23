@@ -186,9 +186,8 @@ Friend Module ModSecret
         End Get
     End Property
 
+    '? 设置页的“输入土豆码”入口仍调用此空实现，待该入口移除后一并删除。
     Public Sub InputPotatoCode(IsUpdating As Boolean)
-    End Sub
-    Friend Sub GeneratePotatoCode()
     End Sub
 
     ''' <summary>
