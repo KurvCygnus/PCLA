@@ -957,4 +957,8 @@
 
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+  <ItemGroup>
+    <Compile Include="$(IntermediateOutputPath)VersionInfo.g.vb" />
+  </ItemGroup>
+  <Import Project="..\Version.targets" />
 </Project>

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <PclaSemVer>0.1.0</PclaSemVer>
+    <PclaProtocolVersion>1000</PclaProtocolVersion>
+    <PclaHelpVersion>1</PclaHelpVersion>
+  </PropertyGroup>
+</Project>

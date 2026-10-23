@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <PclaChannel Condition="'$(PclaChannel)' == '' and '$(Configuration)' == 'Debug'">debug</PclaChannel>
+    <PclaChannel Condition="'$(PclaChannel)' == ''">snapshot</PclaChannel>
+    <PclaCommit Condition="'$(PclaCommit)' == ''">local</PclaCommit>
+  </PropertyGroup>
+
+  <Target Name="PclaGenerateVersion" BeforeTargets="CoreCompile">
+    <!-- 去掉末尾分隔符：带尾反斜杠的目录接到命令行结尾会变成 \"，被解析成转义引号 -->
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)tools\version.ps1&quot; -Channel &quot;$(PclaChannel)&quot; -Commit &quot;$(PclaCommit)&quot; -OutputDir &quot;$(IntermediateOutputPath.TrimEnd('\'))&quot;" />
+  </Target>
+</Project>
