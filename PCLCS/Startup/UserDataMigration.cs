@@ -3,14 +3,18 @@ using Microsoft.Win32;
 namespace PCLCS.Startup;
 
 /// <summary>
-/// 文件系统的最小抽象，便于在测试中模拟复制失败。
+/// 文件系统的最小抽象，便于在测试中模拟复制、移动与清理失败。
+/// 枚举方法只返回当前目录的内容，不递归。
 /// </summary>
 public interface IFileSystem {
     bool DirectoryExists(string path);
     bool FileExists(string path);
     void CreateDirectory(string path);
     IEnumerable<string> EnumerateFiles(string path);
+    IEnumerable<string> EnumerateDirectories(string path);
     void Copy(string source, string destination);
+    void Move(string source, string destination);
+    void DeleteFile(string path);
     void WriteAllText(string path, string text);
 }
 
@@ -53,13 +57,25 @@ public sealed class MigrationOptions {
 /// 把旧版 PCL 的用户数据、便携数据与注册表一次性导入 PCLA。
 /// 只补缺失项：目标已存在的文件或值一律保留；源数据只读，绝不被删除或覆盖。
 /// </summary>
+/// <remarks>
+/// 每个区块只在第一次成功时导入：标记写入后不再扫描旧目录。因此首次启动 PCLA 前应先关闭旧版 PCL，
+/// 首次启动之后才写入旧版 PCL 的数据不会被导入。文件先复制到 <c>.pcla-tmp</c> 暂存名，
+/// 成功后再改名为目标文件，避免把写了一半的内容当成完整数据。
+/// </remarks>
 public static class UserDataMigration {
+    private const string StagingSuffix = ".pcla-tmp";
+
     /// <summary>
     /// 使用真实文件系统、当前用户注册表与默认选项执行迁移。
     /// </summary>
     /// <returns>每个导入失败的区块对应一条中文警告；无失败时为空。</returns>
     public static IReadOnlyList<string> RunDefault() {
-        return Run(new PhysicalFileSystem(), new RegistryStore(), new MigrationOptions());
+        try {
+            return Run(new PhysicalFileSystem(), new RegistryStore(), new MigrationOptions());
+        }
+        catch (Exception ex) {
+            return new[] { $"初始化旧数据导入失败：{ex.Message}" };
+        }
     }
 
     /// <summary>
@@ -97,25 +113,51 @@ public static class UserDataMigration {
             return;
         }
 
-        foreach (var file in fs.EnumerateFiles(source)) {
-            var relative = file.Substring(source.Length)
-                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (ShouldSkip(relative, options)) continue;
-            var destination = Path.Combine(target, relative);
-            if (fs.FileExists(destination)) continue;
-            fs.CreateDirectory(Path.GetDirectoryName(destination)!);
-            fs.Copy(file, destination);
-        }
+        MigrateDirectoryContents(fs, source, target, options);
         fs.WriteAllText(markerPath, DateTime.UtcNow.ToString("O"));
     }
 
-    private static bool ShouldSkip(string relative, MigrationOptions options) {
-        var segments = relative.Split(
-            new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
-            StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0) return true;
-        if (segments.Any(segment => options.ExcludedDirectories.Contains(segment))) return true;
-        return options.ExcludedNames.Contains(segments[segments.Length - 1]);
+    private static void MigrateDirectoryContents(IFileSystem fs, string source, string target,
+        MigrationOptions options) {
+        foreach (var file in fs.EnumerateFiles(source)) {
+            var name = Path.GetFileName(file);
+            if (options.ExcludedNames.Contains(name)) continue;
+            CopyAtomically(fs, file, Path.Combine(target, name));
+        }
+        foreach (var directory in fs.EnumerateDirectories(source)) {
+            var name = Path.GetFileName(directory);
+            // 在进入之前就剪掉排除目录，避免枚举 Cache 这类可能很大的旧缓存。
+            if (options.ExcludedDirectories.Contains(name)) continue;
+            var childTarget = Path.Combine(target, name);
+            fs.CreateDirectory(childTarget);
+            MigrateDirectoryContents(fs, directory, childTarget, options);
+        }
+    }
+
+    private static void CopyAtomically(IFileSystem fs, string source, string destination) {
+        var staging = destination + StagingSuffix;
+        // 上次异常退出可能留下暂存文件；先清理掉，本次复制才能重新建立完整内容。
+        if (fs.FileExists(staging)) fs.DeleteFile(staging);
+        // 目标文件已经存在就视为完整数据（包括用户或开发环境预先创建的文件），绝不覆盖。
+        if (fs.FileExists(destination)) return;
+        fs.CreateDirectory(Path.GetDirectoryName(destination)!);
+        try {
+            fs.Copy(source, staging);
+            fs.Move(staging, destination);
+        }
+        catch {
+            TryDelete(fs, staging);
+            throw;
+        }
+    }
+
+    private static void TryDelete(IFileSystem fs, string path) {
+        try {
+            if (fs.FileExists(path)) fs.DeleteFile(path);
+        }
+        catch (Exception) {
+            // 清理失败不能掩盖原始异常；残留的暂存文件会在下次启动时先被删除。
+        }
     }
 
     private static void MigrateRegistry(IRegistry registry, MigrationOptions options) {
@@ -123,7 +165,8 @@ public static class UserDataMigration {
         if (registry.ValueExists(options.NewRegistryPath, options.RegistryMarker)) return;
         if (registry.KeyExists(options.OldRegistryPath)) {
             foreach (var name in registry.GetValueNames(options.OldRegistryPath)) {
-                if (name == "SystemLastVersionReg") continue;
+                // 注册表值名的比较规则与 Windows 一致，不区分大小写。
+                if (string.Equals(name, "SystemLastVersionReg", StringComparison.OrdinalIgnoreCase)) continue;
                 if (registry.ValueExists(options.NewRegistryPath, name)) continue;
                 var value = registry.GetValue(options.OldRegistryPath, name);
                 if (value != null) registry.SetValue(options.NewRegistryPath, name, value);
@@ -140,8 +183,11 @@ public sealed class PhysicalFileSystem : IFileSystem {
     public bool DirectoryExists(string path) => Directory.Exists(path);
     public bool FileExists(string path) => File.Exists(path);
     public void CreateDirectory(string path) => Directory.CreateDirectory(path);
-    public IEnumerable<string> EnumerateFiles(string path) => Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+    public IEnumerable<string> EnumerateFiles(string path) => Directory.EnumerateFiles(path);
+    public IEnumerable<string> EnumerateDirectories(string path) => Directory.EnumerateDirectories(path);
     public void Copy(string source, string destination) => File.Copy(source, destination, false);
+    public void Move(string source, string destination) => File.Move(source, destination);
+    public void DeleteFile(string path) => File.Delete(path);
     public void WriteAllText(string path, string text) => File.WriteAllText(path, text);
 }
 
