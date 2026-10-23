@@ -985,7 +985,6 @@ NextFile:
 #End Region
 
     Public DragControl = Nothing
-    Private Timer4Count As Integer = 0
     Private Timer150Count As Integer = 0
     Private Sub TimerMain()
         Try
@@ -994,22 +993,10 @@ NextFile:
             MyMsgBoxTick()
             FrmMain.DragTick()
             LoaderTaskbarProgressRefresh()
-            If ThemeDontClick = 2 Then ThemeRefresh()
 #End Region
         Catch ex As Exception
             Logger.Error(ex, "短程主时钟执行异常", LogBehavior.AlertThenCrash)
         End Try
-        Timer4Count += 1
-        If Timer4Count = 4 Then
-            Timer4Count = 0
-            Try
-#Region "每 250ms 执行一次的代码"
-                If ThemeNow = 12 Then ThemeRefresh()
-#End Region
-            Catch ex As Exception
-                Logger.Warn(ex, "中程主时钟执行异常")
-            End Try
-        End If
         Timer150Count += 1
         If Timer150Count = 150 Then
             Timer150Count = 0

@@ -789,43 +789,13 @@
     <Resource Include="Images\Skins\Alex.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Themes\5.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\6.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\7.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\8.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\9.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\10.png" />
-  </ItemGroup>
-  <ItemGroup>
     <Resource Include="Images\Heads\Patrick.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\11.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\12.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Blocks\GoldBlock.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Themes\13.png" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="Resources\Ookii.Dialogs.Wpf.dll" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Themes\42.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Blocks\RedstoneLampOff.png" />
