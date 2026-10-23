@@ -958,7 +958,7 @@ NextFile:
 
 #End Region
 
-#Region "反馈与遥测"
+#Region "反馈"
 
     '反馈
     Public Sub Feedback(Optional ShowMsgbox As Boolean = True, Optional ForceOpenLog As Boolean = False)
@@ -967,7 +967,7 @@ NextFile:
         If ForceOpenLog OrElse (ShowMsgbox AndAlso MyMsgBox("若你在汇报一个 Bug，请点击 打开文件夹 按钮，并上传 Log(1~5).txt 中包含错误信息的文件。" & vbCrLf & "游戏崩溃一般与启动器无关，请不要因为游戏崩溃而提交反馈。", "反馈提交提醒", "打开文件夹", "不需要") = 1) Then
             OpenExplorer(Paths.BaseThenName & "Log1.txt")
         End If
-        OpenWebsite("https://github.com/Meloong-Git/PCL/issues/")
+        OpenWebsite("https://github.com/KurvCygnus/PCLA/issues")
     End Sub
     ''' <summary>
     ''' 在日志中输出系统诊断信息。
@@ -980,26 +980,6 @@ NextFile:
             "DPI：" & DPI & "（" & Math.Round(DPI / 96, 2) * 100 & "%）" & vbCrLf &
             "MC 文件夹：" & If(McFolderSelected, "Nothing") & vbCrLf &
             "文件位置：" & Paths.Base)
-    End Sub
-
-    '遥测
-    Public Sub Telemetry([Event] As String, ParamArray Datas As String())
-        If BuildType = BuildChannel.Debug Then Return '开发版不上传遥测
-        If Not Settings.Get(Of Boolean)("SystemSystemTelemetry") Then Return '用户关闭了遥测
-        If Not ClsBaseUrl.StartsWithF("http") Then Return '开源版没有设置遥测地址
-        RunInNewThread(
-        Sub()
-            Try
-                Logger.Info($"匿名数据上报：{[Event]}")
-                Dim Url As String = $"{ClsBaseUrl}&Event={StringUtils.UrlEscape([Event])}"
-                For i = 0 To Datas.Length - 1 Step 2
-                    Url &= "&" & StringUtils.UrlEscape(Datas(i)) & "=" & StringUtils.UrlEscape(Datas(i + 1).ReplaceLineEndings(vbLf, mergeMultiple:=True))
-                Next
-                NetRequestByClient(Url, MakeLog:=False)
-            Catch ex As Exception
-                Logger.Warn(ex, "匿名数据上报失败")
-            End Try
-        End Sub, "Telemetry", ThreadPriority.Lowest)
     End Sub
 
 #End Region

@@ -333,12 +333,6 @@ Public Class PageInstanceExport
             ConfigLines.Add($"# 当版本设置中选择了 {vbLQ}使用版本文件夹中的 Java{vbRQ} 时，是否打包版本文件夹中的 Java。")
             ConfigLines.Add("IncludeJava:" & CheckOptionsJava.Checked)
             ConfigLines.Add("")
-            ConfigLines.Add("# 是否打包正式版 PCL，以便没有启动器的玩家安装整合包。")
-            ConfigLines.Add("IncludeLauncher:" & CheckOptionsPcl.Checked)
-            ConfigLines.Add("")
-            ConfigLines.Add("# 是否打包 PCL 个性化内容，例如功能隐藏设置、主页、背景音乐和图片等。")
-            ConfigLines.Add("IncludeLauncherCustom:" & CheckOptionsPclCustom.Checked)
-            ConfigLines.Add("")
             ConfigLines.Add("# 是否将 Mod、资源包、光影包的文件直接放入整合包中，这样在导入时就无需联网下载它们。")
             ConfigLines.Add("# 建议仅在无法稳定连接 CurseForge 或 Modrinth 时才考虑启用。")
             ConfigLines.Add("# 二次分发可能违反使用协议，请尽量不要公开发布包含资源文件的整合包！")
@@ -351,7 +345,7 @@ Public Class PageInstanceExport
             ConfigLines.Add("")
             ConfigLines.Add("# 导出的文件的存放位置。")
             ConfigLines.Add("# 若设置了此项，在导出时会直接将文件放到此路径，不会弹窗要求选择。")
-            ConfigLines.Add("# 若 IncludeLauncher 为 True，应以 .zip 结尾；若为 False，应以 .mrpack 结尾。")
+            ConfigLines.Add("# 导出的文件应以 .zip 或 .mrpack 结尾。")
             ConfigLines.Add("PackPath:" & If(ConfigPackPath, ""))
             ConfigLines.Add("")
             '导出内容段
@@ -386,8 +380,6 @@ Public Class PageInstanceExport
             TextExportName.Text = Ini.GetOrDefault("Name", "")
             TextExportVersion.Text = Ini.GetOrDefault("Version", "")
             CheckOptionsJava.Checked = Ini.GetOrDefault("IncludeJava", True)
-            CheckOptionsPcl.Checked = Ini.GetOrDefault("IncludeLauncher", True)
-            CheckOptionsPclCustom.Checked = Ini.GetOrDefault("IncludeLauncherCustom", True)
             CheckAdvancedInclude.Checked = Ini.GetOrDefault("DontCheckHostedAssets", False)
             If Not CheckAdvancedInclude.Checked Then CheckAdvancedModrinth.Checked = Ini.GetOrDefault("ModrinthUploadMode", False) '#7979，加个特判
             ConfigPackPath = Ini.GetOrDefault("PackPath", Nothing)
@@ -445,9 +437,9 @@ Public Class PageInstanceExport
         End If
         If PackPath Is Nothing Then
             Dim Extensions As New List(Of (Extension As String, Display As String))
-            If Not CheckOptionsPcl.Checked AndAlso CheckAdvancedModrinth.Checked Then Extensions.Add(("mrpack", "Modrinth 整合包文件"))
+            If CheckAdvancedModrinth.Checked Then Extensions.Add(("mrpack", "Modrinth 整合包文件"))
             Extensions.Add(("zip", "压缩文件"))
-            If Not CheckOptionsPcl.Checked AndAlso Not CheckAdvancedModrinth.Checked Then Extensions.Add(("mrpack", "Modrinth 整合包文件"))
+            If Not CheckAdvancedModrinth.Checked Then Extensions.Add(("mrpack", "Modrinth 整合包文件"))
             PackPath = Dialogs.SaveFile("选择导出位置",
                 PackName & If(String.IsNullOrEmpty(TextExportVersion.Text), "", " " & TextExportVersion.Text), filter:=Extensions)
             Logger.Info($"手动指定的导出路径：{PackPath}")
@@ -464,26 +456,12 @@ Public Class PageInstanceExport
         Dim PathIndie As String = TargetInstance.PathIndie
         Dim CheckHostedAssets As Boolean = Not CheckAdvancedInclude.Checked
         Dim ModrinthUploadMode As Boolean = CheckAdvancedModrinth.Checked
-        Dim IncludePCL As Boolean = CheckOptionsPcl.Checked
-        Dim IncludePCLCustom As Boolean = IncludePCL AndAlso CheckOptionsPclCustom.Checked
         Dim AllRules = StandardizeLines(GetAllRules(), True).ToList()
         Dim AllExtraFiles = StandardizeLines(GetExtraFileLines(), False).ToList()
         Logger.Info($"准备导出整合包，共有 {AllRules.Count} 条规则，{AllExtraFiles.Count} 条追加内容行")
 
         '构造步骤加载器
         Dim Loaders As New List(Of LoaderBase)
-
-#Region "准备 PCL 文件"
-
-        If BuildType <> BuildChannel.Release AndAlso IncludePCL Then
-            Loaders.Add(New LoaderTask(Of Integer, Integer)("下载 PCL 正式版",
-            Sub(Loader As LoaderTask(Of Integer, Integer))
-                DownloadLatestPCL(Loader)
-                FileUtils.Copy(PathTemp & "Latest.exe", CacheFolder & "Plain Craft Launcher.exe")
-            End Sub) With {.ProgressWeight = 0.5, .Block = False})
-        End If
-
-#End Region
 
 #Region "复制文件"
 
@@ -545,7 +523,7 @@ Public Class PageInstanceExport
             End If
             Loader.Progress = 0.95
             '复制追加内容到根目录
-            Dim BaseFolder As String = If(IncludePCL, CacheFolder, CacheFolder & "modpack\")
+            Dim BaseFolder As String = CacheFolder & "modpack\"
             For Each Line In AllExtraFiles
                 If Line.EndsWithF("\") OrElse Line.EndsWithF("/") Then
                     If DirectoryUtils.Exists(Line) Then
@@ -565,18 +543,6 @@ Public Class PageInstanceExport
             '复制 PCL 版本设置
             If DirectoryUtils.Exists(TargetInstance.PathVersion & "PCL\") Then DirectoryUtils.Copy(TargetInstance.PathVersion & "PCL\", OverridesFolder & "PCL\")
             WriteIni(OverridesFolder & "PCL\Setup.ini", "IsStar", False)
-            '复制 PCL 本体（正式版）
-            If BuildType = BuildChannel.Release AndAlso IncludePCL Then FileUtils.Copy(PathExe, CacheFolder & "Plain Craft Launcher.exe")
-            '复制 PCL 个性化内容
-            If IncludePCLCustom Then
-                If DirectoryUtils.Exists(Paths.BaseThenName & "Pictures\") Then DirectoryUtils.Copy(Paths.BaseThenName & "Pictures\", CacheFolder & "PCL\Pictures\")
-                If DirectoryUtils.Exists(Paths.BaseThenName & "Musics\") Then DirectoryUtils.Copy(Paths.BaseThenName & "Musics\", CacheFolder & "PCL\Musics\")
-                If DirectoryUtils.Exists(Paths.BaseThenName & "Help\") Then DirectoryUtils.Copy(Paths.BaseThenName & "Help\", CacheFolder & "PCL\Help\")
-                If FileUtils.Exists(Paths.BaseThenName & "Custom.xaml") Then FileUtils.Copy(Paths.BaseThenName & "Custom.xaml", CacheFolder & "PCL\Custom.xaml")
-                If FileUtils.Exists(Paths.BaseThenName & "Setup.ini") Then FileUtils.Copy(Paths.BaseThenName & "Setup.ini", CacheFolder & "PCL\Setup.ini")
-                If FileUtils.Exists(Paths.BaseThenName & "hints.txt") Then FileUtils.Copy(Paths.BaseThenName & "hints.txt", CacheFolder & "PCL\hints.txt")
-                If FileUtils.Exists(Paths.BaseThenName & "Logo.png") Then FileUtils.Copy(Paths.BaseThenName & "Logo.png", CacheFolder & "PCL\Logo.png")
-            End If
         End Sub) With {.ProgressWeight = 5})
 
 #End Region
@@ -700,21 +666,9 @@ Public Class PageInstanceExport
                 {"dependencies", Dependencies}
             }
             FileUtils.Write(CacheFolder & "modpack\modrinth.index.json", ResultJson.ToString(Newtonsoft.Json.Formatting.Indented))
-            '打包
-            If IncludePCL Then
-                '首次压缩整合包
-                FileUtils.CreateZipFromDirectory(CacheFolder & "modpack.mrpack", CacheFolder & "modpack\")
-                Loader.Progress = 0.5
-                DirectoryUtils.Delete(CacheFolder & "modpack\")
-                Loader.Progress = 0.6
-                '二次压缩整合包
-                FileUtils.CreateZipFromDirectory(PackPath, CacheFolder)
-                Loader.Progress = 0.9
-            Else
-                '直接压缩整合包
-                FileUtils.CreateZipFromDirectory(PackPath, CacheFolder & "modpack\")
-                Loader.Progress = 0.8
-            End If
+            '直接压缩整合包
+            FileUtils.CreateZipFromDirectory(PackPath, CacheFolder & "modpack\")
+            Loader.Progress = 0.8
             OpenExplorer(PackPath)
         End Sub) With {.ProgressWeight = 6})
 
@@ -776,9 +730,6 @@ Public Class PageInstanceExport
         '勾选打包资源文件时，禁止开启仅 Modrinth 资源模式
         If CheckAdvancedInclude.Checked Then CheckAdvancedModrinth.Checked = False
         CheckAdvancedModrinth.IsEnabled = Not CheckAdvancedInclude.Checked
-    End Sub
-    Private Sub CheckAdvancedModrinth_Change(sender As Object, user As Boolean) Handles CheckAdvancedModrinth.Change, CheckOptionsPcl.Change
-        HintModrinthFormat.Visibility = (CheckAdvancedModrinth.Checked AndAlso CheckOptionsPcl.Checked).ToVisibility
     End Sub
 
 End Class

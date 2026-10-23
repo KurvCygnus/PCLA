@@ -146,21 +146,19 @@ Friend Module ModSecret
 #Region "更新"
 
     Friend Sub UpdateCheckByButton()
-        Hint("该版本中不包含更新功能……")
+        Hint("PCLA 不包含自更新，请从发布页下载新版本。")
+        OpenWebsite("https://github.com/KurvCygnus/PCLA/releases")
     End Sub
 
-    Friend IsUpdateWaitingRestart As Boolean = False
     Public Sub UpdateRestart(TriggerRestartAndByEnd As Boolean)
+        Throw New NotSupportedException("PCLA 不提供自更新")
     End Sub
     Public Sub UpdateReplace(ProcessId As Integer, OldFileName As String, NewFileName As String, TriggerRestart As Boolean)
+        Throw New NotSupportedException("PCLA 不提供自更新")
     End Sub
 
-    ''' <summary>
-    ''' 确保 PathTemp/Latest.exe 是最新正式版的 PCL，它会被用于整合包打包。
-    ''' 如果不是，则下载一个。
-    ''' </summary>
     Friend Sub DownloadLatestPCL(Optional LoaderToSyncProgress As LoaderBase = Nothing)
-        '注意：如果要自行实现这个功能，请换用另一个文件路径，以免与官方版本冲突
+        Throw New NotSupportedException("PCLA 不捆绑启动器 exe")
     End Sub
 
 #End Region
@@ -185,10 +183,6 @@ Friend Module ModSecret
             Return DonationRank.None
         End Get
     End Property
-
-    '? 设置页的“输入土豆码”入口仍调用此空实现，待该入口移除后一并删除。
-    Public Sub InputPotatoCode(IsUpdating As Boolean)
-    End Sub
 
     ''' <summary>
     ''' 获取设备识别码。

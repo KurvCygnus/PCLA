@@ -143,14 +143,14 @@ Public Class FormMain
         RunInNewThread(
         Sub()
             'EULA 提示
-            Const EulaVersion As Integer = 2
+            Const EulaVersion As Integer = 3
             If Settings.Get(Of Integer)("SystemEulaVersion") < EulaVersion Then
                 Select Case MyMsgBox(
                     If(Settings.Get(Of Integer)("SystemEulaVersion") = 0,
-                        "在使用 PCL 前，请先阅读用户协议与免责声明。",
-                        $"PCL 的用户协议与免责声明已更新。{vbCrLf}请阅读更新后的用户协议与免责声明。"),
-                        "协议授权", "同意", "拒绝", "查看用户协议与免责声明",
-                        Button3Action:=Sub() OpenWebsite("https://shimo.im/docs/rGrd8pY8xWkt6ryW"))
+                        "PCLA 是 PCL 的第三方修改版。使用前请阅读 LICENCE 中的许可与免责声明。",
+                        $"PCLA 的许可与免责声明已更新。{vbCrLf}请阅读更新后的 LICENCE。"),
+                        "许可提示", "同意", "拒绝", "查看 LICENCE",
+                        Button3Action:=Sub() PageOtherAbout.OpenLicence())
                     Case 1
                         Settings.Set("SystemEulaVersion", EulaVersion)
                     Case 2
@@ -168,8 +168,6 @@ Public Class FormMain
             Catch ex As Exception
                 Logger.Error(ex, "初始化加载池运行失败")
             End Try
-            '上报
-            Telemetry("启动")
         End Sub, "初始化", ThreadPriority.Lowest)
 
         Logger.Info($"第三阶段加载用时：{GetTimeMs() - ApplicationStartTick} ms")
@@ -242,11 +240,10 @@ Public Class FormMain
         On Error Resume Next
         IsProgramEnding = True
         AniControlEnabled += 1
-        If IsUpdateWaitingRestart Then UpdateRestart(False)
         If ReturnCode = ProcessReturnValues.Exception Then
             If Not IsLogShown Then
                 FeedbackInfo()
-                Logger.Info("请在 https://github.com/Meloong-Git/PCL/issues 提交错误报告，以便于作者解决此问题！")
+                Logger.Info("请在 https://github.com/KurvCygnus/PCLA/issues 提交错误报告，以便于作者解决此问题！")
                 IsLogShown = True
                 StartProcess(Paths.BaseThenName & "Log1.txt")
             End If

@@ -6,10 +6,6 @@ Public Class PageLaunchRight
     Private Sub Init() Handles Me.Loaded
         PanBack.ScrollToHome()
         PanLog.Visibility = ModeDebug.ToVisibility
-        '快照版提示
-        PanHint.Visibility =
-            (BuildType <> BuildChannel.Release AndAlso VersionBranchMain = "Official" AndAlso
-             CurrentRank < DonationRank.Rank23 AndAlso Not Settings.Get(Of Boolean)("HintSnapshot")).ToVisibility
     End Sub
 
 #Region "主页"

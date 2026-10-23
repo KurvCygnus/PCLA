@@ -48,9 +48,8 @@ Public Class Application
             '检查参数调用
             If e.Args.Length > 0 Then
                 If e.Args(0) = "--update" Then
-                    '自动更新
-                    UpdateReplace(e.Args(1), e.Args(2).Trim(""""), e.Args(3).Trim(""""), e.Args(4))
-                    Environment.Exit(ProcessReturnValues.TaskDone)
+                    MsgBox("PCLA 不提供自更新，请从发布页下载新版本。", MsgBoxStyle.Information, "不支持自动更新")
+                    Environment.Exit(ProcessReturnValues.Fail)
                 ElseIf e.Args(0) = "--gpu" Then
                     '调整显卡设置
                     Try

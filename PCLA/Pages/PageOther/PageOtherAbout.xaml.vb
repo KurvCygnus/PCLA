@@ -14,14 +14,13 @@ Public Class PageOtherAbout
 
     End Sub
 
-    '? 设置页的“复制识别码”入口仍调用此方法，待该入口移除后一并删除。
-    Public Shared Sub CopyIdentify()
-        ClipboardSet(Identify)
-    End Sub
     Private Sub BtnAboutUpdate_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnAboutUpdate.Click
         UpdateCheckByButton()
     End Sub
     Private Sub BtnAboutLicence_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnAboutLicence.Click
+        OpenLicence()
+    End Sub
+    Public Shared Sub OpenLicence()
         Dim licencePath As String = Paths.Base & "LICENCE"
         If FileUtils.Exists(licencePath) Then
             OpenExplorer(licencePath)
