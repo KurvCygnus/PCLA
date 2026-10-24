@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'PCLA/**'
+      - 'PCLCS/**'
+      - 'MeloongCore/**'
+      - 'tests/**'
+      - 'Version.props'
+      - 'Version.targets'
+      - 'tools/version.ps1'
+      - 'PCLA.sln'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'PCLA/**'
+      - 'PCLCS/**'
+      - 'MeloongCore/**'
+      - 'tests/**'
+      - 'Version.props'
+      - 'Version.targets'
+      - 'tools/version.ps1'
+      - 'PCLA.sln'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      channel: snapshot
+      commit: ${{ github.sha }}

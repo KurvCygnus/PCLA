@@ -1,69 +1,65 @@
 name: Build
+
 on:
-  push:
-    paths:
-      - 'PCLA/**'
-      - '.github/workflows/**'
-  pull_request:
-    paths:
-      - 'PCLA/**'
-      - '.github/workflows/**'
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      channel:
+        required: true
+        type: string
+      commit:
+        required: true
+        type: string
+    outputs:
+      version:
+        description: Full version
+        value: ${{ jobs.build.outputs.version }}
 
 jobs:
   build:
-    name: Build
     runs-on: windows-latest
-    strategy:  
-       matrix:  
-         configuration: [Debug, Release]
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
 
-    - name: Checkout
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 1
-        submodules: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
 
-    - name: Set Describe
-      shell: bash
-      run: |
-          describe=`git describe --tags --always`
-          echo "describe=$describe" >> $GITHUB_ENV
+      - uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x64
 
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v3
-      with:
-        msbuild-architecture: x64
-    
-    - name: Update Help
-      run:  |
-        Set-Location ..
-        git clone https://github.com/LTCatt/PCL2Help.git -b master --single-branch --depth 1
-        Set-Location PCL2Help
-        Remove-Item -Path *.* -Recurse -Force
-        Compress-Archive -Path .\* -DestinationPath .\Help.zip
-        Copy-Item -Path .\Help.zip -Destination "${{ GITHUB.WORKSPACE }}\PCLA\Resources\Help.zip" -Force
-        Set-Location ..
-        Remove-Item PCL2Help -Recurse -Force
-        Set-Location ${{ GITHUB.WORKSPACE }}
+      - name: Compute version
+        id: version
+        shell: pwsh
+        run: |
+          $lines = & ./tools/version.ps1 -Channel "${{ inputs.channel }}" -Commit "${{ inputs.commit }}"
+          $map = @{}
+          foreach ($line in $lines) {
+            $key, $value = $line.Split('=', 2)
+            $map[$key] = $value
+          }
+          "version=$($map['VersionFull'])" >> $env:GITHUB_OUTPUT
 
+      - name: Build PCLCS
+        run: dotnet build PCLCS\PCLCS.csproj -c Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }}
 
-    - name: Replace
-      run: |
-        (gc "PCLA\Modules\ModSecret.vb") -replace 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "")', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "${{ secrets.CLIENT_ID }}")' | Out-File "PCLA\Modules\ModSecret.vb"
-        (gc "PCLA\Modules\ModSecret.vb") -replace 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "")', 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "${{ secrets.CURSEFORGE_API_KEY }}")' | Out-File "PCLA\Modules\ModSecret.vb"
-        (gc "PCLA\Modules\Base\ModBase.vb") -replace 'Public Const CommitHash As String = ""', 'Public Const CommitHash As String = "${{ github.sha }}"' | Out-File "PCLA\Modules\Base\ModBase.vb"
-        
-    - name: Restore NuGet Packages
-      run: dotnet restore PCLCS\PCLCS.csproj
+      - name: Test
+        run: dotnet test tests\PCLCS.Tests\PCLCS.Tests.csproj -c Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }}
 
-    - name: Build
-      run: msbuild "PCLA\PCLA.vbproj" -p:Configuration=${{ matrix.configuration }}
+      - name: Build PCLA
+        run: msbuild PCLA\PCLA.vbproj -t:Rebuild -p:Configuration=Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }} -m:2
 
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: ${{ matrix.configuration }} ${{ env.describe }}
-        path: PCLA\obj\${{ matrix.configuration }}\PCLA.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PCLA-${{ steps.version.outputs.version }}
+          path: |
+            PCLA\bin\PCLA.exe
+            LICENCE
+            README.md
+            CHANGELOG.md
+          retention-days: 90

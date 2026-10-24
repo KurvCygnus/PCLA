@@ -1,0 +1,21 @@
+name: Preview
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        options: [nightly, snapshot]
+        default: nightly
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      channel: ${{ github.event_name == 'schedule' && 'nightly' || inputs.channel }}
+      commit: ${{ github.sha }}

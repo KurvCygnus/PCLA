@@ -1,4 +1,4 @@
-# Plain Craft Launcher Alternative (PCLA)
+# Plain Craft Launcher (PCL) Alternative (PCLA)
 
 PCLA 是 [Plain Craft Launcher 2](https://github.com/Meloong-Git/PCL)（PCL / PCL2）的第三方分支，由 [KurvCygnus](https://github.com/KurvCygnus) 基于其开源代码独立进行二次创作，与龙腾猫跃及 PCL 官方没有任何隶属关系，也不代表 PCL 官方立场。
 
@@ -21,7 +21,7 @@ $msbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSB
 
 ## 凭据
 
-微软 OAuth 的 Client ID 与 CurseForge API Key 不写入源码，构建后通过环境变量提供（读取位置：`PCLA\Modules\ModSecret.vb`）：
+微软 OAuth 的 Client ID 与 CurseForge API Key 不写入源码，也不在构建时注入，运行时从环境变量读取（读取位置：`PCLA\Modules\ModSecret.vb`）：
 
 | 变量 | 用途 |
 | --- | --- |

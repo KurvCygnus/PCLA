@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      channel: release
+      commit: ${{ github.sha }}
+
+  publish:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: PCLA-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Verify tag
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $semver = (Select-String -Path Version.props -Pattern '<PclaSemVer>(.*?)</PclaSemVer>').Matches[0].Groups[1].Value
+          $expected = "v$semver"
+          if ("${{ github.ref_name }}" -ne $expected) {
+            throw "tag ${{ github.ref_name }} != $expected"
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $zip = "PCLA-${{ needs.build.outputs.version }}-win.zip"
+          Compress-Archive -Path dist\* -DestinationPath $zip
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Set-Content -LiteralPath SHA256SUMS.txt -Encoding ascii
+          "ZIP=$zip" >> $env:GITHUB_ENV
+
+      - name: Create draft release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" "$env:ZIP" SHA256SUMS.txt --draft --generate-notes
