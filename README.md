@@ -19,6 +19,8 @@ $msbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSB
 
 产物位于 `PCLA\bin\PCLA.exe`。
 
+发布包未做代码签名，首次运行时 Windows SmartScreen 可能提示“未知发布者”；确认文件来自本仓库 Release 后，可选择“更多信息”→“仍要运行”。
+
 ## 凭据
 
 微软 OAuth 的 Client ID 与 CurseForge API Key 不写入源码，也不在构建时注入，运行时从环境变量读取（读取位置：`PCLA\Modules\ModSecret.vb`）：
