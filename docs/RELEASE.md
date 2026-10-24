@@ -27,3 +27,11 @@ nightly/snapshot 只验证 Actions artifact 的版本串、zip 内容与校验�
 - `dotnet test tests\PCLCS.Tests\PCLCS.Tests.csproj -c Release`：192 通过 + 1 跳过（含新增版本/迁移用例）。
 - `MeloongCore.Tests` 不进 CI：TUnit 在 .NET 10 下不可用，且已有 `FileUtilsTest.cs:7` 失败；本地运行 `MeloongCore\Tests\bin\Release\net48\MeloongCore.Tests.exe`。
 - 凭据只从 `PCL_MS_CLIENT_ID` / `PCL_CURSEFORGE_API_KEY` 环境变量读取，不嵌入产物。
+
+## 0.1.0 本地验收（2026-10-24）
+
+- Release 全量重建：0 警告 0 错误，产物 `PCLA\bin\PCLA.exe`。
+- 测试：192 通过 + 1 跳过（`NeoForgeParserTests.RealNeoForgeFeedsParse`，网络不可达）。
+- 产物元数据：`FileVersion=0.1.0.0`，`ProductVersion=0.1.0-snapshot`。
+- 旧名/旧 pack URI/`VersionBaseName`/`VersionCode`/`%VERSIONCODE%` 扫描仅剩允许清单（旧整合包识别、旧皮肤迁移、加密口令、迁移测试常量）。
+- 未在本机执行：UI 冒烟、真实上游下载（需桌面同意门）、GitHub Actions 真实运行、tag push 与 artifact 端到端下载；首次 push 后按本清单复核。
