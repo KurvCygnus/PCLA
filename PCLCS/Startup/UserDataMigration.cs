@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using PCLCS.Results;
 
 namespace PCLCS.Startup;
 
@@ -65,40 +66,47 @@ public sealed class MigrationOptions {
 /// </remarks>
 public static class UserDataMigration {
 
-    /// <summary>
-    /// 使用真实文件系统、当前用户注册表与默认选项执行迁移。
-    /// </summary>
-    /// <returns>每个导入失败的区块对应一条中文警告；无失败时为空。</returns>
-    public static IReadOnlyList<string> RunDefault() {
+    /// <summary>使用真实文件系统与当前用户注册表执行迁移；初始化失败也返回报告。</summary>
+    public static MigrationReport RunDefault() =>
+        RunDefault(() => new PhysicalFileSystem(), () => new RegistryStore(), new MigrationOptions());
+
+    internal static MigrationReport RunDefault(Func<IFileSystem> fileSystemFactory,
+        Func<IRegistry> registryFactory, MigrationOptions options) {
         try {
-            return Run(new PhysicalFileSystem(), new RegistryStore(), new MigrationOptions());
-        }
-        catch (Exception ex) {
-            return new[] { $"初始化旧数据导入失败：{ex.Message}" };
+            return Run(fileSystemFactory(), registryFactory(), options);
+        } catch (Exception ex) {
+            return new MigrationReport([
+                new MigrationSectionResult(MigrationSection.Startup,
+                    Result<Unit, MigrationError>.Err(
+                        new MigrationError(MigrationSection.Startup, null, "初始化用户数据导入失败", ex))),
+            ]);
         }
     }
 
-    /// <summary>
-    /// 执行迁移。三个区块（用户数据、便携数据、注册表）互相独立，
-    /// 任一区块抛出异常只会记录一条警告，其余区块继续执行。
-    /// </summary>
-    /// <returns>每个导入失败的区块对应一条中文警告；无失败时为空。</returns>
-    public static IReadOnlyList<string> Run(IFileSystem fs, IRegistry registry, MigrationOptions options) {
-        var warnings = new List<string>();
-        Try(() => MigrateDirectory(fs, Path.Combine(options.AppDataRoot, options.OldFolderName),
-            Path.Combine(options.AppDataRoot, options.NewFolderName), options.FilesMarker, options), "用户数据", warnings);
-        Try(() => MigrateDirectory(fs, Path.Combine(options.BaseDirectory, options.OldFolderName),
-            Path.Combine(options.BaseDirectory, options.NewFolderName), options.PortableMarker, options), "便携数据", warnings);
-        Try(() => MigrateRegistry(registry, options), "注册表", warnings);
-        return warnings;
+    /// <summary>执行三个区块的迁移；区块失败不阻断其他区块。</summary>
+    public static MigrationReport Run(IFileSystem fs, IRegistry registry, MigrationOptions options) {
+        var filesPath = Path.Combine(options.AppDataRoot, options.NewFolderName);
+        var portablePath = Path.Combine(options.BaseDirectory, options.NewFolderName);
+        return new MigrationReport([
+            RunSection(MigrationSection.Files, filesPath, "用户数据",
+                () => MigrateDirectory(fs, Path.Combine(options.AppDataRoot, options.OldFolderName),
+                    filesPath, options.FilesMarker, options)),
+            RunSection(MigrationSection.Portable, portablePath, "便携数据",
+                () => MigrateDirectory(fs, Path.Combine(options.BaseDirectory, options.OldFolderName),
+                    portablePath, options.PortableMarker, options)),
+            RunSection(MigrationSection.Registry, options.NewRegistryPath, "注册表",
+                () => MigrateRegistry(registry, options)),
+        ]);
     }
 
-    private static void Try(Action action, string label, List<string> warnings) {
+    private static MigrationSectionResult RunSection(MigrationSection section, string path, string label,
+        Action action) {
         try {
             action();
-        }
-        catch (Exception ex) {
-            warnings.Add($"{label}导入失败：{ex.Message}");
+            return new MigrationSectionResult(section, Result<Unit, MigrationError>.Ok(Unit.Value));
+        } catch (Exception ex) {
+            return new MigrationSectionResult(section,
+                Result<Unit, MigrationError>.Err(new MigrationError(section, path, $"{label}导入失败", ex)));
         }
     }
 

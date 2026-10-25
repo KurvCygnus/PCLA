@@ -1,3 +1,4 @@
+using PCLCS.Results;
 using PCLCS.Startup;
 
 namespace PCLCS.Tests;
@@ -158,9 +159,9 @@ public class UserDataMigrationTests {
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
             var target = Path.Combine(options.AppDataRoot, "PCLA");
 
-            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
             Assert.True(File.Exists(Path.Combine(source, "options.txt")));
@@ -198,9 +199,9 @@ public class UserDataMigrationTests {
             File.WriteAllText(Path.Combine(target, "foo"), "target-foo");
             File.WriteAllText(Path.Combine(target, "foo.pcla-tmp"), "lookalike");
 
-            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             Assert.Equal("target-foo", File.ReadAllText(Path.Combine(target, "foo")));
             Assert.Equal("lookalike", File.ReadAllText(Path.Combine(target, "foo.pcla-tmp")));
             Assert.Equal("source-foo", File.ReadAllText(Path.Combine(source, "foo")));
@@ -219,9 +220,9 @@ public class UserDataMigrationTests {
             File.WriteAllText(Path.Combine(source, "foo.pcla-tmp"), "b");
             var target = Path.Combine(options.AppDataRoot, "PCLA");
 
-            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             Assert.Equal("a", File.ReadAllText(Path.Combine(target, "foo")));
             Assert.Equal("b", File.ReadAllText(Path.Combine(target, "foo.pcla-tmp")));
             Assert.True(File.Exists(Path.Combine(source, "foo")));
@@ -272,9 +273,9 @@ public class UserDataMigrationTests {
             File.WriteAllText(Path.Combine(source, "Sub", "keep.txt"), "keep");
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
 
-            var warnings = UserDataMigration.Run(new CacheTripwireFileSystem(), new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(new CacheTripwireFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             var target = Path.Combine(options.AppDataRoot, "PCLA");
             Assert.Equal(new[] { "keep.txt", "options.txt" },
                 Directory.EnumerateFiles(target, "*", SearchOption.AllDirectories)
@@ -295,9 +296,9 @@ public class UserDataMigrationTests {
             var target = Path.Combine(options.AppDataRoot, "PCLA");
             var torn = new TornCopyFileSystem();
 
-            var warnings = UserDataMigration.Run(torn, new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(torn, new InMemoryRegistry(), options);
 
-            Assert.Contains(warnings, warning => warning.Contains("用户数据"));
+            AssertFailure(report, MigrationSection.Files, "用户数据");
             var firstStaging = torn.LastStagingPath
                 ?? throw new InvalidOperationException("未捕获首次暂存路径");
             Assert.StartsWith(Path.Combine(target, "options.txt"), firstStaging);
@@ -309,9 +310,9 @@ public class UserDataMigrationTests {
 
             var retry = new TornCopyFileSystem { Fail = false };
 
-            var secondWarnings = UserDataMigration.Run(retry, new InMemoryRegistry(), options);
+            var retryReport = UserDataMigration.Run(retry, new InMemoryRegistry(), options);
 
-            Assert.Empty(secondWarnings);
+            AssertSuccess(retryReport);
             var retryStaging = retry.LastStagingPath
                 ?? throw new InvalidOperationException("未捕获重试暂存路径");
             Assert.NotEqual(firstStaging, retryStaging);
@@ -332,18 +333,18 @@ public class UserDataMigrationTests {
             var target = Path.Combine(options.AppDataRoot, "PCLA");
             var moveFail = new MoveFailingFileSystem();
 
-            var warnings = UserDataMigration.Run(moveFail, new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(moveFail, new InMemoryRegistry(), options);
 
-            Assert.Contains(warnings, warning => warning.Contains("用户数据"));
+            AssertFailure(report, MigrationSection.Files, "用户数据");
             var staging = moveFail.LastStagingPath
                 ?? throw new InvalidOperationException("未捕获暂存路径");
             Assert.False(File.Exists(Path.Combine(target, ".pcla-import-files")));
             Assert.False(File.Exists(Path.Combine(target, "options.txt")));
             Assert.False(File.Exists(staging));
 
-            var secondWarnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+            var retryReport = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Empty(secondWarnings);
+            AssertSuccess(retryReport);
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
         }
@@ -363,9 +364,9 @@ public class UserDataMigrationTests {
             File.WriteAllText(Path.Combine(source, "options.txt"), "changed");
             File.WriteAllText(Path.Combine(source, "added.txt"), "added");
 
-            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.False(File.Exists(Path.Combine(target, "added.txt")));
         }
@@ -385,10 +386,9 @@ public class UserDataMigrationTests {
             var registry = new InMemoryRegistry();
             registry.SetValue(options.OldRegistryPath, "A", "1");
 
-            var warnings = UserDataMigration.Run(new FailingFileSystem(source), registry, options);
+            var report = UserDataMigration.Run(new FailingFileSystem(source), registry, options);
 
-            Assert.Single(warnings);
-            Assert.Contains("用户数据", warnings[0]);
+            AssertFailure(report, MigrationSection.Files, "用户数据");
             Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
             Assert.True(File.Exists(Path.Combine(options.BaseDirectory, "PCLA", ".pcla-import-portable")));
             Assert.Equal("portable", File.ReadAllText(Path.Combine(options.BaseDirectory, "PCLA", "portable.txt")));
@@ -417,9 +417,9 @@ public class UserDataMigrationTests {
             registry.SetValue(options.OldRegistryPath, "A", "1");
             registry.SetValue(options.OldRegistryPath, "SystemLastVersionReg", 413);
 
-            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), registry, options);
+            var report = UserDataMigration.Run(new PhysicalFileSystem(), registry, options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             Assert.Equal("1", registry.GetValue(options.NewRegistryPath, "A"));
             Assert.False(registry.ValueExists(options.NewRegistryPath, "SystemLastVersionReg"));
             Assert.Equal(1, registry.GetValue(options.NewRegistryPath, options.RegistryMarker));
@@ -434,9 +434,9 @@ public class UserDataMigrationTests {
             var registry = new InMemoryRegistry();
             registry.SetValue(options.OldRegistryPath, "SYSTEMLASTVERSIONREG", 413);
 
-            var warnings = UserDataMigration.Run(new PhysicalFileSystem(), registry, options);
+            var report = UserDataMigration.Run(new PhysicalFileSystem(), registry, options);
 
-            Assert.Empty(warnings);
+            AssertSuccess(report);
             Assert.False(registry.ValueExists(options.NewRegistryPath, "SystemLastVersionReg"));
             Assert.Equal(1, registry.GetValue(options.NewRegistryPath, options.RegistryMarker));
         }
@@ -466,12 +466,44 @@ public class UserDataMigrationTests {
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
 
-            var warnings = UserDataMigration.Run(new FailingFileSystem(), new InMemoryRegistry(), options);
+            var report = UserDataMigration.Run(new FailingFileSystem(), new InMemoryRegistry(), options);
 
-            Assert.Contains(warnings, warning => warning.Contains("用户数据"));
+            AssertFailure(report, MigrationSection.Files, "用户数据");
             Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
             Assert.Empty(Directory.EnumerateFiles(Path.Combine(options.AppDataRoot, "PCLA")));
         }
         finally { Cleanup(root); }
+    }
+
+    [Fact]
+    public void RunDefaultStartupFailureReturnsStartupSection() {
+        var (root, options) = CreateRoot();
+        try {
+            var report = UserDataMigration.RunDefault(
+                () => throw new IOException("无法构造文件系统"),
+                () => new InMemoryRegistry(),
+                options);
+
+            var startup = Assert.Single(report.Sections);
+            Assert.Equal(MigrationSection.Startup, startup.Section);
+            Assert.True(startup.Outcome.IsFailure);
+            Assert.Equal("migration.startup", startup.Outcome.Error.Code);
+            Assert.Contains("无法构造文件系统", startup.Outcome.Error.Cause!.Message);
+        }
+        finally { Cleanup(root); }
+    }
+
+    private static MigrationSectionResult Section(MigrationReport report, MigrationSection section) =>
+        Assert.Single(report.Sections, result => result.Section == section);
+
+    private static void AssertSuccess(MigrationReport report) =>
+        Assert.All(report.Sections, section =>
+            Assert.True(section.Outcome.IsSuccess,
+                section.Outcome.IsFailure ? section.Outcome.Error.Message : ""));
+
+    private static void AssertFailure(MigrationReport report, MigrationSection section, string messagePart) {
+        var result = Section(report, section);
+        Assert.True(result.Outcome.IsFailure);
+        Assert.Contains(messagePart, result.Outcome.Error.Message);
     }
 }
