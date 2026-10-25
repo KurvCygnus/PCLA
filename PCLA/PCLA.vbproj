@@ -901,19 +901,19 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\PCLCS\bin\PCLCS.dll">
+    <None Include="..\PCLCS\bin\net48\PCLCS.dll">
       <LogicalName>PCLCS.dll</LogicalName>
       <Link>Resources\PCLCS.dll</Link>
     </None>
-    <None Include="..\PCLCS\bin\MeloongCore.dll">
+    <None Include="..\PCLCS\bin\net48\MeloongCore.dll">
       <LogicalName>MeloongCore.dll</LogicalName>
       <Link>Resources\MeloongCore.dll</Link>
     </None>
-    <None Include="..\PCLCS\bin\MeloongCore.Wpf.dll">
+    <None Include="..\MeloongCore\Wpf\bin\MeloongCore.Wpf.dll">
       <LogicalName>MeloongCore.Wpf.dll</LogicalName>
       <Link>Resources\MeloongCore.Wpf.dll</Link>
     </None>
-    <None Include="..\PCLCS\bin\Microsoft.Win32.Registry.dll">
+    <None Include="..\PCLCS\bin\net48\Microsoft.Win32.Registry.dll">
       <LogicalName>Microsoft.Win32.Registry.dll</LogicalName>
       <Link>Resources\Microsoft.Win32.Registry.dll</Link>
     </None>

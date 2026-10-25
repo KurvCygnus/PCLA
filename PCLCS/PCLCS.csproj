@@ -1,20 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net48</TargetFramework>
+		<TargetFrameworks>net48;net8.0</TargetFrameworks>
 		<OutputType>Library</OutputType>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-		<OutDir>bin\</OutDir>
-		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-		<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+		<!-- 按 TFM 分目录、不按配置分目录：PCLA 以 ..\PCLCS\bin\net48\ 嵌入，配置子目录会让嵌入路径随构建配置漂移 -->
+		<BaseOutputPath>bin\</BaseOutputPath>
+		<OutputPath>$(BaseOutputPath)</OutputPath>
+		<AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
 		<Configurations>Debug;Release;Snapshot</Configurations>
 		<Deterministic>true</Deterministic>
 		<LangVersion>13.0</LangVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<!-- PCLCS 只服务于 Windows 客户端，注册表等 Windows 专属 API 在 net8.0 下无需跨平台告警 -->
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="PolySharp" Version="1.15.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -35,13 +39,10 @@
 		<Using Include="Newtonsoft.Json.Linq" />
 		<Using Include="MeloongCore" />
 		<Using Include="MeloongCore.Extensions" />
-		<Using Include="MeloongCore.Wpf" />
-		<Using Include="MeloongCore.Wpf.Extensions" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <ProjectReference Include="..\MeloongCore\Shared\MeloongCore.csproj" />
-	  <ProjectReference Include="..\MeloongCore\Wpf\MeloongCore.Wpf.csproj" />
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -61,13 +62,6 @@
 		<EmbeddedResource Include="Resource\WikiEntries.txt" LogicalName="Resource\WikiEntries.txt" />
 		<EmbeddedResource Include="Minecraft\OptiFineHashes.json" LogicalName="Minecraft\OptiFineHashes.json" />
 	</ItemGroup>
-	<ItemGroup>
-	  <Reference Include="Microsoft.VisualBasic" />
-	  <Reference Include="Newtonsoft.Json">
-	    <HintPath>..\PCLA\Resources\Newtonsoft.Json.dll</HintPath>
-	  </Reference>
-	</ItemGroup>
-
   <ItemGroup>
     <Compile Include="$(IntermediateOutputPath)VersionInfo.g.cs" />
   </ItemGroup>
