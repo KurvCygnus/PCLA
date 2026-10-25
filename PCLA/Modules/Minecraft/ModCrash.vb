@@ -921,7 +921,7 @@ NextStack:
     ''' <summary>
     ''' 获取崩溃分析的结果描述。
     ''' </summary>
-    Private Function GetAnalyzeResult(IsHandAnalyze As Boolean) As String
+    Friend Function GetAnalyzeResult(IsHandAnalyze As Boolean) As String
 
         '没有结果的处理
         If Not CrashReasons.Any() Then

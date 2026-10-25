@@ -55,3 +55,5 @@ Imports System.Runtime.InteropServices
 <Assembly: AssemblyFileVersion(VersionInfo.AssemblyVersion)>
 <Assembly: AssemblyInformationalVersion(VersionInfo.VersionFull)>
 <Assembly: NeutralResourcesLanguage("")>
+
+<Assembly: System.Runtime.CompilerServices.InternalsVisibleTo("PCLA.BehaviorTests")>
