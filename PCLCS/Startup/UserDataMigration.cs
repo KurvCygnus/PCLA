@@ -106,7 +106,7 @@ public static class UserDataMigration {
             return new MigrationSectionResult(section, Result<Unit, MigrationError>.Ok(Unit.Value));
         } catch (Exception ex) {
             return new MigrationSectionResult(section,
-                Result<Unit, MigrationError>.Err(new MigrationError(section, path, $"{label}导入失败", ex)));
+                Result<Unit, MigrationError>.Err(new MigrationError(section, path, $"{label}导入失败：{ex.Message}", ex)));
         }
     }
 

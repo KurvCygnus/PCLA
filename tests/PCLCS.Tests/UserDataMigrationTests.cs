@@ -298,7 +298,7 @@ public class UserDataMigrationTests {
 
             var report = UserDataMigration.Run(torn, new InMemoryRegistry(), options);
 
-            AssertFailure(report, MigrationSection.Files, "用户数据");
+            AssertFailure(report, MigrationSection.Files, "用户数据", "模拟复制中断");
             var firstStaging = torn.LastStagingPath
                 ?? throw new InvalidOperationException("未捕获首次暂存路径");
             Assert.StartsWith(Path.Combine(target, "options.txt"), firstStaging);
@@ -335,7 +335,7 @@ public class UserDataMigrationTests {
 
             var report = UserDataMigration.Run(moveFail, new InMemoryRegistry(), options);
 
-            AssertFailure(report, MigrationSection.Files, "用户数据");
+            AssertFailure(report, MigrationSection.Files, "用户数据", "模拟移动失败");
             var staging = moveFail.LastStagingPath
                 ?? throw new InvalidOperationException("未捕获暂存路径");
             Assert.False(File.Exists(Path.Combine(target, ".pcla-import-files")));
@@ -388,7 +388,7 @@ public class UserDataMigrationTests {
 
             var report = UserDataMigration.Run(new FailingFileSystem(source), registry, options);
 
-            AssertFailure(report, MigrationSection.Files, "用户数据");
+            AssertFailure(report, MigrationSection.Files, "用户数据", "模拟复制失败");
             Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
             Assert.True(File.Exists(Path.Combine(options.BaseDirectory, "PCLA", ".pcla-import-portable")));
             Assert.Equal("portable", File.ReadAllText(Path.Combine(options.BaseDirectory, "PCLA", "portable.txt")));
@@ -468,7 +468,7 @@ public class UserDataMigrationTests {
 
             var report = UserDataMigration.Run(new FailingFileSystem(), new InMemoryRegistry(), options);
 
-            AssertFailure(report, MigrationSection.Files, "用户数据");
+            AssertFailure(report, MigrationSection.Files, "用户数据", "模拟复制失败");
             Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
             Assert.Empty(Directory.EnumerateFiles(Path.Combine(options.AppDataRoot, "PCLA")));
         }
@@ -501,9 +501,15 @@ public class UserDataMigrationTests {
             Assert.True(section.Outcome.IsSuccess,
                 section.Outcome.IsFailure ? section.Outcome.Error.Message : ""));
 
-    private static void AssertFailure(MigrationReport report, MigrationSection section, string messagePart) {
+    private static void AssertFailure(MigrationReport report, MigrationSection section, string messagePart,
+        string causeMessagePart) {
         var result = Section(report, section);
         Assert.True(result.Outcome.IsFailure);
         Assert.Contains(messagePart, result.Outcome.Error.Message);
+        var cause = result.Outcome.Error.Cause;
+        Assert.NotNull(cause);
+        Assert.Contains(causeMessagePart, cause!.Message);
+        // 启动提示直接展示 Error.Message，底层原因必须出现在消息里。
+        Assert.Contains(cause.Message, result.Outcome.Error.Message);
     }
 }

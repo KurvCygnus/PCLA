@@ -196,6 +196,10 @@ RetryCacheCheck:
                 Try
                     CType(FrmMain.PageLeft, IDispatcherUnhandledException).DispatcherUnhandledException(sender, e)
                 Catch ex As Exception
+                    If TypeOf ex Is OperationCanceledException Then
+                        e.Handled = True
+                        Return
+                    End If
                     PCLCS.Results.PclaCrashFallback.TryWrite(
                         ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
                 End Try
@@ -205,6 +209,10 @@ RetryCacheCheck:
                 Try
                     CType(FrmMain.PageRight, IDispatcherUnhandledException).DispatcherUnhandledException(sender, e)
                 Catch ex As Exception
+                    If TypeOf ex Is OperationCanceledException Then
+                        e.Handled = True
+                        Return
+                    End If
                     PCLCS.Results.PclaCrashFallback.TryWrite(
                         ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
                 End Try
@@ -233,7 +241,7 @@ RetryCacheCheck:
         Catch ex As Exception
             e.Handled = True
             PCLCS.Results.PclaCrashFallback.TryWrite(
-                ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
+                e.Exception, PCLCS.Results.PclaError.Unexpected(e.Exception), PathTemp)
         End Try
     End Sub
     Private Shared Sub OldEnvironmentAssert(Optional ex As Exception = Nothing)

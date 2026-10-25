@@ -12,7 +12,7 @@
 
 1. 更新 `Version.props` 的 `PclaSemVer` 与 `CHANGELOG.md`，提交。
 2. 打 tag `v<PclaSemVer>` 并推送。
-3. `release.yml` 在下载构建产物前校验 tag 与 `Version.props` 的 `PclaSemVer` 一致；不一致会直接失败，不浪费构建。
+3. `release.yml` 在开始构建前校验 tag 与 `Version.props` 的 `PclaSemVer` 一致；不一致会直接失败，不浪费构建（手动触发时跳过 tag 校验）。
 4. 等 `release.yml` 完成，检查 zip 内容、`SHA256SUMS.txt` 与 Release notes。
 5. 在干净目录解压 zip，启动 `PCLA.exe`：标题、版本、关于页署名/赞助/许可链接正确。
 6. 确认 `%APPDATA%\PCLA`、`<exe>\PCLA`、`HKCU\Software\PCLADebug` 创建，旧 `PCL` 数据未被修改。

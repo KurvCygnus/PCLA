@@ -9,6 +9,16 @@ Public Class PclLogger
     End Function
 
     ''' <inheritdoc/>
+    Public Overrides Sub Output(Entry As LogEntry)
+        Try
+            MyBase.Output(Entry)
+        Catch ex As Exception
+            PCLCS.Results.PclaCrashFallback.TryWrite(
+                ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
+        End Try
+    End Sub
+
+    ''' <inheritdoc/>
     Public Overrides Sub HandleBehavior(RawMessage As String, FormattedMessage As String, Behavior As LogBehavior, Ex As Exception)
         If IsProgramEnding Then Return
         MyBase.HandleBehavior(RawMessage, FormattedMessage, Behavior, Ex)

@@ -9,14 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    uses: ./.github/workflows/build.yml
-    with:
-      channel: release
-      commit: ${{ github.sha }}
-
-  publish:
-    needs: build
+  verify:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -30,6 +23,19 @@ jobs:
           if ("${{ github.ref_name }}" -ne $expected) {
             throw "tag ${{ github.ref_name }} != $expected"
           }
+
+  build:
+    needs: verify
+    uses: ./.github/workflows/build.yml
+    with:
+      channel: release
+      commit: ${{ github.sha }}
+
+  publish:
+    needs: [verify, build]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
 
       - uses: actions/download-artifact@v4
         with:
