@@ -190,27 +190,51 @@ RetryCacheCheck:
 
     '异常
     Private Sub Application_DispatcherUnhandledException(sender As Object, e As DispatcherUnhandledExceptionEventArgs) Handles Me.DispatcherUnhandledException
-        On Error Resume Next
-        '触发页面的 Dispatcher
-        If FrmMain?.PageLeft IsNot Nothing AndAlso TypeOf FrmMain.PageLeft Is IDispatcherUnhandledException Then
-            CType(FrmMain.PageLeft, IDispatcherUnhandledException).DispatcherUnhandledException(sender, e)
-            If e.Handled Then Return
-        End If
-        If FrmMain?.PageRight IsNot Nothing AndAlso TypeOf FrmMain.PageRight Is IDispatcherUnhandledException Then
-            CType(FrmMain.PageRight, IDispatcherUnhandledException).DispatcherUnhandledException(sender, e)
-            If e.Handled Then Return
-        End If
-        '正常处理
-        e.Handled = True
-        If IsProgramEnding Then Return
-        FeedbackInfo()
-        Dim Detail As String = e.Exception.GetDisplay(True)
-        If Detail.Contains("System.Windows.Threading.Dispatcher.Invoke") OrElse Detail.Contains("MS.Internal.AppModel.ITaskbarList.HrInit") OrElse Detail.Contains("未能加载文件或程序集") OrElse
-           Detail.Contains(".NET Framework") Then ' “自动错误判断” 的结果分析
-            OldEnvironmentAssert(e.Exception)
-        Else
-            Logger.Error(e.Exception, "程序出现未知错误", LogBehavior.AlertThenCrash)
-        End If
+        Try
+            '触发页面的 Dispatcher；页面处理器自身出错时也只记录，不逃逸
+            If FrmMain?.PageLeft IsNot Nothing AndAlso TypeOf FrmMain.PageLeft Is IDispatcherUnhandledException Then
+                Try
+                    CType(FrmMain.PageLeft, IDispatcherUnhandledException).DispatcherUnhandledException(sender, e)
+                Catch ex As Exception
+                    PCLCS.Results.PclaCrashFallback.TryWrite(
+                        ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
+                End Try
+                If e.Handled Then Return
+            End If
+            If FrmMain?.PageRight IsNot Nothing AndAlso TypeOf FrmMain.PageRight Is IDispatcherUnhandledException Then
+                Try
+                    CType(FrmMain.PageRight, IDispatcherUnhandledException).DispatcherUnhandledException(sender, e)
+                Catch ex As Exception
+                    PCLCS.Results.PclaCrashFallback.TryWrite(
+                        ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
+                End Try
+                If e.Handled Then Return
+            End If
+
+            e.Handled = True
+            If TypeOf e.Exception Is OperationCanceledException Then Return
+            If IsProgramEnding Then Return
+            FeedbackInfo()
+
+            If TypeOf e.Exception Is PCLCS.Results.PclaException Then
+                Dim ErrorInfo = CType(e.Exception, PCLCS.Results.PclaException).Error
+                Logger.Error(e.Exception, $"{ErrorInfo.Code}：{ErrorInfo.Message}", LogBehavior.AlertThenCrash)
+                Return
+            End If
+
+            Dim Detail As String = e.Exception.GetDisplay(True)
+            If Detail.Contains("System.Windows.Threading.Dispatcher.Invoke") OrElse Detail.Contains("MS.Internal.AppModel.ITaskbarList.HrInit") OrElse Detail.Contains("未能加载文件或程序集") OrElse
+               Detail.Contains(".NET Framework") Then
+                OldEnvironmentAssert(e.Exception)
+            Else
+                Dim ErrorInfo = PCLCS.Results.PclaError.Unexpected(e.Exception)
+                Logger.Error(e.Exception, $"程序出现未知错误（{ErrorInfo.Code}）", LogBehavior.AlertThenCrash)
+            End If
+        Catch ex As Exception
+            e.Handled = True
+            PCLCS.Results.PclaCrashFallback.TryWrite(
+                ex, PCLCS.Results.PclaError.Unexpected(ex), PathTemp)
+        End Try
     End Sub
     Private Shared Sub OldEnvironmentAssert(Optional ex As Exception = Nothing)
         OpenWebsite("https://dotnet.microsoft.com/zh-cn/download/dotnet-framework/thank-you/net48-offline-installer")
