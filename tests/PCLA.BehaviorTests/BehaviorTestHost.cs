@@ -12,6 +12,13 @@ internal static class BehaviorTestHost
 
     public static string Root { get; private set; } = "";
 
+    public static string DefaultMcFolder => Path.Combine(Root, "minecraft") + Path.DirectorySeparatorChar;
+
+    public static void RestoreDefaultMcFolder()
+    {
+        ModMinecraft.McFolderSelected = DefaultMcFolder;
+    }
+
     public static void Initialize()
     {
         lock (Gate)
@@ -22,6 +29,7 @@ internal static class BehaviorTestHost
             Directory.CreateDirectory(Root);
             Directory.CreateDirectory(Path.Combine(Root, "logs"));
             Directory.CreateDirectory(Path.Combine(Root, "temp"));
+            Directory.CreateDirectory(DefaultMcFolder);
 
             Main.Init("PCLABehaviorTests");
             Directory.CreateDirectory(Paths.AppDataThenName);
@@ -32,7 +40,7 @@ internal static class BehaviorTestHost
                 MinLevel = LogLevel.Trace
             };
             ModBase.PathTemp = Path.Combine(Root, "temp") + Path.DirectorySeparatorChar;
-            ModMinecraft.McFolderSelected = Path.Combine(Root, "minecraft");
+            RestoreDefaultMcFolder();
 
             _initialized = true;
         }

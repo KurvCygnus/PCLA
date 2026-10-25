@@ -29,6 +29,26 @@ public sealed class HostSmokeTests : IDisposable
         Assert.Equal("1.20.1", loaded.Version.VanillaName);
     }
 
+    [Fact]
+    public void HostDefaultFolderExists()
+    {
+        Assert.Equal(BehaviorTestHost.DefaultMcFolder, ModMinecraft.McFolderSelected);
+        Assert.True(Directory.Exists(BehaviorTestHost.DefaultMcFolder));
+    }
+
+    [Fact]
+    public void RestoredDefaultFolderStaysUsableAfterCaseRemoval()
+    {
+        var caseRoot = BehaviorTestHost.CreateCaseRoot("restore-default");
+        ModMinecraft.McFolderSelected = caseRoot;
+        Directory.Delete(caseRoot, true);
+
+        BehaviorTestHost.RestoreDefaultMcFolder();
+
+        Assert.Equal(BehaviorTestHost.DefaultMcFolder, ModMinecraft.McFolderSelected);
+        Assert.True(Directory.Exists(ModMinecraft.McFolderSelected));
+    }
+
     private static void WriteVanilla(string root, string name)
     {
         var dir = Path.Combine(root, "versions", name);
@@ -50,5 +70,6 @@ public sealed class HostSmokeTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(_root)) Directory.Delete(_root, true);
+        BehaviorTestHost.RestoreDefaultMcFolder();
     }
 }
