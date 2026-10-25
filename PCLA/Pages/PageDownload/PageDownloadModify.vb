@@ -244,7 +244,7 @@ Public Class PageDownloadModify
         'OptiFine
         Dim OptiFineFiles As New List(Of (File As FileInfo, Sha1 As String, OriginalName As String))
         If SelectedOptiFine Is Nothing AndAlso (SelectedForge IsNot Nothing OrElse SelectedLiteLoader IsNot Nothing OrElse SelectedFabric IsNot Nothing) Then 'OptiFine 只在有 Mod 加载器时才看在不在 mods 文件夹中
-            Static OptiFineHashes As JObject = FileUtils.ReadAsJson("Minecraft\OptiFineHashes.json", type:=GetType(Resource)) 'JSON 内容：{"SHA1": "原始文件名", ...}
+            Static OptiFineHashes As JObject = LegacyFileUtils.ReadAsJson("Minecraft\OptiFineHashes.json", type:=GetType(Resource)) 'JSON 内容：{"SHA1": "原始文件名", ...}
             OptiFineFiles = Mods.Value.
                     Select(Function(Entry) (Entry.File, Entry.Sha1, OriginalName:=OptiFineHashes(Entry.Sha1)?.ToString())). '用本地文件的 SHA1 匹配下载时的原始文件名，再根据原始文件名取得下载源信息
                     Where(Function(Entry) Entry.OriginalName IsNot Nothing).ToList()

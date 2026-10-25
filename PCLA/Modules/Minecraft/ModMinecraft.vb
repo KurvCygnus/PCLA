@@ -363,7 +363,7 @@ Public Module ModMinecraft
                 JsonPath = Nothing
                 For Each JsonCandidatePath In DirectoryUtils.EnumerateFiles(PathVersion, searchPattern:="*.json")
                     Try
-                        Dim JsonCandidate As JObject = FileUtils.ReadAsJson(JsonCandidatePath)
+                        Dim JsonCandidate As JObject = LegacyFileUtils.ReadAsJson(JsonCandidatePath)
                         If Not JsonCandidate.ContainsKey("mainClass") Then Continue For
                         If Not JsonCandidate.ContainsKey("type") Then Continue For
                         If Not JsonCandidate.ContainsKey("id") Then Continue For
@@ -821,7 +821,7 @@ ExitDataLoad:
             Dim JsonObject As JObject
             Dim OldJsonPath = GetJsonPath()
             Try
-                JsonObject = FileUtils.ReadAsJson(OldJsonPath)
+                JsonObject = LegacyFileUtils.ReadAsJson(OldJsonPath)
             Catch ex As Exception
                 Logger.Warn(ex, "在重命名读取 JSON 时失败")
                 JsonObject = Me.JsonObject
@@ -1981,7 +1981,7 @@ OnLoaded:
             '初始化
             If Not FileUtils.Exists($"{McFolderSelected}assets\indexes\{IndexName}.json") Then Throw New FileNotFoundException("未找到 Asset Index", McFolderSelected & "assets\indexes\" & IndexName & ".json")
             Dim Result As New List(Of McAssetsToken)
-            Dim Json As JObject = FileUtils.ReadAsJson($"{McFolderSelected}assets\indexes\{IndexName}.json")
+            Dim Json As JObject = LegacyFileUtils.ReadAsJson($"{McFolderSelected}assets\indexes\{IndexName}.json")
 
             '读取列表
             For Each File As JProperty In Json("objects").Children

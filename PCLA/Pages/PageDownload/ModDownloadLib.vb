@@ -51,7 +51,7 @@ Public Module ModDownloadLib
             End Try
             '顺手添加 Json 项目
             Try
-                Dim InstanceJson As JObject = FileUtils.ReadAsJson(VersionFolder & InstanceName & ".json")
+                Dim InstanceJson As JObject = LegacyFileUtils.ReadAsJson(VersionFolder & InstanceName & ".json")
                 InstanceJson("clientVersion") = Id
                 FileUtils.Write($"{VersionFolder}{InstanceName}.json", InstanceJson.ToString)
             Catch ex As Exception

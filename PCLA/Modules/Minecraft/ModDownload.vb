@@ -253,7 +253,7 @@ Public Module ModDownload
             Dim Json = PCLCS.Minecraft.Download.ClientListParser.Parse(ResultText, "BMCLAPI")
             '添加 PCL 特供项
             If FileUtils.Exists(PathTemp & "Cache\download.json") Then
-                CType(Json("versions"), JArray).Merge(FileUtils.ReadAsJson(PathTemp & "Cache\download.json"))
+                CType(Json("versions"), JArray).Merge(LegacyFileUtils.ReadAsJson(PathTemp & "Cache\download.json"))
             End If
             '检查是否有要求的版本（#5195）
             If Not String.IsNullOrEmpty(Loader.Input) AndAlso

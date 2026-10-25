@@ -1627,7 +1627,7 @@ Retry:
             }"
             Dim ReplaceJson As JObject = (ReplaceJsonString).DeserializeJson()
             '更新文件
-            Dim Profiles As JObject = FileUtils.ReadAsJson(McFolderSelected & "launcher_profiles.json")
+            Dim Profiles As JObject = LegacyFileUtils.ReadAsJson(McFolderSelected & "launcher_profiles.json")
             Profiles.Merge(ReplaceJson)
             FileUtils.Write(McFolderSelected & "launcher_profiles.json", Profiles.ToString, encoding:=Encoding.GetEncoding("GB18030"))
             McLaunchLog("已更新 launcher_profiles.json")
@@ -1657,7 +1657,7 @@ Retry:
                     }"
                 Dim ReplaceJson As JObject = ReplaceJsonString.DeserializeJson()
                 '更新文件
-                Dim Profiles As JObject = FileUtils.ReadAsJson(McFolderSelected & "launcher_profiles.json")
+                Dim Profiles As JObject = LegacyFileUtils.ReadAsJson(McFolderSelected & "launcher_profiles.json")
                 Profiles.Merge(ReplaceJson)
                 FileUtils.Write(McFolderSelected & "launcher_profiles.json", Profiles.ToString, encoding:=Encoding.GetEncoding("GB18030"))
                 McLaunchLog("已在删除后更新 launcher_profiles.json")
