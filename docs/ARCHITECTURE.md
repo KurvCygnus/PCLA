@@ -164,7 +164,8 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 测试进程内初始化临时目录；不启动 WPF、不访问网络、不写真实用户目录。
 - `CrashAnalyzer.GetAnalyzeResult` 是唯一生产可见性接缝（`Friend` + `InternalsVisibleTo`）。
 - 语料是合成数据；行为变化必须显式更新断言，不能靠放宽断言通过。
-- `dotnet build` 不支持该 VB WPF 工程的 XAML 构建，必须走 `.\tools\test-behavior.ps1`（MSBuild 构建 + `vstest.console.exe` 运行）。
+- 当前共 32 个测试：3 个宿主冒烟、10 个实例模型、8 个崩溃分析、11 个配置读写。
+- 该 VB WPF 工程是非 SDK 形式的旧式项目，`dotnet build` 完全无法构建；行为测试必须走 `.\tools\test-behavior.ps1`（MSBuild 构建 + `vstest.console.exe` 运行）。
 
 ## 8. 关键路径速查
 
