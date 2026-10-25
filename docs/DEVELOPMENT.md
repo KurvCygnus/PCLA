@@ -36,7 +36,9 @@ dotnet test tests\PCLCS.Tests\PCLCS.Tests.csproj -c Release
 
 当前共 32 个测试：3 个宿主冒烟、10 个实例模型、8 个崩溃分析、11 个配置读写；其中 29 个是黄金语料用例。
 
-默认使用 Release 配置，可用 `-Configuration` 切换。只跑一部分测试时传 `-TestCaseFilter`：
+默认使用 Release 配置，可用 `-Configuration` 切换。CI 通过 `-PclaChannel` 与 `-PclaCommit` 传入版本信息；本地默认 `snapshot`/`local`，与直接构建 PCLA 的默认值一致。
+
+只跑一部分测试时传 `-TestCaseFilter`：
 
 ```powershell
 .\tools\test-behavior.ps1 -TestCaseFilter 'FullyQualifiedName~CrashAnalyzerTests'

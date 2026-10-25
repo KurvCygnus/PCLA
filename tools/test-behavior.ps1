@@ -1,5 +1,7 @@
 ﻿param(
     [string]$Configuration = 'Release',
+    [string]$PclaChannel = 'snapshot',
+    [string]$PclaCommit = 'local',
     [string]$TestCaseFilter = ''
 )
 
@@ -80,7 +82,8 @@ Write-Host "MSBuild：$msbuild"
 Write-Host "vstest：$vstest"
 
 # 新检出的仓库没有 obj/project.assets.json，-restore 保证 Build 前完成 NuGet 还原。
-& $msbuild $project -t:Build -restore -p:Configuration=$Configuration -m:2
+# 测试项目引用 PCLA.vbproj，必须一并转发版本属性，否则会以默认 snapshot/local 重编 PCLA。
+& $msbuild $project -t:Build -restore -p:Configuration=$Configuration -p:PclaChannel=$PclaChannel -p:PclaCommit=$PclaCommit -m:2
 $buildExit = $LASTEXITCODE
 if ($null -eq $buildExit) { $buildExit = 1 }
 if ($buildExit -ne 0) {

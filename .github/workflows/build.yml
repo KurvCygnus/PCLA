@@ -60,7 +60,7 @@ jobs:
 
       - name: Run behavior tests
         shell: pwsh
-        run: ./tools/test-behavior.ps1
+        run: ./tools/test-behavior.ps1 -PclaChannel ${{ inputs.channel }} -PclaCommit ${{ inputs.commit }}
 
       - uses: actions/upload-artifact@v4
         with:
