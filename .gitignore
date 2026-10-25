@@ -349,6 +349,7 @@ MaskFiles/
 
 #* superpowers SDD workspace
 .superpowers/
+docs/superpowers/
 
 #* 实机差分验证用临时启动器
 .parity/
