@@ -98,6 +98,8 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 镜像：Mojang 元数据/资源/库走 BMCLAPI 或官方源（`ModDownload.vb:954-1000`）；CurseForge/Modrinth 走 `mod.mcimirror.top`（`:994`）；多源通过 `DlSourceLoader` 竞速（`:999-1066`）。下载源与清单解析细节见 §6.3。
 - 资源 API：CurseForge `api.curseforge.com/v1/mods/search`（`Modules\Resource\ResourceSearcher.vb:73-91`）与 Modrinth `/v2/search`（`:96-111`），页大小 40；中文查询先查本地 MCWiki 词条映射成英文关键词（`:184-288`）；响应全程 `JObject`/`JToken`，无 DTO。
 
+`PCLCS/Results` 提供 `Result<T, TError>`、领域错误与 `PclaException`；三个首批接缝（用户数据迁移、Fabric 列表解析、Java 探测）返回 Result，VB 边界用 `.OrThrow()` 或 `IsSuccess` 消费。全局未处理异常在 `Application.xaml.vb` 统一记录，日志系统失败时写 `%TEMP%\PCLA\crash-*.log`。
+
 ### 5.4 登录与凭据
 
 - 微软登录六步都在 `ModLaunch.vb`：设备码（`:882-912`）、刷新令牌（`:914-946`）、Xbox Live（`:948-962`）、XSTS（`:964-1014`）、`login_with_xbox`（`:1016-1046`）、`/entitlements/mcstore`（`:1048-1066`）与 `/minecraft/profile`（`:1068-1098`）。
