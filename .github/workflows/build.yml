@@ -45,6 +45,10 @@ jobs:
           }
           "version=$($map['VersionFull'])" >> $env:GITHUB_OUTPUT
 
+      - name: Branding scan
+        shell: pwsh
+        run: ./tools/check-branding.ps1
+
       - name: Build PCLCS
         run: dotnet build PCLCS\PCLCS.csproj -c Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }}
 

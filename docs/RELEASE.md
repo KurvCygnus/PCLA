@@ -12,11 +12,12 @@
 
 1. 更新 `Version.props` 的 `PclaSemVer` 与 `CHANGELOG.md`，提交。
 2. 打 tag `v<PclaSemVer>` 并推送。
-3. 等 `release.yml` 完成，检查 zip 内容、`SHA256SUMS.txt` 与 Release notes。
-4. 在干净目录解压 zip，启动 `PCLA.exe`：标题、版本、关于页署名/赞助/许可链接正确。
-5. 确认 `%APPDATA%\PCLA`、`<exe>\PCLA`、`HKCU\Software\PCLADebug` 创建，旧 `PCL` 数据未被修改。
-6. 确认发布包不含 `PCL_MS_CLIENT_ID` 与 `PCL_CURSEFORGE_API_KEY`，不含旧名 exe 与旧 pack URI。
-7. 首次公开发布前确认 Visual Companion 图标已替换；未替换时 Release notes 标注"图标待替换"。
+3. `release.yml` 在下载构建产物前校验 tag 与 `Version.props` 的 `PclaSemVer` 一致；不一致会直接失败，不浪费构建。
+4. 等 `release.yml` 完成，检查 zip 内容、`SHA256SUMS.txt` 与 Release notes。
+5. 在干净目录解压 zip，启动 `PCLA.exe`：标题、版本、关于页署名/赞助/许可链接正确。
+6. 确认 `%APPDATA%\PCLA`、`<exe>\PCLA`、`HKCU\Software\PCLADebug` 创建，旧 `PCL` 数据未被修改。
+7. 确认发布包不含 `PCL_MS_CLIENT_ID` 与 `PCL_CURSEFORGE_API_KEY`，不含旧名 exe 与旧 pack URI。
+8. 首次公开发布前确认 Visual Companion 图标已替换；未替换时 Release notes 标注"图标待替换"。
 
 ## 预览
 

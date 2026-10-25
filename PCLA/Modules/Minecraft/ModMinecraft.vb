@@ -160,6 +160,8 @@ Public Module ModMinecraft
     ""selectedProfile"": ""PCL"",
     ""clientToken"": ""23323323323323323323323323323333""
 }"
+            '只替换本方法刚生成的三个 profile 字段；已有文件在方法开头已直接返回。
+            ResultJson = ResultJson.Replace("""PCL""", """" & PCLCS.Startup.LauncherIdentity.AssemblyName & """")
             FileUtils.Write(Folder & "launcher_profiles.json", ResultJson, encoding:=Encoding.GetEncoding("GB18030"))
             Logger.Info($"已创建 launcher_profiles.json：{Folder}")
         Catch ex As Exception

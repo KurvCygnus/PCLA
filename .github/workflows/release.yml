@@ -20,10 +20,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
-        with:
-          name: PCLA-${{ needs.build.outputs.version }}
-          path: dist
 
       - name: Verify tag
         if: github.event_name == 'push'
@@ -34,6 +30,11 @@ jobs:
           if ("${{ github.ref_name }}" -ne $expected) {
             throw "tag ${{ github.ref_name }} != $expected"
           }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: PCLA-${{ needs.build.outputs.version }}
+          path: dist
 
       - name: Package
         shell: pwsh

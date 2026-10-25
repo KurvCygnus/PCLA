@@ -16,4 +16,7 @@ public static class LauncherIdentity {
 
     /// <summary>单例互斥量名称。</summary>
     public const string MutexName = "PCLA_SingletonMutex";
+
+    /// <summary>程序集名与启动器在 Minecraft 参数中的名字。</summary>
+    public const string AssemblyName = "PCLA";
 }
