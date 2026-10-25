@@ -1,3 +1,5 @@
+using PCLCS.Results;
+
 namespace PCLCS;
 
 /// <summary>
@@ -27,61 +29,110 @@ namespace PCLCS;
     /// </summary>
     [JsonIgnore] public string? NativeEncodingName;
 
-    /// <summary>
-    /// 检查该 Java 是否存在问题，并获取其版本号。
-    /// 返回其是否通过了检查。
-    /// </summary>
-    public async Task<bool> CheckAsync(CancellationToken cancellationToken = default) {
-        if (Interlocked.Exchange(ref isChecked, 1) == 1 && available != null) return available!.Value; // 已检查过
-        string? output = null;
-        try {
-            if (!FileUtils.Exists(JavaExePath)) throw new FileNotFoundException("未找到 java.exe 文件", JavaExePath);
+    /// <summary>最近一次检查失败的原因；成功或未检查时为 null。</summary>
+    [JsonIgnore, NonSerialized] public JavaCheckError? LastError;
 
-            // 运行 -version
-            output = (await TaskUtils.RunProgramAsync(JavaExePath, "-XshowSettings:properties -version", 15000, cancellationToken: cancellationToken).NoCapture()).Output.Lower();
-            if (output == "") throw new InvalidOperationException("尝试运行该 Java 失败");
-            Logger.Trace($"Java 检查输出：{JavaExePath}{Environment.NewLine}{output}");
-            if (output.Contains("/lib/ext exists")) throw new InvalidOperationException("无法运行该 Java，请在删除 Java 文件夹中的 /lib/ext 文件夹后再试");
-            if (output.Contains("a fatal error") || output.Contains("error: ")) throw new InvalidOperationException("无法运行该 Java，该 Java 或系统存在问题");
-           
-            // 获取版本号
-            var versionString = (output.RegexSeek(@"(?<=version "")[^""]+") ?? output.RegexSeek("(?<=openjdk )[0-9]+"))?.Replace("_", ".").Replace("+", ".").BeforeFirst("-");
-            if (string.IsNullOrEmpty(versionString)) throw new InvalidOperationException($"未找到该 Java 的版本号{(output.Length < 500 ? $"\n原始输出为：\n{output}" : "")}");
-            if (versionString.StartsWithF("1.")) versionString = versionString!.AfterFirst("."); // 去除开头的 1.
+    /// <summary>检查 Java 是否可用；失败写入 LastError，取消不记为失败。</summary>
+    public async Task<Result<Java, JavaCheckError>> CheckAsync(
+        CancellationToken cancellationToken = default, IJavaProcessRunner? runner = null) {
+        if (Interlocked.Exchange(ref isChecked, 1) == 1 && available is not null) {
+            return available.Value
+                ? Result<Java, JavaCheckError>.Ok(this)
+                : Result<Java, JavaCheckError>.Err(
+                    LastError ?? new JavaCheckError(JavaFailureReason.Unexpected, "Java 检查失败", Folder));
+        }
+
+        JavaProcessOutput? output = null;
+        try {
+            if (runner is null && !FileUtils.Exists(JavaExePath)) {
+                return Fail(JavaFailureReason.MissingExe, "未找到 java.exe 文件", null, null);
+            }
+
+            output = await (runner ?? new ProcessJavaRunner())
+                .RunAsync(JavaExePath, "-XshowSettings:properties -version", 15000, cancellationToken)
+                .NoCapture();
+            if (output.TimedOut) {
+                return Fail(JavaFailureReason.Timeout, "Java 检查超时", output.ExitCode, output.Output);
+            }
+
+            var rawOutput = output.Output;
+            var text = rawOutput.Lower();
+            if (output.ExitCode != 0) {
+                return Fail(JavaFailureReason.ProcessFailed, "Java 进程返回了非零退出码",
+                    output.ExitCode, text);
+            }
+            if (text == "") {
+                return Fail(JavaFailureReason.OutputUnreadable, "运行该 Java 失败", output.ExitCode, text);
+            }
+
+            Logger.Trace($"Java 检查输出：{JavaExePath}{Environment.NewLine}{text}");
+            if (text.Contains("/lib/ext exists")) {
+                return Fail(JavaFailureReason.ProcessFailed, "无法运行该 Java，请删除 Java 文件夹中的 /lib/ext 文件夹后重试",
+                    output.ExitCode, text);
+            }
+            if (text.Contains("a fatal error") || text.Contains("error: ")) {
+                return Fail(JavaFailureReason.ProcessFailed, "无法运行该 Java，请检查 Java 或系统环境",
+                    output.ExitCode, text);
+            }
+
+            var versionString = (text.RegexSeek(@"(?<=version "")[^""]+")
+                ?? text.RegexSeek("(?<=openjdk )[0-9]+"))
+                ?.Replace("_", ".").Replace("+", ".").BeforeFirst("-");
+            if (string.IsNullOrEmpty(versionString)) {
+                return Fail(JavaFailureReason.OutputUnreadable, "未找到该 Java 的版本号",
+                    output.ExitCode, text);
+            }
+            if (versionString.StartsWithF("1.")) versionString = versionString!.AfterFirst(".");
             var segments = versionString!.Split(".", true).ToList();
             while (segments.Count < 4) segments.Add("0");
             Version = new Version(segments.Take(4).Join("."));
-            if (Version.Major is <= 4 or >= 100) throw new InvalidOperationException($"分析详细信息失败，获取的版本为 {Version}{(output.Length < 500 ? $"\n原始输出为：\n{output}" : "")}");
+            if (Version.Major is <= 4 or >= 100) {
+                return Fail(JavaFailureReason.UnsupportedVersion, $"Java 版本不受支持：{Version}",
+                    output.ExitCode, text);
+            }
+            if (!text.Contains("64-bit")) {
+                return Fail(JavaFailureReason.Not64Bit, "该 Java 为 32 位版本，请安装 64 位 Java",
+                    output.ExitCode, text);
+            }
 
-            // 获取 Java 的相关属性
-            if (!output.Contains("64-bit")) throw new InvalidOperationException("该 Java 为 32 位版本，请安装 64 位的 Java");
             string? GetProperty(string name) {
-                string prefix = name + " = ";
-                string? line = output.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWithF(prefix));
+                var prefix = name + " = ";
+                var line = rawOutput.Split('\n').Select(l => l.Trim())
+                    .FirstOrDefault(l => l.StartsWithF(prefix));
                 return line?[prefix.Length..].Trim();
             }
-            FileEncodingName = GetProperty("file.encoding");
-            NativeEncodingName = GetProperty("native.encoding") ?? FileEncodingName; // 旧版本没有 native.encoding
 
-            Logger.Info($"检查 Java 成功：{this}");
+            FileEncodingName = GetProperty("file.encoding");
+            NativeEncodingName = GetProperty("native.encoding") ?? FileEncodingName;
+
             available = true;
+            LastError = null;
+            Logger.Info($"检查 Java 成功：{this}");
+            return Result<Java, JavaCheckError>.Ok(this);
+        } catch (OperationCanceledException) {
+            isChecked = 0;
+            throw;
         } catch (Exception ex) {
-            if (ex.IsCanceled()) {
-                isChecked = 0;
-                throw;
-            }
-            Logger.Warn($"检查 Java 失败（{JavaExePath}），其输出为：\n{output ?? "无程序输出"}");
-            available = false;
+            return Fail(JavaFailureReason.Unexpected, "检查 Java 时发生未预期错误",
+                output?.ExitCode, output?.Output, ex);
         }
-        return available!.Value;
+    }
+
+    private Result<Java, JavaCheckError> Fail(JavaFailureReason reason, string message, int? exitCode,
+        string? output, Exception? cause = null) {
+        available = false;
+        LastError = new JavaCheckError(reason, message, Folder, exitCode, output, cause);
+        Logger.Warn($"检查 Java 失败：{JavaExePath}（{LastError.Code}：{message}）");
+        return Result<Java, JavaCheckError>.Err(LastError);
     }
 
     public void InvalidateChecked() {
         isChecked = 0;
         available = null;
+        LastError = null;
     }
 
-    [JsonIgnore] private int isChecked = 0;
+    [JsonIgnore] internal int isChecked = 0;
     /// <summary>若已进行过检查，表示该检查是否成功。若未检查，则为 null。</summary>
     [JsonIgnore] internal bool? available = null;
 

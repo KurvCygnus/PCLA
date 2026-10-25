@@ -73,7 +73,7 @@ Public Module ModJava
         If String.IsNullOrEmpty(NewJavaPath) Then Return
         '验证 Java 可用
         Dim NewJava As New Java(PathUtils.RemoveLastPart(NewJavaPath))
-        If Not NewJava.CheckAsync().Run() Then
+        If Not NewJava.CheckAsync().Run().IsSuccess Then
             Hint("该 Java 存在异常，无法使用", HintType.Red)
             Return
         End If
@@ -321,7 +321,7 @@ Public Module ModJava
                         End If
                         p?.Skip() : Return Nothing '<==== 设置中指定的 Java 不在列表中
                     End If
-                    If Not ChosenJava.CheckAsync(c).Run() Then
+                    If Not ChosenJava.CheckAsync(c).Run().IsSuccess Then
                         Configs.JavaForced.Reset(Instance.Config)
                         UpdateJavaLists()
                         If TryFixOrHint Then
@@ -349,7 +349,7 @@ Public Module ModJava
                     Function() As Java
                         JavaListRefreshWorker.WaitIfRunning() '等待进行中的搜索结束
                         For Each ChosenJava In Configs.JavaList.Get()
-                            If Not ChosenJava.CheckAsync(c).Run() Then '检查
+                            If Not ChosenJava.CheckAsync(c).Run().IsSuccess Then '检查
                                 Logger.Warn($"Java 检查失败，将尝试列表中的下一个 Java：{ChosenJava}")
                                 Continue For
                             End If
@@ -493,7 +493,7 @@ Public Module ModJava
                 p?.Set(0.4, True) : GoTo NoForcedJava
             End If
             Dim ForcedJava = New Java(ForcedJavaSetting.DeserializeJson(Of JObject)()("Path").ToString)
-            If Not ForcedJava.CheckAsync(c).Run() Then
+            If Not ForcedJava.CheckAsync(c).Run().IsSuccess Then
                 Hint("该版本的设置中强制指定的 Java 存在异常，该设置已重置", HintType.Red)
                 p?.Set(0.4) : GoTo NoForcedJava
             End If
