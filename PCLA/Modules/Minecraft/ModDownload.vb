@@ -867,7 +867,7 @@ Public Module ModDownload
     Private Sub DlFabricListOfficialMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
         Dim Result As String = NetRequestByClientRetry("https://meta.fabricmc.net/v2/versions", RequireJson:=True)
         Loader.Output = New DlFabricListResult With {.IsOfficial = True, .SourceName = "Fabric 官方源",
-            .Value = PCLCS.Minecraft.Download.FabricListParser.Parse(Result)}
+            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result)}
     End Sub
 
     ''' <summary>
@@ -877,7 +877,7 @@ Public Module ModDownload
     Private Sub DlFabricListBmclapiMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
         Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/fabric-meta/v2/versions", RequireJson:=True)
         Loader.Output = New DlFabricListResult With {.IsOfficial = False, .SourceName = "BMCLAPI",
-            .Value = PCLCS.Minecraft.Download.FabricListParser.Parse(Result)}
+            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result)}
     End Sub
 
     ''' <summary>
@@ -1075,6 +1075,12 @@ Public Module ModDownload
         Do While Current IsNot Nothing
             If TypeOf Current Is PCLCS.Minecraft.Download.DownloadSourceException Then
                 Return CType(Current, PCLCS.Minecraft.Download.DownloadSourceException).IsUnavailable
+            End If
+            If TypeOf Current Is PCLCS.Results.PclaException Then
+                Dim InnerError = CType(Current, PCLCS.Results.PclaException).Error
+                If TypeOf InnerError Is PCLCS.Results.DownloadError Then
+                    Return CType(InnerError, PCLCS.Results.DownloadError).IsUnavailable
+                End If
             End If
             Current = Current.InnerException
         Loop
