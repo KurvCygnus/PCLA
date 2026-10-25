@@ -174,3 +174,18 @@
 - **残留：LiteLoader 的 `OfficialError` 无写入点。** `ModDownload.vb:752` 声明了 `DlLiteLoaderListResult.OfficialError`，全仓库没有任何赋值，恒为 `Nothing`；它是旧“官方源错误备用”方案的遗留字段，可随下次 UI 收敛删除。
 - **残留：Forge/NeoForge 的 VB 构造器重复解析。** `DlForgeVersionEntry.New`（`ModDownload.vb:550-562`）与 `DlNeoForgeListEntry.New`（`ModDownload.vb:668-695`）在 C# 解析器已经做过分支修正/版本推导之后又各算一遍。修正幂等，当前行为安全；风险是今后只改 C# 一侧时 VB 副本会静默过期。待 UI 收敛时改为逐字段直传，与其余五类加载器一致。
 - **残留：BMCLAPI 客户端清单异常拼接完整响应体。** `ModDownload.vb:268` 把 `ResultText` 整段拼进用户可见异常消息。旧代码同样拼接 `Json.ToString`，属保真保留；后续可改用 `DownloadDiagnostics.Snippet` 截断。
+
+## 8. NativeAOT 去反射残留（2026-10-23）
+
+- **S4 唯一明确豁免：`MeloongCore.Shared.General.Config` 的泛型 `Config<T>` / `ConfigEntry<T>` 反序列化。** 它按调用方类型做 `JsonSerializer.Deserialize<T>` / `JsonConvert.DeserializeObject<T>`，无法用一份固定的源生成上下文覆盖；S4 只保证 AOT 冒烟覆盖的 PCLCS 解析与迁移路径零反射告警，不承诺该泛型 API 可 AOT。
+- **后续整顿：** 给 `IConfigProvider.Read` / `ConfigEntry<T>` 增加 `JsonTypeInfo<T>` 重载，调用方从源生成上下文取类型信息；没有类型信息的旧路径保留 net48 兼容。完成后再把 `Config<T>` 纳入 AOT 冒烟。
+- **边界说明：** `PCLA` 的 VB/WPF 壳仍使用 `AssemblyResolve` + 嵌入 DLL 的单 exe 方案，不在 S4 的 AOT 范围；C# 化时一并替换。
+- **验证要求：** S4 的 `PCLCS.AotSmoke` 只覆盖 PCLCS 与 `MeloongCore.Shared` 中实际调用的解析/迁移路径；新增 AOT 调用点时若触发反射告警，必须先修或登记到本节，不得静默忽略。
+
+## 9. JSON 动态移植的过渡债（2026-10-24）
+
+- S4 把 `PCLCS` / `MeloongCore.Shared` 从 Newtonsoft 迁到 System.Text.Json 时采用动态 `JsonNode` 移植，属于过渡方案；后续 Wave（C# 化）应把清单解析与配置改为强类型 DTO + 源生成。
+- 行为差异清单：缺失属性默认值、属性名大小写、数字/字符串宽松转换、日期/时区、注释/尾逗号、`null` 与缺失的区别。
+- 当前统一在 `JsonNodeUtils`：缺失返回默认值；大小写可指定；数字/字符串按目标类型转换；注释 `Skip`、尾逗号允许；日期按本地时区。
+- 未覆盖或无法统一的差异必须补 parity 夹具；S4 验收要求 PCLCS 230 + 行为 32/32 不退，AOT 冒烟通过。
+- 后续清理时删除 `JsonNodeUtils` 的宽松层，改为 DTO/源生成后再收紧 schema。
