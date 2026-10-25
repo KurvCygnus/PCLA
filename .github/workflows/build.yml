@@ -58,6 +58,10 @@ jobs:
       - name: Build PCLA
         run: msbuild PCLA\PCLA.vbproj -t:Rebuild -p:Configuration=Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }} -m:2
 
+      - name: Run behavior tests
+        shell: pwsh
+        run: ./tools/test-behavior.ps1
+
       - uses: actions/upload-artifact@v4
         with:
           name: PCLA-${{ steps.version.outputs.version }}
