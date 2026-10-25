@@ -150,9 +150,23 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 ### 6.6 整合包与崩溃分析
 
 - 五种格式：CurseForge `manifest.json`、Modrinth `modrinth.index.json`、HMCL `mcbbs.packmeta`、MultiMC `mmc-pack.json`、MCBBS；入口 `ModpackInstall`（`ModModpack.vb:31`），按压缩包内文件名嗅探（`:44-72`），overrides 复制到版本目录并写入 `VersionArgumentIndie`（`:126-143`）。
-- 崩溃分析 `CrashAnalyzer`（`ModCrash.vb:1`）：收集最近 3 分钟的 crash-report 与 latest.log（`:21-85`），按文件类型截取头尾窗口（`:214-264`），再用约 60 条 `String.Contains` 规则匹配原因（`:474-584`），最后做 Mixin/模组名归因（`:589-670`）。规则即产品知识，没有测试夹具。
+- 崩溃分析 `CrashAnalyzer`（`ModCrash.vb:1`）：收集最近 3 分钟的 crash-report 与 latest.log（`:21-85`），按文件类型截取头尾窗口（`:214-264`），再用约 60 条 `String.Contains` 规则匹配原因（`:474-584`），最后做 Mixin/模组名归因（`:589-670`）。规则即产品知识，行为由 `tests\PCLA.BehaviorTests` 的黄金语料锁定。
 
-## 7. 关键路径速查
+## 7. 测试
+
+### 7.1 PCLCS 单元测试
+
+`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
+
+### 7.2 行为黄金语料
+
+- `tests\PCLA.BehaviorTests` 通过 `ProjectReference` 直连 `PCLA`，覆盖 `McInstance`、`CrashAnalyzer`、`Settings`。
+- 测试进程内初始化临时目录；不启动 WPF、不访问网络、不写真实用户目录。
+- `CrashAnalyzer.GetAnalyzeResult` 是唯一生产可见性接缝（`Friend` + `InternalsVisibleTo`）。
+- 语料是合成数据；行为变化必须显式更新断言，不能靠放宽断言通过。
+- `dotnet build` 不支持该 VB WPF 工程的 XAML 构建，必须走 `.\tools\test-behavior.ps1`（MSBuild 构建 + `vstest.console.exe` 运行）。
+
+## 8. 关键路径速查
 
 | 场景 | 入口 | 关键实现 |
 | --- | --- | --- |

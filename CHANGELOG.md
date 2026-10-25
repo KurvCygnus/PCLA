@@ -1,5 +1,9 @@
 # 更新日志
 
+## [Unreleased]
+
+- 新增行为黄金语料，锁定实例识别、崩溃分析与配置读写，为后续 C# 化提供回归基线。
+
 ## 0.1.0
 
 - 启动器更名为 Plain Craft Launcher (PCL) Alternative（PCLA），使用独立的数据目录与注册表，可与原版 PCL 并存。
