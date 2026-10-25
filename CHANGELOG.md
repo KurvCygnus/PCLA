@@ -2,9 +2,9 @@
 
 ## 0.1.0
 
-- 改名 `Plain Craft Launcher (PCL) Alternative (PCLA)`，隔离数据目录、注册表与单例。
-- 首次启动从旧 PCL 数据目录一次性导入，不覆盖、不删除旧数据。
-- 版本单点化：`Version.props` + `tools/version.ps1`，支持 release / nightly / snapshot。
-- 清理赞助解锁、土豆码、虚假更新/遥测入口；主题固定 210 蓝。
-- 建立可复用构建、CI、正式发布与预览工作流，发布包附 `LICENCE` 与 SHA-256。
-- 内部：统一用户数据迁移、Fabric 列表解析与 Java 探测的错误边界，新增全局崩溃文件兜底。
+- 启动器更名为 Plain Craft Launcher (PCL) Alternative（PCLA），使用独立的数据目录与注册表，可与原版 PCL 并存。
+- 首次启动会把旧 PCL 数据复制到 PCLA 目录；已有文件不覆盖，旧数据不删除。
+- 移除赞助解锁、土豆码、启动器更新、公告与匿名数据收集等无效入口；主题固定为蓝色。
+- 关于页保留原作者署名与赞助链接，并增加 PCLA 的源码、问题反馈与许可入口。
+- Java 探测、模组下载与用户数据导入失败时给出更明确的原因；崩溃时生成诊断日志，便于反馈。
+- 发布包附 LICENCE 与 SHA-256 校验文件。
