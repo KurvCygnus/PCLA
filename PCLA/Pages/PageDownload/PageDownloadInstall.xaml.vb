@@ -1142,7 +1142,7 @@ Public Class PageDownloadInstall
     Public Function GetSelectedComponents() As McComponents
         Return New McComponents(
             minecraftVersion:=VanillaName,
-            optiFineEntry:=If(SelectedOptiFine Is Nothing, Nothing, JObject.FromObject(SelectedOptiFine)),
+            optiFineEntry:=If(SelectedOptiFine Is Nothing, Nothing, CType(JObject.FromObject(SelectedOptiFine).ToJsonNode(), System.Text.Json.Nodes.JsonObject)),
             forgeVersion:=SelectedForge?.VersionName,
             neoForgeVersion:=SelectedNeoForge?.VersionName,
             fabricVersion:=SelectedFabric,

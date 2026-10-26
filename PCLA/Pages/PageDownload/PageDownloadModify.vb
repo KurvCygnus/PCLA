@@ -1,3 +1,5 @@
+Imports System.Text.Json
+
 ''' <summary>
 ''' 版本修改页：完整还原已安装组件后，复用安装页的选择交互。
 ''' </summary>
@@ -124,7 +126,9 @@ Public Class PageDownloadModify
         VanillaData("id") = MinecraftVersion
         'OptiFine
         If Manifest IsNot Nothing Then
-            SelectedOptiFine = Components.OptiFineEntry?.ToObject(Of DlOptiFineListEntry)()
+            SelectedOptiFine = If(Components.OptiFineEntry Is Nothing, Nothing,
+                JsonSerializer.Deserialize(Of DlOptiFineListEntry)(Components.OptiFineEntry.ToJsonString(),
+                    New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}))
             If SelectedOptiFine IsNot Nothing AndAlso Not DlOptiFineListLoader.Output.Value.Any(Function(v) v.FileName = SelectedOptiFine.FileName) Then
                 '如果 OptiFine 是 pre 版，可能只在 BMCLAPI 下有，官方源删了。如果是这种缺失数据的情况，换用 BMCLAPI 源作为输出
                 If DlOptiFineListBmclapiLoader.State <> LoadState.Finished Then DlOptiFineListBmclapiLoader.WaitForExit()
@@ -272,7 +276,7 @@ Public Class PageDownloadModify
         '保存 Manifest
         If IsVanillaVersionReliable Then
             Components = New McComponents(MinecraftVersion, Components.ModLoaderVersions,
-                    If(SelectedOptiFine Is Nothing, Nothing, JObject.FromObject(SelectedOptiFine)),
+                    If(SelectedOptiFine Is Nothing, Nothing, CType(JObject.FromObject(SelectedOptiFine).ToJsonNode(), System.Text.Json.Nodes.JsonObject)),
                     If(SelectedFabricApi?.Version, If(SelectedFabricApi?.Id, SelectedFabricApi?.Display)),
                     If(SelectedOptiFabric?.Version, If(SelectedOptiFabric?.Id, SelectedOptiFabric?.Display)))
             If Manifest Is Nothing OrElse Not Components.IsEquivalentTo(Manifest.Components) OrElse Not ManagedFiles.SequenceEqual(Manifest.ManagedFiles) Then

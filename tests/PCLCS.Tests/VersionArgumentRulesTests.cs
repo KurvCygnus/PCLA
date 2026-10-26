@@ -1,4 +1,4 @@
-using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using PCLCS.Minecraft.Launch;
 
 namespace PCLCS.Tests;
@@ -16,14 +16,14 @@ public class VersionArgumentRulesTests
     [InlineData("unknown", true)]
     public void OsName(string name, bool expected)
     {
-        var rules = JToken.Parse($"{{\"action\":\"allow\",\"os\":{{\"name\":\"{name}\"}}}}");
+        var rules = JsonNode.Parse($"{{\"action\":\"allow\",\"os\":{{\"name\":\"{name}\"}}}}");
         Assert.Equal(expected, VersionArgumentRules.IsAllowed(rules, Windows10));
     }
 
     [Fact]
     public void OsVersionMatchesRegex()
     {
-        var rules = JToken.Parse("{\"action\":\"allow\",\"os\":{\"name\":\"windows\",\"version\":\"^10\\\\.\"}}");
+        var rules = JsonNode.Parse("{\"action\":\"allow\",\"os\":{\"name\":\"windows\",\"version\":\"^10\\\\.\"}}");
         Assert.True(VersionArgumentRules.IsAllowed(rules, Windows10));
         Assert.False(VersionArgumentRules.IsAllowed(rules, new RuleEnvironment("Microsoft Windows NT 6.1.7601.0")));
     }
@@ -32,7 +32,7 @@ public class VersionArgumentRulesTests
     public void InvalidRegexWarnsAndDenies()
     {
         var warnings = new List<string>();
-        var rules = JToken.Parse("{\"action\":\"allow\",\"os\":{\"name\":\"windows\",\"version\":\"[\"}}");
+        var rules = JsonNode.Parse("{\"action\":\"allow\",\"os\":{\"name\":\"windows\",\"version\":\"[\"}}");
         Assert.False(VersionArgumentRules.IsAllowed(rules, Windows10, warnings.Add));
         Assert.Contains("规则正则无效：[", warnings[0]);
     }
@@ -43,7 +43,7 @@ public class VersionArgumentRulesTests
     [InlineData("x86_64", true)]
     public void OsArch(string arch, bool expected)
     {
-        var rules = JToken.Parse($"{{\"action\":\"allow\",\"os\":{{\"arch\":\"{arch}\"}}}}");
+        var rules = JsonNode.Parse($"{{\"action\":\"allow\",\"os\":{{\"arch\":\"{arch}\"}}}}");
         Assert.Equal(expected, VersionArgumentRules.IsAllowed(rules, Windows10));
     }
 
@@ -56,13 +56,13 @@ public class VersionArgumentRulesTests
     [InlineData("{\"action\":\"allow\",\"features\":{\"quick_play_singleplayer\":true}}", false)]
     public void FeaturesAndAction(string json, bool expected)
     {
-        Assert.Equal(expected, VersionArgumentRules.IsAllowed(JToken.Parse(json), Windows10));
+        Assert.Equal(expected, VersionArgumentRules.IsAllowed(JsonNode.Parse(json), Windows10));
     }
 
     [Fact]
     public void DisallowOverridesEarlierAllow()
     {
-        var rules = JToken.Parse(
+        var rules = JsonNode.Parse(
             "[{\"action\":\"allow\",\"os\":{\"name\":\"windows\"}},{\"action\":\"disallow\",\"os\":{\"name\":\"windows\"}}]");
         Assert.False(VersionArgumentRules.IsAllowed(rules, Windows10));
     }

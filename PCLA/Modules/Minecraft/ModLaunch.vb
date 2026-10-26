@@ -1200,8 +1200,8 @@ Retry:
             McLaunchLog("旧版 JVM 参数")
         End If
         Args.AddRange(PCLCS.Minecraft.Launch.VersionArguments.CollectJvm(
-            McInstanceSelected.JsonObject,
-            Function(name) (New McInstance(name)).JsonObject,
+            McInstanceSelected.JsonObject.ToJsonNode().AsObject(),
+            Function(name) (New McInstance(name)).JsonObject.ToJsonNode().AsObject(),
             New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
             Sub(message) Logger.Warn(message),
             inheritName:=McInstanceSelected.InheritName))
@@ -1331,8 +1331,8 @@ Retry:
             McLaunchLog($"新版游戏参数：从版本 JSON 获取（{McInstanceSelected.Name}）")
         End If
         Dim Arg As String = PCLCS.Minecraft.Launch.VersionArguments.CollectGame(
-            McInstanceSelected.JsonObject,
-            Function(name) (New McInstance(name)).JsonObject,
+            McInstanceSelected.JsonObject.ToJsonNode().AsObject(),
+            Function(name) (New McInstance(name)).JsonObject.ToJsonNode().AsObject(),
             New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
             Sub(message) Logger.Warn(message),
             inheritName:=McInstanceSelected.InheritName)

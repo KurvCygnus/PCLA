@@ -1,4 +1,6 @@
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using PCLCS.Json;
 using System.Text.RegularExpressions;
 
 namespace PCLCS.Minecraft.Download;
@@ -138,20 +140,20 @@ public static class ForgeBuildParser {
     /// <param name="recommendedVersion">推荐版本的版本名；未知时为 null。</param>
     /// <exception cref="DownloadSourceException">JSON 非法、条目缺字段或没有可用构建。</exception>
     public static IReadOnlyList<ForgeBuildEntry> ParseBmclapiJson(string json, string inherit, string? recommendedVersion) {
-        JArray array;
+        JsonArray array;
         try {
-            array = JArray.Parse(json);
-        } catch (Newtonsoft.Json.JsonException ex) {
+            array = JsonNodeUtils.Parse(json).AsArray();
+        } catch (JsonException ex) {
             throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
                 "Forge BMCLAPI 返回的内容不是合法 JSON 数组", "BMCLAPI", DownloadDiagnostics.Snippet(json), ex);
         }
         var entries = new List<ForgeBuildEntry>();
-        foreach (var token in array.OfType<JObject>()) {
+        foreach (var token in array.OfType<JsonObject>()) {
             string? hash = null;
             var category = "unknown";
             var priority = -1;
-            if (token["files"] is JArray files) {
-                foreach (var file in files.OfType<JObject>()) {
+            if (token["files"] is JsonArray files) {
+                foreach (var file in files.OfType<JsonObject>()) {
                     var fileCategory = file["category"]?.ToString();
                     var format = file["format"]?.ToString();
                     if (fileCategory == "installer" && format == "jar") {
@@ -172,10 +174,12 @@ public static class ForgeBuildParser {
             var version = token["version"]?.ToString()
                 ?? throw new DownloadSourceException(DownloadFailureKind.MissingField,
                     "Forge BMCLAPI 条目缺少 version", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToString()));
-            var branch = token["branch"]?.Type == JTokenType.Null ? null : token["branch"]?.ToString();
+            var branch = token["branch"]?.ToString();
             try {
-                var modified = token["modified"]?.ToObject<DateTime>()
-                    ?? throw new DownloadSourceException(DownloadFailureKind.MissingField,
+                //* 旧引擎的 ToObject<DateTime> 遇到格式错误的日期会抛异常并转为 InvalidPayload；这里用 GetValue<DateTime> 保持同一行为。
+                var modified = token["modified"] is JsonValue modifiedValue
+                    ? GetValueOrThrow<DateTime>(modifiedValue)
+                    : throw new DownloadSourceException(DownloadFailureKind.MissingField,
                         $"Forge BMCLAPI 构建 {version} 缺少 modified", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToString()));
                 entries.Add(new ForgeBuildEntry(version, branch, inherit) {
                     Hash = hash,
@@ -197,4 +201,7 @@ public static class ForgeBuildParser {
         }
         return entries;
     }
+
+    //* 统一走 GetValue 以复刻旧引擎 ToObject 的抛错语义：缺失/类型错 → MissingField，格式错 → FormatException → InvalidPayload。
+    private static T GetValueOrThrow<T>(JsonValue value) where T : notnull => value.TryGetValue<T>(out var result) ? result : throw new FormatException();
 }

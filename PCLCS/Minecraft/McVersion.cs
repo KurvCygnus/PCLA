@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Nodes;
 
 namespace PCLCS;
 
@@ -110,11 +111,13 @@ public sealed class McVersion {
     /// <param name="instanceName">实例文件夹名。</param>
     /// <param name="json">展开的版本 JSON。</param>
     /// <param name="jarVersionJson">版本 JAR 中的 version.json。</param>
-    public McVersion(string instanceName, JObject json, JObject? jarVersionJson = null) {
-        string jsonText = json.ToString(Formatting.None);
+    public McVersion(string instanceName, JsonObject json, JsonObject? jarVersionJson = null) {
+        string jsonText = json.ToJsonString();
         DateTime releaseTime = new(1970, 1, 1, 15, 0, 0); // 未知版本也可能显示为 1970 年
         try {
-            if (json["releaseTime"] is JToken releaseTimeToken) releaseTime = releaseTimeToken.ToObject<DateTime>();
+            if (json["releaseTime"] is JsonNode releaseTimeNode) {
+                releaseTime = releaseTimeNode.GetValue<DateTime>();
+            }
         } catch {
         }
         bool reliable = true;
@@ -124,7 +127,7 @@ public sealed class McVersion {
         VanillaName = vanillaName;
         ReleaseTime = releaseTime;
         // 确定版本分类
-        string jsonType = json.Value<string>("type") ?? "";
+        string jsonType = json["type"]?.GetValue<string>() ?? "";
         // OptiFine
         OptiFine = jsonText.ContainsIgnoreCase("optifine") ? jsonText.RegexSeek(@"(?<=HD_U_)[^\"":/]+") ?? "未知版本": null;
         // 愚人节与快照版本
@@ -151,16 +154,16 @@ public sealed class McVersion {
         }
     }
 
-    private static string? GetVanillaName(string instanceName, JObject json, JObject? jarVersionJson, DateTime releaseTime, ref bool reliable) {
+    private static string? GetVanillaName(string instanceName, JsonObject json, JsonObject? jarVersionJson, DateTime releaseTime, ref bool reliable) {
         // 获取发布时间并判断是否为老版本
         if (releaseTime.Year is > 2000 and < 2013) return "Old";
         // 实验性快照
-        if (json.Value<string>("type") == "pending") return "pending";
+        if (json["type"]?.GetValue<string>() == "pending") return "pending";
         // 从 PCL 下载的版本信息中获取版本号
-        if (json["clientVersion"] is JToken clientVersion) return clientVersion.ToString();
+        if (json["clientVersion"] is JsonNode clientVersion) return clientVersion.ToString();
         // 从 HMCL 下载的版本信息中获取版本号
-        if (json["patches"] is JArray patches) {
-            JToken? gameVersion = patches.OfType<JObject>().FirstOrDefault(patch => patch.Value<string>("id") == "game")?["version"];
+        if (json["patches"] is JsonArray patches) {
+            JsonNode? gameVersion = patches.OfType<JsonObject>().FirstOrDefault(patch => patch["id"]?.GetValue<string>() == "game")?["version"];
             if (gameVersion is not null) return gameVersion.ToString();
         }
         // 从 Forge / NeoForge Arguments 中获取版本号
@@ -172,7 +175,7 @@ public sealed class McVersion {
             return jar.Length > 0 ? jar : inherit;
         }
         // 从下载地址中获取版本号
-        string? download = json["downloads"]?.ToString(Formatting.None).RegexSeek(@"(?<=launcher.mojang.com/mc/game/)[^/]*");
+        string? download = json["downloads"]?.ToJsonString().RegexSeek(@"(?<=launcher.mojang.com/mc/game/)[^/]*");
         if (download is not null) return download;
         // 从 Forge/OptiFine/Fabric 版本中获取版本号
         string librariesText = json["libraries"]!.ToString();
@@ -186,9 +189,9 @@ public sealed class McVersion {
             if (librariesText.RegexSeek(pattern) is string match) return match;
         }
         // 从 jar 项中获取版本号
-        if (json["jar"] is JToken jarToken) return jarToken.ToString();
+        if (json["jar"] is JsonNode jarToken) return jarToken.ToString();
         // 从 jar 文件的 version.json 中获取版本号
-        if (jarVersionJson?["name"] is JToken jarNameToken && jarNameToken.ToString() is { Length: < 32 } jarName) { // 因为 wiki 说这玩意儿可能是个 hash，虽然我没发现
+        if (jarVersionJson?["name"] is JsonNode jarNameToken && jarNameToken.ToString() is { Length: < 32 } jarName) { // 因为 wiki 说这玩意儿可能是个 hash，虽然我没发现
             Logger.Info($"从版本 jar 中的 version.json 获取到版本号：{jarName}");
             return jarName;
         }
@@ -201,9 +204,9 @@ public sealed class McVersion {
         // 从文件夹名中获取
         if (instanceName.RegexSeek(VersionPattern, RegexOptions.IgnoreCase) is string folderMatch) return folderMatch;
         // 从 JSON 出现的版本号中获取
-        JObject withoutLibraries = (JObject) json.DeepClone();
+        JsonObject withoutLibraries = json.DeepClone().AsObject()!;
         withoutLibraries.Remove("libraries");
-        return withoutLibraries.ToString(Formatting.None).RegexSeek(VersionPattern, RegexOptions.IgnoreCase);
+        return withoutLibraries.ToJsonString().RegexSeek(VersionPattern, RegexOptions.IgnoreCase);
     }
 
     private static bool IsFoolName(string name) {
@@ -219,9 +222,8 @@ public sealed class McVersion {
     /// <summary>
     /// 读取 arguments 中指定参数的字符串值。
     /// </summary>
-    private static string? FindArgumentValue(JObject json, string name) {
-        JArray? arguments = json["arguments"]?["game"] as JArray;
-        if (arguments is null) return null;
+    private static string? FindArgumentValue(JsonObject json, string name) {
+        if (json["arguments"]?["game"] is not JsonArray arguments) return null;
         for (int i = 0; i + 1 < arguments.Count; i++) {
             if (arguments[i]?.ToString() == name) return arguments[i + 1]?.ToString();
         }

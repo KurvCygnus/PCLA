@@ -1,5 +1,6 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using PCLCS.Json;
 
 namespace PCLCS.Minecraft.Download;
 
@@ -8,15 +9,15 @@ public static class ClientListParser {
     private const int MinimumEntries = 200;
 
     /// <summary>校验并返回 JSON；条目不足或结构异常时抛结构化错误。</summary>
-    public static JObject Parse(string json, string sourceName) {
-        JObject root;
+    public static JsonObject Parse(string json, string sourceName) {
+        JsonObject root;
         try {
-            root = JObject.Parse(json);
+            root = JsonNodeUtils.ParseObject(json);
         } catch (JsonException ex) {
             throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
                 $"{sourceName} 返回的内容不是合法 JSON", sourceName, DownloadDiagnostics.Snippet(json), ex);
         }
-        if (root["versions"] is not JArray versions) {
+        if (root["versions"] is not JsonArray versions) {
             throw new DownloadSourceException(DownloadFailureKind.MissingField,
                 $"{sourceName} 的清单缺少 versions 数组", sourceName, DownloadDiagnostics.Snippet(json));
         }
@@ -29,11 +30,11 @@ public static class ClientListParser {
     }
 
     /// <summary>提取所有正式版的 Drop 序数，去重后降序。</summary>
-    public static IReadOnlyList<int> ComputeDrops(JObject json) {
-        var versions = json["versions"] as JArray
+    public static IReadOnlyList<int> ComputeDrops(JsonObject json) {
+        var versions = json["versions"] as JsonArray
             ?? throw new DownloadSourceException(DownloadFailureKind.MissingField, "版本清单缺少 versions 数组");
         return versions
-            .Select(v => v["id"]?.ToString())
+            .Select(v => v?["id"]?.GetValue<string>())
             .Where(id => !string.IsNullOrEmpty(id) && !id!.Contains('-'))
             .Select(id => McVersion.VersionToDrop(id!))
             .Where(drop => drop != 209)
@@ -43,8 +44,8 @@ public static class ClientListParser {
     }
 
     /// <summary>清单中是否存在指定 id。</summary>
-    public static bool ContainsVersion(JObject json, string id) {
-        return (json["versions"] as JArray)?.Any(v => v["id"]?.ToString() == id) == true;
+    public static bool ContainsVersion(JsonObject json, string id) {
+        return (json["versions"] as JsonArray)?.Any(v => v?["id"]?.GetValue<string>() == id) == true;
     }
 
     /// <summary>规范化版本 id：下划线转连字符，非 1.0 去掉尾部 .0。</summary>

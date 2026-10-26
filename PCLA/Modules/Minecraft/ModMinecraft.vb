@@ -328,7 +328,9 @@ Public Module ModMinecraft
             Get
                 If _Version IsNot Nothing Then Return _Version
                 Try
-                    Dim Result = New McVersion(Name, JsonObject, JsonVersion)
+                    Dim VersionNode = JsonObject.ToJsonNode().AsObject()
+                    Dim JarNode = If(JsonVersion Is Nothing, Nothing, JsonVersion.ToJsonNode())
+                    Dim Result = New McVersion(Name, VersionNode, JarNode)
                     _Version = Result
                     If Result.VanillaName = "Unknown" Then Info = "PCL 无法识别该版本的 MC 版本号"
                 Catch ex As Exception
@@ -1555,7 +1557,7 @@ OnLoaded:
     ''' <param name="RuleToken">Json 中的 "rules" 项目。</param>
     Public Function McJsonRuleCheck(RuleToken As JToken) As Boolean
         Return PCLCS.Minecraft.Launch.VersionArgumentRules.IsAllowed(
-            RuleToken,
+            RuleToken.ToJsonNode(),
             New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
             Sub(message) Logger.Warn(message))
     End Function

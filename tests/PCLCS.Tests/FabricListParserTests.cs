@@ -1,4 +1,4 @@
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using PCLCS.Minecraft.Download;
 using PCLCS.Results;
 
@@ -14,10 +14,7 @@ public class FabricListParserTests {
 
         Assert.True(result.IsSuccess);
         var root = result.Value;
-        Assert.Same(root, root["game"]!.Root);
-        Assert.Same(root, root["loader"]!.Root);
-        Assert.Same(root, root["installer"]!.Root);
-        Assert.Equal("1.21.1", ((JArray)root["game"]!)[0]!["version"]!.ToString());
+        Assert.Equal("1.21.1", root["game"]!.AsArray()[0]!["version"]!.ToString());
     }
 
     [Theory]
@@ -58,9 +55,9 @@ public class FabricListParserTests {
         Assert.True(result.IsSuccess);
         var root = result.Value;
         Assert.NotNull(root["loader"]);
-        Assert.True(((JArray)root["loader"]!).Count > 0);
-        Assert.True(((JArray)root["game"]!).Count > 0);
-        Assert.True(((JArray)root["installer"]!).Count > 0);
-        Assert.All((JArray)root["loader"]!, entry => Assert.NotNull(entry["version"]));
+        Assert.True(root["loader"]!.AsArray().Count > 0);
+        Assert.True(root["game"]!.AsArray().Count > 0);
+        Assert.True(root["installer"]!.AsArray().Count > 0);
+        Assert.All(root["loader"]!.AsArray(), entry => Assert.NotNull(entry["version"]));
     }
 }

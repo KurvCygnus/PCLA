@@ -1,3 +1,6 @@
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+
 namespace PCLCS;
 
 /// <summary>
@@ -38,7 +41,7 @@ public record McInstallManifest(int SchemaVersion, McComponents Components, Date
     /// <param name="LastWriteTimeUtc"> 目标文件的最后修改时间（UTC）。</param>
     /// <param name="Component"> 安装器组件名；为空时表示文件由整合包管理。</param>
     public record ManagedFile(string RelativePath, string Sha1, DateTime LastWriteTimeUtc,
-        [property: JsonProperty(NullValueHandling = NullValueHandling.Ignore)] string? Component = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Component = null);
 }
 
 /// <param name="MinecraftVersion"> 目标 Minecraft 版本。</param>
@@ -48,12 +51,12 @@ public record McInstallManifest(int SchemaVersion, McComponents Components, Date
 /// <param name="OptiFabricVersion"> 由 PCL 管理的 OptiFabric 版本；不安装时为 <see langword="null"/>。</param>
 [method: JsonConstructor]
 public record McComponents(string MinecraftVersion, Dictionary<ModLoaders, string> ModLoaderVersions,
-        [property: JsonProperty(NullValueHandling = NullValueHandling.Ignore)] JObject? OptiFineEntry = null,
-        [property: JsonProperty(NullValueHandling = NullValueHandling.Ignore)] string? FabricApiVersion = null,
-        [property: JsonProperty(NullValueHandling = NullValueHandling.Ignore)] string? OptiFabricVersion = null) {
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonObject? OptiFineEntry = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FabricApiVersion = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OptiFabricVersion = null) {
     [JsonIgnore]
-    public string? OptiFineVersion => OptiFineEntry?["InstanceName"]?.Value<string>()?.AfterLast("-OptiFine_");
-    public McComponents(string minecraftVersion, JObject? optiFineEntry, string? forgeVersion,
+    public string? OptiFineVersion => OptiFineEntry?["InstanceName"]?.GetValue<string>()?.AfterLast("-OptiFine_");
+    public McComponents(string minecraftVersion, JsonObject? optiFineEntry, string? forgeVersion,
         string? neoForgeVersion, string? fabricVersion, string? fabricApiVersion, string? optiFabricVersion, string? liteLoaderVersion)
         : this(minecraftVersion, [], optiFineEntry, fabricApiVersion, optiFabricVersion) {
         if (forgeVersion is not null) ModLoaderVersions[ModLoaders.Forge] = forgeVersion;

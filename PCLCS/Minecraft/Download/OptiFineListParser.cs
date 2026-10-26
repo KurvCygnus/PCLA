@@ -1,4 +1,5 @@
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
+using PCLCS.Json;
 
 namespace PCLCS.Minecraft.Download;
 
@@ -112,18 +113,18 @@ public static class OptiFineListParser {
 
     /// <summary>解析 BMCLAPI JSON 列表。</summary>
     public static IReadOnlyList<OptiFineEntry> ParseBmclapiJson(string json) {
-        JArray array;
+        JsonArray array;
         try {
-            array = JArray.Parse(json);
-        } catch (Newtonsoft.Json.JsonException ex) {
+            array = JsonNodeUtils.Parse(json).AsArray();
+        } catch (System.Text.Json.JsonException ex) {
             throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
                 "OptiFine BMCLAPI 返回的内容不是合法 JSON 数组", "BMCLAPI", DownloadDiagnostics.Snippet(json), ex);
         }
         var entries = new List<OptiFineEntry>();
-        foreach (var token in array.OfType<JObject>()) {
+        foreach (var token in array.OfType<JsonObject>()) {
             var mcVersion = token["mcversion"]?.ToString()
                 ?? throw new DownloadSourceException(DownloadFailureKind.MissingField,
-                    "OptiFine BMCLAPI 条目缺少 mcversion", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToString()));
+                    "OptiFine BMCLAPI 条目缺少 mcversion", "BMCLAPI", DownloadDiagnostics.Snippet(token.ToJsonString()));
             var type = token["type"]?.ToString() ?? "";
             var patch = token["patch"]?.ToString() ?? "";
             var display = (mcVersion + type.Replace("HD_U", "").Replace("_", " ") + " " + patch).Replace(".0 ", " ");

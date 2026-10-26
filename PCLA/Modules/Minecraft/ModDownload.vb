@@ -1,3 +1,5 @@
+Imports System.Text.Json.Nodes
+
 Public Module ModDownload
 
 #Region "DlClient* | Minecraft 客户端"
@@ -199,7 +201,8 @@ Public Module ModDownload
         Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
         DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlClientListMojangLoader, DlClientListBmclapiLoader), Loader.IsForceRestarting)
         '提取所有 Drop 序数
-        AllDrops = PCLCS.Minecraft.Download.ClientListParser.ComputeDrops(Loader.Output.Value).ToList
+        AllDrops = PCLCS.Minecraft.Download.ClientListParser.ComputeDrops(
+            Loader.Output.Value.ToJsonNode().AsObject()).ToList
     End Sub
 
     '各个下载源的分加载器
@@ -219,7 +222,7 @@ Public Module ModDownload
                 Logger.Info($"Mojang 官方源加载耗时：{DeltaTime}ms，{If(DlPreferMojang, "可优先使用官方源", "不优先使用官方源")}")
             End If
             '返回
-            Loader.Output = New DlClientListResult With {.IsOfficial = True, .SourceName = "Mojang 官方源", .Value = Json}
+            Loader.Output = New DlClientListResult With {.IsOfficial = True, .SourceName = "Mojang 官方源", .Value = Json.ToJToken()}
             'MC 更新提示
             Static IsHinted As Boolean = False
             Dim Version As String
@@ -228,7 +231,7 @@ Public Module ModDownload
             If Settings.Get(Of Boolean)("ToolUpdateSnapshot") AndAlso Not Settings.Get(Of String)("ToolUpdateSnapshotLast") = "" AndAlso
                Settings.Get(Of String)("ToolUpdateSnapshotLast") <> Version AndAlso Not IsHinted Then
                 IsHinted = True
-                McDownloadClientUpdateHint(Version, Json)
+                McDownloadClientUpdateHint(Version, Json.ToJToken())
             End If
             Settings.Set("ToolUpdateSnapshotLast", If(Version, "Nothing"))
             '正式版
@@ -236,7 +239,7 @@ Public Module ModDownload
             If Settings.Get(Of Boolean)("ToolUpdateRelease") AndAlso Not Settings.Get(Of String)("ToolUpdateReleaseLast") = "" AndAlso
                Settings.Get(Of String)("ToolUpdateReleaseLast") <> Version AndAlso Not IsHinted Then
                 IsHinted = True
-                McDownloadClientUpdateHint(Version, Json)
+                McDownloadClientUpdateHint(Version, Json.ToJToken())
             End If
             Settings.Set("ToolUpdateReleaseLast", Version)
         Catch ex As Exception
@@ -253,7 +256,12 @@ Public Module ModDownload
             Dim Json = PCLCS.Minecraft.Download.ClientListParser.Parse(ResultText, "BMCLAPI")
             '添加 PCL 特供项
             If FileUtils.Exists(PathTemp & "Cache\download.json") Then
-                CType(Json("versions"), JArray).Merge(LegacyFileUtils.ReadAsJson(PathTemp & "Cache\download.json"))
+                Dim Extra = LegacyFileUtils.ReadAsJson(PathTemp & "Cache\download.json")
+                Dim Versions = CType(JsonNode.Parse(Json.ToJsonString()), System.Text.Json.Nodes.JsonObject)
+                For Each Pair In CType(Extra.ToJsonNode(), System.Text.Json.Nodes.JsonObject)
+                    Versions(Pair.Key) = Pair.Value.DeepClone()
+                Next
+                Json = Versions
             End If
             '检查是否有要求的版本（#5195）
             If Not String.IsNullOrEmpty(Loader.Input) AndAlso
@@ -263,7 +271,7 @@ Public Module ModDownload
                     $"BMCLAPI 源未包含目标版本 {Loader.Input}", "BMCLAPI")
             End If
             '返回
-            Loader.Output = New DlClientListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Json}
+            Loader.Output = New DlClientListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Json.ToJToken()}
         Catch ex As Exception
             Throw New Exception("Minecraft BMCLAPI 版本列表解析失败（" & ResultText & "）", ex)
         End Try
@@ -780,7 +788,7 @@ Public Module ModDownload
         ''' <summary>
         ''' 对应的 Json 项。
         ''' </summary>
-        Public JsonToken As JToken
+        Public JsonToken As System.Text.Json.Nodes.JsonNode
     End Class
 
     ''' <summary>
@@ -867,7 +875,7 @@ Public Module ModDownload
     Private Sub DlFabricListOfficialMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
         Dim Result As String = NetRequestByClientRetry("https://meta.fabricmc.net/v2/versions", RequireJson:=True)
         Loader.Output = New DlFabricListResult With {.IsOfficial = True, .SourceName = "Fabric 官方源",
-            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result)}
+            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result).ToJToken()}
     End Sub
 
     ''' <summary>
@@ -877,7 +885,7 @@ Public Module ModDownload
     Private Sub DlFabricListBmclapiMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
         Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/fabric-meta/v2/versions", RequireJson:=True)
         Loader.Output = New DlFabricListResult With {.IsOfficial = False, .SourceName = "BMCLAPI",
-            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result)}
+            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result).ToJToken()}
     End Sub
 
     ''' <summary>

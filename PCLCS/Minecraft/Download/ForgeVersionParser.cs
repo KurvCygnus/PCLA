@@ -1,4 +1,6 @@
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using PCLCS.Json;
 
 namespace PCLCS.Minecraft.Download;
 
@@ -26,14 +28,14 @@ public static class ForgeVersionParser {
     /// <param name="json">BMCLAPI 的 JSON 数组。</param>
     /// <exception cref="DownloadSourceException">JSON 非法或版本数量不足。</exception>
     public static IReadOnlyList<string> ParseBmclapiJson(string json) {
-        JArray array;
+        JsonArray array;
         try {
-            array = JArray.Parse(json);
-        } catch (Newtonsoft.Json.JsonException ex) {
+            array = JsonNodeUtils.Parse(json).AsArray();
+        } catch (JsonException ex) {
             throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
                 "Forge BMCLAPI 返回的内容不是合法 JSON 数组", "BMCLAPI", DownloadDiagnostics.Snippet(json), ex);
         }
-        var names = array.Select(token => token.ToString()).ToList();
+        var names = array.Select(token => token?.ToString() ?? "").ToList();
         if (names.Count < 10) {
             throw new DownloadSourceException(DownloadFailureKind.TooFewEntries,
                 $"BMCLAPI 只返回了 {names.Count} 个 Forge 版本（至少 10 个）", "BMCLAPI", DownloadDiagnostics.Snippet(json));

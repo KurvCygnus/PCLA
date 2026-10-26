@@ -1,3 +1,5 @@
+Imports System.Text.Json
+
 Public Module ModDownloadLib
 
 #Region "Minecraft 下载"
@@ -801,7 +803,7 @@ Retry:
                 VersionJson.Add("releaseTime", Date.ParseExact(DownloadInfo.ReleaseTime, "yyyy/MM/dd HH:mm", Globalization.CultureInfo.InvariantCulture))
                 VersionJson.Add("type", "release")
                 VersionJson.Add("arguments", ("{""game"":[""--tweakClass"",""" & DownloadInfo.JsonToken("tweakClass").ToString & """]}").DeserializeJson())
-                VersionJson.Add("libraries", DownloadInfo.JsonToken("libraries"))
+                VersionJson.Add("libraries", DownloadInfo.JsonToken("libraries").ToJToken())
                 CType(VersionJson("libraries"), JContainer).Add(("{""name"": ""com.mumfrey:liteloader:" & DownloadInfo.JsonToken("version").ToString & """,""url"": ""https://dl.liteloader.com/versions/""}").DeserializeJson())
                 VersionJson.Add("mainClass", "net.minecraft.launchwrapper.Launch")
                 VersionJson.Add("minimumLauncherVersion", 18)
@@ -1742,7 +1744,9 @@ Retry:
             Request.Components.ModLoaderVersions.ContainsKey(ModLoaders.Forge) OrElse Request.Components.ModLoaderVersions.ContainsKey(ModLoaders.NeoForge))
 
         '获取各个 Mod 加载器的缓存文件夹
-        Dim OptiFineEntry = Request.Components.OptiFineEntry?.ToObject(Of DlOptiFineListEntry)()
+        Dim OptiFineEntry = If(Request.Components.OptiFineEntry Is Nothing, Nothing,
+            JsonSerializer.Deserialize(Of DlOptiFineListEntry)(Request.Components.OptiFineEntry.ToJsonString(),
+                New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}))
         Dim OptiFineFolder = If(OptiFineEntry Is Nothing, Nothing, $"{TempMcFolder}versions\{OptiFineEntry.InstanceName}")
         Dim ForgeVersion = If(Request.Components.ModLoaderVersions.ContainsKey(ModLoaders.Forge), Request.Components.ModLoaderVersions(ModLoaders.Forge), Nothing)
         Dim ForgeFolder = If(ForgeVersion Is Nothing, Nothing, $"{TempMcFolder}versions\forge-{ForgeVersion}")

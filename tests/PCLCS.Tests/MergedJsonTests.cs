@@ -1,5 +1,6 @@
-using Newtonsoft.Json.Linq;
+using PCLCS.Json;
 using PCLCS.Minecraft.Launch;
+using System.Text.Json.Nodes;
 
 namespace PCLCS.Tests;
 
@@ -7,9 +8,9 @@ public class MergedJsonTests
 {
     private static readonly RuleEnvironment Windows10 = new("Microsoft Windows NT 10.0.19045.0");
 
-    private static JObject Load(string name) => JObject.Parse(File.ReadAllText(TestPaths.Fixture(name)));
+    private static JsonObject Load(string name) => JsonNodeUtils.ParseObject(File.ReadAllText(TestPaths.Fixture(name)));
 
-    private static JObject? ResolveParent(string name) => name == "merged-parent" ? Load("merged-parent.json") : null;
+    private static JsonObject? ResolveParent(string name) => name == "merged-parent" ? Load("merged-parent.json") : null;
 
     [Fact]
     public void Jvm_MergedJsonThenParent_KeepsFirstOccurrence()

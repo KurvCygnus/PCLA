@@ -1,4 +1,5 @@
 using PCLCS.Results;
+using System.Text.Json.Serialization;
 
 namespace PCLCS;
 
@@ -252,10 +253,12 @@ public static class JavaUtils {
                         cancellationToken.ThrowIfCancellationRequested();
                         string targetFolder = PathUtils.AddSlashSuffix(PathUtils.ForCompare(PathUtils.RemoveLastPart(file)));
                         // 判断文件夹是否包含重解析点（例如符号链接）
-                        static bool HasReparsePoint(FileSystemInfo info) {
+                        static bool HasReparsePoint(FileSystemInfo? info) {
+                            if (info is null) return false;
                             if (PathUtils.IsParentOf(Paths.AppData + @".minecraft\runtime\", info.FullName)) return false; // 不筛查 PCL 的下载路径（#8928）
                             do {
                                 if (info.Attributes.HasFlagF(FileAttributes.ReparsePoint)) return true;
+                                // FileInfo.Directory 与 DirectoryInfo.Parent 在根处返回 null，由 while 条件终止循环。
                                 info = info is FileInfo fileInfo ? fileInfo.Directory : ((DirectoryInfo) info).Parent;
                             } while (info is not null);
                             return false;

@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace PCLCS.Minecraft.Launch;
 
 /// <summary>
@@ -10,13 +12,14 @@ public static class VersionArgumentRules {
     /// <param name="rules">版本 JSON 的 <c>rules</c> 节点；为 <c>null</c> 时放行。</param>
     /// <param name="environment">当前运行环境。</param>
     /// <param name="warn">规则正则无效时的警告回调。</param>
-    public static bool IsAllowed(JToken? rules, RuleEnvironment environment, Action<string>? warn = null) {
+    public static bool IsAllowed(JsonNode? rules, RuleEnvironment environment, Action<string>? warn = null) {
         if (rules is null) return true;
 
         var required = false;
         // 版本 JSON 里 rules 总是数组；单条规则对象按一条规则处理。
-        var ruleList = rules is JArray array ? (IEnumerable<JToken>)array : new[] { rules };
+        var ruleList = rules is JsonArray array ? array.AsEnumerable() : new[] { rules };
         foreach (var rule in ruleList) {
+            if (rule is null) continue;
             var matches = true;
             var os = rule["os"];
             if (os is not null) {
@@ -37,8 +40,8 @@ public static class VersionArgumentRules {
             var features = rule["features"];
             if (features is not null) {
                 matches &= features["is_demo_user"] is null;
-                var featureObject = (JObject)features;
-                if (featureObject.Properties().Any(property => property.Name.Contains("quick_play"))) matches = false;
+                var featureObject = features.AsObject();
+                if (featureObject.Select(property => property.Key).Any(key => key.Contains("quick_play"))) matches = false;
             }
 
             if (rule["action"]?.ToString() == "allow") {

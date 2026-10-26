@@ -18,7 +18,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="PolySharp" Version="1.15.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -35,8 +34,6 @@
 		<Using Include="System.Net" />
 		<Using Include="System.Runtime.CompilerServices" />
 		<Using Include="System.Runtime.InteropServices" />
-		<Using Include="Newtonsoft.Json" />
-		<Using Include="Newtonsoft.Json.Linq" />
 		<Using Include="MeloongCore" />
 		<Using Include="MeloongCore.Extensions" />
 	</ItemGroup>

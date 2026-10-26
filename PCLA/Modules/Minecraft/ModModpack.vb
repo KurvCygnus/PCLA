@@ -723,7 +723,7 @@ Public Module ModModpack
         If Addons.ContainsKey("forge") Then ModLoaderVersions(ModLoaders.Forge) = Addons("forge")
         If Addons.ContainsKey("neoforge") Then ModLoaderVersions(ModLoaders.NeoForge) = Addons("neoforge")
         If Addons.ContainsKey("fabric") Then ModLoaderVersions(ModLoaders.Fabric) = Addons("fabric")
-        Dim OptiFineEntry As JObject = Nothing
+        Dim OptiFineEntry As System.Text.Json.Nodes.JsonObject = Nothing
         If Addons.ContainsKey("optifine") Then
             Dim MinecraftVersion = Addons("game")
             If MinecraftVersion.EndsWithF(".0") Then MinecraftVersion = MinecraftVersion.Substring(0, MinecraftVersion.Length - 2)
@@ -733,7 +733,7 @@ Public Module ModModpack
             Dim Entry = DlOptiFineListBmclapiLoader.Output.Value.FirstOrDefault(
                 Function(v) v.Inherit = MinecraftVersion AndAlso v.FileName.EndsWithF(OptiFineFileSuffix))
             If Entry Is Nothing Then Throw New Exception($"OptiFine 列表中没有整合包所需的 OptiFine {Addons("optifine")}（Minecraft {Addons("game")}）")
-            OptiFineEntry = JObject.FromObject(Entry)
+            OptiFineEntry = CType(JObject.FromObject(Entry).ToJsonNode(), System.Text.Json.Nodes.JsonObject)
         End If
         Dim Target As New McComponents(Addons("game"), ModLoaderVersions, OptiFineEntry)
         Dim MergeLoaders = McInstallLoadersGet(New McInstallRequest With {

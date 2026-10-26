@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace PCLCS.Minecraft.Launch;
 
 /// <summary>
@@ -18,8 +20,8 @@ public static class VersionArguments {
     /// 覆盖第一层父级名；<c>null</c> 表示沿用 JSON 的 <c>inheritsFrom</c>，空字符串表示没有父级。
     /// </param>
     public static IReadOnlyList<string> CollectJvm(
-        JObject version,
-        Func<string, JObject?> resolveParent,
+        JsonObject version,
+        Func<string, JsonObject?> resolveParent,
         RuleEnvironment environment,
         Action<string>? warn = null,
         string? inheritName = null) {
@@ -54,8 +56,8 @@ public static class VersionArguments {
     /// 覆盖第一层父级名；<c>null</c> 表示沿用 JSON 的 <c>inheritsFrom</c>，空字符串表示没有父级。
     /// </param>
     public static string CollectGame(
-        JObject version,
-        Func<string, JObject?> resolveParent,
+        JsonObject version,
+        Func<string, JsonObject?> resolveParent,
         RuleEnvironment environment,
         Action<string>? warn = null,
         string? inheritName = null) {
@@ -81,12 +83,12 @@ public static class VersionArguments {
 
     // 子版本在前、根在最后；输出时正序遍历，对齐 VB 的追加顺序：
     // 先输出选中版本的合并 JSON（内部祖先→子），再沿 InheritName 逐级追加父级。
-    private static List<JObject> BuildChain(
-        JObject version,
-        Func<string, JObject?> resolveParent,
+    private static List<JsonObject> BuildChain(
+        JsonObject version,
+        Func<string, JsonObject?> resolveParent,
         string? inheritName = null) {
-        var chain = new List<JObject>();
-        JObject? current = version;
+        var chain = new List<JsonObject>();
+        JsonObject? current = version;
         for (var depth = 0; current is not null && depth < MaxInheritDepth; depth++) {
             chain.Add(current);
             // 老 LiteLoader 的 JSON 没有 inheritsFrom，由调用方通过 inheritName 提供真实父级；
@@ -101,31 +103,32 @@ public static class VersionArguments {
     }
 
     private static void EmitSection(
-        JObject level,
+        JsonObject level,
         string section,
         RuleEnvironment environment,
         Action<string>? warn,
         Action<string> emit) {
-        if (level["arguments"] is not JObject arguments || arguments[section] is not JArray list) return;
+        if (level["arguments"] is not JsonObject arguments || arguments[section] is not JsonArray list) return;
         foreach (var token in list) {
-            switch (token.Type) {
-                case JTokenType.String:
+            if (token is null) continue;
+            switch (token) {
+                case JsonValue:
                     emit(token.ToString());
                     break;
-                case JTokenType.Object: {
+                case JsonObject: {
                     if (token["rules"] is not null
                         && !VersionArgumentRules.IsAllowed(token["rules"], environment, warn)) continue;
                     var value = token["value"];
                     if (value is null) continue;
-                    if (value.Type == JTokenType.String) {
+                    if (value is JsonValue) {
                         emit(value.ToString());
-                    } else {
-                        foreach (var item in value) emit(item.ToString());
+                    } else if (value.AsArray() is { } itemArray) {
+                        foreach (var item in itemArray) emit(item?.ToString() ?? "");
                     }
                     break;
                 }
                 default:
-                    warn?.Invoke($"忽略无法识别的参数项类型 {token.Type}");
+                    warn?.Invoke($"忽略无法识别的参数项类型 {token.GetType().Name}");
                     break;
             }
         }
