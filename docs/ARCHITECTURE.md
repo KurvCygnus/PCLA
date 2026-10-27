@@ -10,7 +10,7 @@
 | `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析 |
 | `MeloongCore` | C#（子模块） | net48 / netstandard2.0 | 通用基础设施：日志、路径、配置、网络、文件工具 |
 | `MeloongCore.Wpf` | C# | net48 | WPF 相关基础件 |
-| `PCLCS.AotSmoke` | C# | net8.0* | NativeAOT 冒烟工程：发布 `PCLCS` + `MeloongCore.Shared` 的解析与迁移路径（见下文 §1.1） |
+| `PCLCS.AotSmoke` | C# | net10.0 | NativeAOT 冒烟工程：发布 `PCLCS` + `MeloongCore.Shared` 的解析与迁移路径（见下文 §1.1） |
 
 - 规模：VB/XAML 共 176 个文件、约 46.1k 行。单文件超过 1000 行的有 12 个，前四名：`Modules\Minecraft\ModMinecraft.vb`（2117）、`Modules\Minecraft\ModLaunch.vb`（2081）、`Pages\PageDownload\ModDownloadLib.vb`（2080）、`Modules\Base\ModNet.vb`（1850）。
 - 编译选项：`OptionStrict Off`、`OptionInfer On`、`WarningLevel 1`，并屏蔽了 `BC41999/42016-42022/42032/42036/42314` 一整批晚期绑定与类型转换警告（`Plain Craft Launcher 2\Plain Craft Launcher 2.vbproj:75-85`）。这决定了整个代码库默认使用晚期绑定。
@@ -22,7 +22,7 @@
 - JSON 栈：`PCLCS` 与 `MeloongCore.Shared` 已全面使用 `System.Text.Json`（`JsonNode`/`JsonSerializer`），不再引用 Newtonsoft.Json；动态 `JsonNode` 移植的过渡债见 `docs/TECHDEBT.md` §9。
 - `MeloongCore.Wpf` 仍保留 PCLA 遗留的 Newtonsoft JSON 扩展（供 VB 壳过渡期使用），是仓库内唯一保留 Newtonsoft 依赖的项目。
 - `PCLA`（VB 壳）通过 `Resources.resx` 嵌入 Newtonsoft.Json.dll（13.0.0.0）并经 `AssemblyResolve` 加载，与 C# 侧的 System.Text.Json 并存互不干扰；VB 调用 C# 类型时在边界处做 JSON 字符串/`JsonObject` 转换。
-- AOT：`PCLCS.AotSmoke` 以 NativeAOT 发布并运行，锁定 `PCLCS` 与 `MeloongCore.Shared` 在 AOT 下的解析/迁移路径零反射告警；`Config<T>` 泛型反射是唯一明确豁免（`docs/TECHDEBT.md` §8）。
+- AOT：`PCLCS.AotSmoke` 以 net10.0 NativeAOT 发布并运行（计划原文 net8.0，因机器无 8.x SDK 调整，宿主/目标 TFM 错位的验证盲区见 `docs/TECHDEBT.md` §9），锁定 `PCLCS` 与 `MeloongCore.Shared` 在 AOT 下的解析/迁移路径零反射告警；`Config<T>` 泛型反射是唯一明确豁免（`docs/TECHDEBT.md` §8）。
 
 ## 2. 分层与现实
 

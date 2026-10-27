@@ -27,7 +27,7 @@ nightly/snapshot 只验证 Actions artifact 的版本串、zip 内容与校验�
 
 - `dotnet test tests\PCLCS.Tests\PCLCS.Tests.csproj -c Release`：240 通过 + 1 跳过（含安装清单、版本/迁移用例）。
 - `powershell -NoProfile -File tools\test-behavior.ps1`：行为黄金语料 32/32。
-- AOT 冒烟：`dotnet publish PCLCS.AotSmoke\PCLCS.AotSmoke.csproj -c Release`，要求 0 条 IL 告警；随后运行 `PCLCS.AotSmoke\bin\Release\net8.0\publish\PCLCS.AotSmoke.exe`，退出码 0。该工程只用于本地/CI 验证，不在发布包内。
+- AOT 冒烟：`dotnet publish PCLCS.AotSmoke\PCLCS.AotSmoke.csproj -c Release`，要求 0 条 IL 告警；随后运行 `PCLCS.AotSmoke\bin\Release\net10.0\win-x64\publish\PCLCS.AotSmoke.exe`，退出码 0。该工程只用于本地/CI 验证，不在发布包内。
 - `MeloongCore.Tests` 不进 CI：TUnit 在 .NET 10 下不可用，且已有 `FileUtilsTest.cs:7` 失败；本地运行 `MeloongCore\Tests\bin\Release\net48\MeloongCore.Tests.exe`。
 - 凭据只从 `PCL_MS_CLIENT_ID` / `PCL_CURSEFORGE_API_KEY` 环境变量读取，不嵌入产物。
 
