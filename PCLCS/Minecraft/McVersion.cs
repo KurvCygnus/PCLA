@@ -116,7 +116,10 @@ public sealed class McVersion {
         DateTime releaseTime = new(1970, 1, 1, 15, 0, 0); // 未知版本也可能显示为 1970 年
         try {
             if (json["releaseTime"] is JsonNode releaseTimeNode) {
-                releaseTime = releaseTimeNode.GetValue<DateTime>();
+                // ISO 8601 按不变区域与 RoundtripKind 解析；失败时保留 1970 默认值，与旧 ToObject 抛错回退一致
+                if (DateTime.TryParse(releaseTimeNode.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedReleaseTime)) {
+                    releaseTime = parsedReleaseTime;
+                }
             }
         } catch {
         }
