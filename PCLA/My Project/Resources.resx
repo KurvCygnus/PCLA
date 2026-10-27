@@ -154,6 +154,24 @@
   <data name="Microsoft.Win32.Registry" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\..\PCLCS\bin\net48\Microsoft.Win32.Registry.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
+  <data name="System.Text.Json" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\..\PCLCS\bin\net48\System.Text.Json.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="System.Memory" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\..\PCLCS\bin\net48\System.Memory.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="System.Buffers" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\..\PCLCS\bin\net48\System.Buffers.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="System.Runtime.CompilerServices.Unsafe" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\..\PCLCS\bin\net48\System.Runtime.CompilerServices.Unsafe.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="Microsoft.Bcl.AsyncInterfaces" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\..\PCLCS\bin\net48\Microsoft.Bcl.AsyncInterfaces.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="System.Text.Encodings.Web" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\..\PCLCS\bin\net48\System.Text.Encodings.Web.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
   <data name="NAudio" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\NAudio.dll;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>

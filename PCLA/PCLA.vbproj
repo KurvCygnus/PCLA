@@ -169,11 +169,11 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Memory">
-      <HintPath>C:\Users\Lenovo\.nuget\packages\system.memory\4.5.5\lib\net461\System.Memory.dll</HintPath>
+      <HintPath>..\PCLCS\bin\net48\System.Memory.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Buffers">
-      <HintPath>C:\Users\Lenovo\.nuget\packages\system.buffers\4.5.1\lib\net461\System.Buffers.dll</HintPath>
+      <HintPath>..\PCLCS\bin\net48\System.Buffers.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
@@ -182,11 +182,11 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces">
-      <HintPath>C:\Users\Lenovo\.nuget\packages\microsoft.bcl.asyncinterfaces\8.0.0\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+      <HintPath>..\PCLCS\bin\net48\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Text.Encodings.Web">
-      <HintPath>C:\Users\Lenovo\.nuget\packages\system.text.encodings.web\8.0.0\lib\net462\System.Text.Encodings.Web.dll</HintPath>
+      <HintPath>..\PCLCS\bin\net48\System.Text.Encodings.Web.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Net.Http.Formatting, Version=5.2.7.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -941,6 +941,30 @@
     <None Include="..\PCLCS\bin\net48\Microsoft.Win32.Registry.dll">
       <LogicalName>Microsoft.Win32.Registry.dll</LogicalName>
       <Link>Resources\Microsoft.Win32.Registry.dll</Link>
+    </None>
+    <None Include="..\PCLCS\bin\net48\System.Text.Json.dll">
+      <LogicalName>System.Text.Json.dll</LogicalName>
+      <Link>Resources\System.Text.Json.dll</Link>
+    </None>
+    <None Include="..\PCLCS\bin\net48\System.Memory.dll">
+      <LogicalName>System.Memory.dll</LogicalName>
+      <Link>Resources\System.Memory.dll</Link>
+    </None>
+    <None Include="..\PCLCS\bin\net48\System.Buffers.dll">
+      <LogicalName>System.Buffers.dll</LogicalName>
+      <Link>Resources\System.Buffers.dll</Link>
+    </None>
+    <None Include="..\PCLCS\bin\net48\System.Runtime.CompilerServices.Unsafe.dll">
+      <LogicalName>System.Runtime.CompilerServices.Unsafe.dll</LogicalName>
+      <Link>Resources\System.Runtime.CompilerServices.Unsafe.dll</Link>
+    </None>
+    <None Include="..\PCLCS\bin\net48\Microsoft.Bcl.AsyncInterfaces.dll">
+      <LogicalName>Microsoft.Bcl.AsyncInterfaces.dll</LogicalName>
+      <Link>Resources\Microsoft.Bcl.AsyncInterfaces.dll</Link>
+    </None>
+    <None Include="..\PCLCS\bin\net48\System.Text.Encodings.Web.dll">
+      <LogicalName>System.Text.Encodings.Web.dll</LogicalName>
+      <Link>Resources\System.Text.Encodings.Web.dll</Link>
     </None>
   </ItemGroup>
   <ItemGroup>
