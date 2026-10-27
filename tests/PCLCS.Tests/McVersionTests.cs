@@ -44,6 +44,7 @@ public class McVersionTests
         // 无时区后缀按 RoundtripKind 归为 Unspecified，行为与旧 JToken.ToObject<DateTime>() 一致。
         var version = new McVersion("test", Parse("""{"id":"test","libraries":[],"releaseTime":"2013-06-25T13:25:49"}"""));
         Assert.Equal(new DateTime(2013, 6, 25, 13, 25, 49, DateTimeKind.Unspecified), version.ReleaseTime);
+        Assert.Equal(DateTimeKind.Unspecified, version.ReleaseTime.Kind);
     }
 
     [Fact]

@@ -187,5 +187,7 @@
 - S4 把 `PCLCS` / `MeloongCore.Shared` 从 Newtonsoft 迁到 System.Text.Json 时采用动态 `JsonNode` 移植，属于过渡方案；后续 Wave（C# 化）应把清单解析与配置改为强类型 DTO + 源生成。
 - 行为差异清单：缺失属性默认值、属性名大小写、数字/字符串宽松转换、日期/时区、注释/尾逗号、`null` 与缺失的区别。
 - 当前统一在 `JsonNodeUtils`：缺失返回默认值；大小写可指定；数字/字符串按目标类型转换；注释 `Skip`、尾逗号允许；日期按本地时区。
-- 未覆盖或无法统一的差异必须补 parity 夹具；S4 验收要求 PCLCS 230 + 行为 32/32 不退，AOT 冒烟通过。
+- **未覆盖或无法统一的差异必须补 parity 夹具；S4 验收要求 PCLCS 230 + 行为 32/32 不退，AOT 冒烟通过。
 - 后续清理时删除 `JsonNodeUtils` 的宽松层，改为 DTO/源生成后再收紧 schema。
+- **残留：`StringExtensions.GetString` 的 GB18030 回退在 AOT/不变全球化下不可用。** `MeloongCore\Shared\Extensions\StringExtensions.cs:350-367` 在 UTF-8 严格解码失败后调用 `Encoding.GetEncoding("GB18030")`；该编码依赖 `System.Text.Encoding.CodePages` 提供程序注册，NativeAOT 且 `InvariantGlobalization=true` 的进程中未注册时直接抛 `ArgumentException`。net48 桌面路径不受影响；AOT 路径若新增非 UTF-8 文本解析需求，需先显式注册 CodePages 提供程序或改为显式传入 `Encoding` 参数。
+- **验证盲区：AOT 冒烟的宿主与目标 TFM 不一致。** 本机与 CI 的 SDK 为 9.x/10.x，`PCLCS.AotSmoke` 以 net10.0 发布冒烟，而 `PCLCS` 的 AOT 目标是 net8.0；net10 宿主加载 net8.0 程序集的冒烟无法覆盖 net8.0 宿主的真实 AOT 编译差异（如 SDK 版本引入的 IL 剪裁告警变化）。SDK 8.x 环境下需重跑 `dotnet publish PCLCS.AotSmoke` 作为补充验证。

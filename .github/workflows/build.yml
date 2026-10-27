@@ -62,6 +62,15 @@ jobs:
         shell: pwsh
         run: ./tools/test-behavior.ps1 -PclaChannel ${{ inputs.channel }} -PclaCommit ${{ inputs.commit }}
 
+      - name: AOT smoke
+        shell: pwsh
+        run: |
+          dotnet publish PCLCS.AotSmoke\PCLCS.AotSmoke.csproj -c Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }}
+          $exe = Get-ChildItem "PCLCS.AotSmoke\bin\Release\*\publish\PCLCS.AotSmoke.exe" | Select-Object -First 1
+          if (-not $exe) { throw "AOT smoke executable not found" }
+          & $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "AOT smoke exited with $LASTEXITCODE" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: PCLA-${{ steps.version.outputs.version }}
