@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- 机器上只有 9.x/10.x SDK，无 8.x；NativeAOT 冒烟以 net10.0 发布（计划原文为 net8.0） -->
+		<TargetFramework>net10.0</TargetFramework>
+		<OutputType>Exe</OutputType>
+		<PublishAot>true</PublishAot>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<LangVersion>13.0</LangVersion>
+		<Deterministic>true</Deterministic>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\PCLCS\PCLCS.csproj" />
+	</ItemGroup>
+
+</Project>
