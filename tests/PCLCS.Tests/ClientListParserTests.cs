@@ -64,7 +64,7 @@ public class ClientListParserTests {
         Assert.Equal("https://piston-meta.mojang.com/v1/packages/2ee2d20f6e6a37aae39238fff3286ab879a99ce6/26.4-snapshot-5.json",
             versions[0]!["url"]!.ToString());
         Assert.Equal("rd-132211", versions[versions.Count - 1]!["id"]!.ToString());
-        var release = versions.Single(v => v!["id"]!.ToString() == "1.20.1");
+        var release = versions.Single(v => v!["id"]!.ToString() == "1.20.1")!;
         Assert.Equal("release", release["type"]!.ToString());
         Assert.Equal("https://piston-meta.mojang.com/v1/packages/38d412af3b247e485c7f7e50ac25febc4e79ab1d/1.20.1.json",
             release["url"]!.ToString());

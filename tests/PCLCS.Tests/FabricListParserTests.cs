@@ -58,6 +58,6 @@ public class FabricListParserTests {
         Assert.True(root["loader"]!.AsArray().Count > 0);
         Assert.True(root["game"]!.AsArray().Count > 0);
         Assert.True(root["installer"]!.AsArray().Count > 0);
-        Assert.All(root["loader"]!.AsArray(), entry => Assert.NotNull(entry["version"]));
+        Assert.All(root["loader"]!.AsArray(), entry => Assert.NotNull(entry!["version"]));
     }
 }
