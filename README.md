@@ -63,3 +63,5 @@ $msbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSB
 
 - 龙腾猫跃（LTCat）— Plain Craft Launcher 原作者，[赞助链接](https://meloong.com/afd/a/LTCat)
 - PCL 与 MeloongCore 的所有贡献者
+
+> 注：龙腾猫跃的 GitHub 账号目前处于封禁状态，上游暂时无法正常更新；PCLA 由本仓库独立维护，不依赖上游可用性。
