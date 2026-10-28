@@ -1,7 +1,7 @@
-using System;
-using System.IO;
 using PCL;
 using PCLA.BehaviorTests.Fixtures;
+using System;
+using System.IO;
 
 namespace PCLA.BehaviorTests;
 

@@ -2,12 +2,14 @@ using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
 
-public class NeoForgeParserTests {
+public class NeoForgeParserTests
+{
     private const string Latest = "{\"versions\":[\"20.4.30-beta\",\"21.1.0\",\"26.1.0.0-alpha.1+snapshot-1\"]}";
     private const string Legacy = "{\"versions\":[\"1.20.1-47.1.99\",\"47.1.82\",\"0.25w14craftmine.3-beta\"]}";
 
     [Fact]
-    public void ParsesBothFeedsAndSortsNewestFirst() {
+    public void ParsesBothFeedsAndSortsNewestFirst()
+    {
         var entries = NeoForgeParser.Parse(Latest, Legacy);
         Assert.Equal(5, entries.Count);
         Assert.Equal("26.1.0.0-alpha.1+snapshot-1", entries[0].ApiName);
@@ -15,7 +17,8 @@ public class NeoForgeParserTests {
     }
 
     [Fact]
-    public void LegacyOneTwentyOneLiftsMajorToNineteen() {
+    public void LegacyOneTwentyOneLiftsMajorToNineteen()
+    {
         var entry = NeoForgeParser.Parse(Latest, Legacy).Single(e => e.ApiName == "1.20.1-47.1.99");
         Assert.Equal("19.47.1.99", entry.Version.ToString());
         Assert.Equal("1.20.1", entry.Inherit);
@@ -23,19 +26,22 @@ public class NeoForgeParserTests {
     }
 
     [Fact]
-    public void SnapshotSuffixBecomesInheritSuffix() {
+    public void SnapshotSuffixBecomesInheritSuffix()
+    {
         var entry = NeoForgeParser.Parse(Latest, "{\"versions\":[]}").Single(e => e.ApiName.StartsWith("26.1.0.0"));
         Assert.Equal("26.1-snapshot-1", entry.Inherit);
     }
 
     [Fact]
-    public void EmptyFeedsThrowNotFound() {
+    public void EmptyFeedsThrowNotFound()
+    {
         var ex = Assert.Throws<DownloadSourceException>(() => NeoForgeParser.Parse("{\"versions\":[]}", "{\"versions\":[]}"));
         Assert.Equal(DownloadFailureKind.NotFound, ex.Kind);
     }
 
     [Fact]
-    public void UnparsableApiNameThrowsInvalidPayload() {
+    public void UnparsableApiNameThrowsInvalidPayload()
+    {
         //* 该名称能通过正则（第 4 段可缺省），但映射 Legacy 前缀后是 5 段，Version 构造会抛。
         var ex = Assert.Throws<DownloadSourceException>(
             () => NeoForgeParser.Parse("{\"versions\":[\"1.20.1-47.1.99.5\"]}", "{\"versions\":[]}"));
@@ -46,7 +52,8 @@ public class NeoForgeParserTests {
     }
 
     [Fact]
-    public void SortsFullOrderNewestFirst() {
+    public void SortsFullOrderNewestFirst()
+    {
         var entries = NeoForgeParser.Parse(Latest, Legacy);
         Assert.Equal(new[] {
             "26.1.0.0-alpha.1+snapshot-1",
@@ -58,7 +65,8 @@ public class NeoForgeParserTests {
     }
 
     [Fact]
-    public void SameVersionBreaksTieByVersionName() {
+    public void SameVersionBreaksTieByVersionName()
+    {
         //* 三个名称的 Version 都是 21.1.0，顺序完全由 McUtils.CompareVersion 决定：
         //* beta.10 与 beta.2 按数字段比较（10 > 2，Ordinal 字符串比较会得出相反结果）；
         //* "beta" 与缺失段都归 0 后走 Ordinal 回退，字母大于数字，故 beta 系排在 21.1.0 之前。
@@ -68,7 +76,8 @@ public class NeoForgeParserTests {
     }
 
     [Fact(Skip = "maven.neoforged.net 在本机不可达，待网络可用后补录真实响应")]
-    public void RealNeoForgeFeedsParse() {
+    public void RealNeoForgeFeedsParse()
+    {
         //* 真实夹具从未录制成功（maven.neoforged.net:443 被墙），本测试在录制成功前保持跳过。
         var latestPath = TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.json"));
         var legacyPath = TestPaths.Fixture(Path.Combine("Download", "neoforge-legacy.json"));
@@ -78,7 +87,8 @@ public class NeoForgeParserTests {
     }
 
     [Fact]
-    public void MinimalFixturesParseExcludeAndSort() {
+    public void MinimalFixturesParseExcludeAndSort()
+    {
         //* 合成夹具（neoforge-*.min.json）：真实响应因 maven.neoforged.net 不可达未录制，
         //* 用最小可解析形状锁住字段映射与排序，不依赖网络。
         var latest = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.min.json")));
@@ -97,7 +107,8 @@ public class NeoForgeParserTests {
     }
 
     [Fact]
-    public void MinimalFixturesMapFields() {
+    public void MinimalFixturesMapFields()
+    {
         var latest = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-latest.min.json")));
         var legacy = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "neoforge-legacy.min.json")));
         var entries = NeoForgeParser.Parse(latest, legacy);

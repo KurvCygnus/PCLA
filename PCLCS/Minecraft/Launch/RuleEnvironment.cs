@@ -3,8 +3,10 @@ namespace PCLCS.Minecraft.Launch;
 /// <summary>
 /// 版本规则求值所需的运行环境。
 /// </summary>
-public readonly struct RuleEnvironment {
-    public RuleEnvironment(string osVersion) {
+public readonly struct RuleEnvironment
+{
+    public RuleEnvironment(string osVersion)
+    {
         OsVersion = osVersion;
     }
 

@@ -2,9 +2,11 @@ using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
 
-public class OptiFineBmclapiParserTests {
+public class OptiFineBmclapiParserTests
+{
     [Fact]
-    public void ParseBmclapiJsonMapsFields() {
+    public void ParseBmclapiJsonMapsFields()
+    {
         const string json = """
         [
             {"mcversion":"1.12.2","type":"HD_U","patch":"G5","filename":"OptiFine_1.12.2_HD_U_G5.jar","forge":"Forge #2859"}
@@ -21,7 +23,8 @@ public class OptiFineBmclapiParserTests {
     }
 
     [Fact]
-    public void ParseBmclapiJsonNormalizesInheritAndInstanceName() {
+    public void ParseBmclapiJsonNormalizesInheritAndInstanceName()
+    {
         const string json = """
         [
             {"mcversion":"1.9.0","type":"HD_U","patch":"E7","filename":"OptiFine_1.9.0_HD_U_E7.jar","forge":"Forge 11.15.1.2318"},
@@ -39,7 +42,8 @@ public class OptiFineBmclapiParserTests {
     }
 
     [Fact]
-    public void ParseBmclapiJsonHandlesForgeCompatibility() {
+    public void ParseBmclapiJsonHandlesForgeCompatibility()
+    {
         const string json = """
         [
             {"mcversion":"1.12.2","type":"HD_U","patch":"G5","filename":"a.jar","forge":"N/A"},

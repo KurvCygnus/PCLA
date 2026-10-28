@@ -2,8 +2,10 @@ using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
 
-public class ForgeBuildParserTests {
-    private static string Html(string version, string category = "installer", string md5 = "abc123") {
+public class ForgeBuildParserTests
+{
+    private static string Html(string version, string category = "installer", string md5 = "abc123")
+    {
         var file = category == "installer" ? "installer.jar" : category + ".zip";
         var cls = category == "client" ? "client.zip" : "classifier-" + category + "\"";
         return "<table><td class=\"download-version\"><a href=\"/forge-" + version + "-" + file + "\">" + version + "</a>" +
@@ -15,7 +17,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void OfficialHtmlReadsInstallerBuild() {
+    public void OfficialHtmlReadsInstallerBuild()
+    {
         var entry = ForgeBuildParser.ParseOfficialHtml("<html>" + Html("47.1.0") + "</html>", "1.20.1").Single();
         Assert.Equal("47.1.0", entry.VersionName);
         Assert.Equal("1.20.1", entry.Inherit);
@@ -26,20 +29,23 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void OfficialHtmlSkipsBuildsWithoutDownloads() {
+    public void OfficialHtmlSkipsBuildsWithoutDownloads()
+    {
         var html = "<html><table><td class=\"download-version\"><a>1.0</a></td></table></html>" + new string('x', 1000);
         var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseOfficialHtml(html, "1.0"));
         Assert.Equal(DownloadFailureKind.NotFound, ex.Kind);
     }
 
     [Fact]
-    public void OfficialHtmlRejectsShortResponse() {
+    public void OfficialHtmlRejectsShortResponse()
+    {
         var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseOfficialHtml("<html></html>", "1.0"));
         Assert.Equal(DownloadFailureKind.TooFewEntries, ex.Kind);
     }
 
     [Fact]
-    public void BmclapiPrefersInstallerOverUniversalAndClient() {
+    public void BmclapiPrefersInstallerOverUniversalAndClient()
+    {
         var json = "[{\"version\":\"47.1.0\",\"branch\":null,\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[" +
                    "{\"category\":\"client\",\"format\":\"zip\",\"hash\":\"c\"}," +
                    "{\"category\":\"universal\",\"format\":\"zip\",\"hash\":\"u\"}," +
@@ -52,14 +58,16 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void BmclapiAppliesLegacyBranchFixups() {
+    public void BmclapiAppliesLegacyBranchFixups()
+    {
         var json = "[{\"version\":\"11.15.1.2318\",\"branch\":null,\"modified\":\"2015-01-02T03:04:05Z\",\"files\":[{\"category\":\"installer\",\"format\":\"jar\",\"hash\":\"i\"}]}]";
         var entry = ForgeBuildParser.ParseBmclapiJson(json, "1.8.9", null).Single();
         Assert.Equal("11.15.1.2318-1.8.9", entry.FileVersion);
     }
 
     [Fact]
-    public void BmclapiInvalidVersionThrowsInvalidPayload() {
+    public void BmclapiInvalidVersionThrowsInvalidPayload()
+    {
         var json = "[{\"version\":\"not-a-version\",\"branch\":null,\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[{\"category\":\"installer\",\"format\":\"jar\",\"hash\":\"i\"}]}]";
         var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
         Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
@@ -68,7 +76,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void BmclapiNonStringVersionThrowsInvalidPayload() {
+    public void BmclapiNonStringVersionThrowsInvalidPayload()
+    {
         var json = "[{\"version\":{\"build\":1},\"branch\":null,\"modified\":\"2024-01-02T03:04:05Z\"}]";
         var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
         Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
@@ -76,7 +85,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void BmclapiInvalidModifiedThrowsInvalidPayload() {
+    public void BmclapiInvalidModifiedThrowsInvalidPayload()
+    {
         var json = "[{\"version\":\"47.1.0\",\"branch\":null,\"modified\":\"not-a-date\",\"files\":[]}]";
         var ex = Assert.Throws<DownloadSourceException>(() => ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null));
         Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
@@ -84,7 +94,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void BmclapiPrefersInstallerEvenWhenItComesFirst() {
+    public void BmclapiPrefersInstallerEvenWhenItComesFirst()
+    {
         var json = "[{\"version\":\"47.1.0\",\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[" +
                    "{\"category\":\"installer\",\"format\":\"jar\",\"hash\":\"i\"}," +
                    "{\"category\":\"client\",\"format\":\"zip\",\"hash\":\"c\"}]}]";
@@ -94,7 +105,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void BmclapiIgnoresFileWithMismatchedFormat() {
+    public void BmclapiIgnoresFileWithMismatchedFormat()
+    {
         var json = "[{\"version\":\"47.1.0\",\"modified\":\"2024-01-02T03:04:05Z\",\"files\":[" +
                    "{\"category\":\"installer\",\"format\":\"zip\",\"hash\":\"bad\"}," +
                    "{\"category\":\"universal\",\"format\":\"zip\",\"hash\":\"u\"}]}]";
@@ -104,7 +116,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void RealForgeBuildsPageParses() {
+    public void RealForgeBuildsPageParses()
+    {
         var html = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "forge-builds.html")));
         var entries = ForgeBuildParser.ParseOfficialHtml(html, "1.20.1");
         Assert.NotEmpty(entries);
@@ -114,7 +127,8 @@ public class ForgeBuildParserTests {
     }
 
     [Fact]
-    public void RealForgeBuildsJsonParses() {
+    public void RealForgeBuildsJsonParses()
+    {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "forge-builds-bmclapi.json")));
         var entries = ForgeBuildParser.ParseBmclapiJson(json, "1.20.1", null);
         Assert.NotEmpty(entries);

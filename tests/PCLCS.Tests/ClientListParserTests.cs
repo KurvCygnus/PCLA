@@ -1,30 +1,35 @@
-using System.Text.Json.Nodes;
-using PCLCS.Minecraft.Download;
 using PCLCS.Json;
+using PCLCS.Minecraft.Download;
+using System.Text.Json.Nodes;
 
 namespace PCLCS.Tests;
 
-public class ClientListParserTests {
-    private static string Manifest(params string[] ids) {
+public class ClientListParserTests
+{
+    private static string Manifest(params string[] ids)
+    {
         var versions = string.Join(",", ids.Select(id => $"{{\"id\":\"{id}\",\"url\":\"https://x/{id}.json\"}}"));
         return $"{{\"latest\":{{\"release\":\"1.21.1\"}},\"versions\":[{versions}]}}";
     }
 
     [Fact]
-    public void RejectsListsBelowTwoHundredEntries() {
+    public void RejectsListsBelowTwoHundredEntries()
+    {
         var ex = Assert.Throws<DownloadSourceException>(() => ClientListParser.Parse(Manifest("1.20.1"), "Mojang 官方源"));
         Assert.Equal(DownloadFailureKind.TooFewEntries, ex.Kind);
     }
 
     [Fact]
-    public void AcceptsRealSizedListAndKeepsJson() {
+    public void AcceptsRealSizedListAndKeepsJson()
+    {
         var ids = Enumerable.Range(0, 200).Select(i => $"1.{i}.0").ToArray();
         var result = ClientListParser.Parse(Manifest(ids), "Mojang 官方源");
         Assert.Equal(200, result["versions"]!.AsArray().Count);
     }
 
     [Fact]
-    public void DropsSkipSnapshotsAndUnknownDrops() {
+    public void DropsSkipSnapshotsAndUnknownDrops()
+    {
         //* 快照 "1.21-pre1" 含连字符会被跳过，其 Drop 210 与正式版不同；
         //* "unknown" 经 NameToVersion 落到 9999.0.0，VersionToDrop 返回 209，会被排除。
         var json = JsonNodeUtils.ParseObject(Manifest("1.12.2", "1.20.1", "1.20.1", "1.21-pre1", "unknown"));
@@ -33,28 +38,32 @@ public class ClientListParserTests {
     }
 
     [Fact]
-    public void NormalizeIdFixesUnderscoresAndTrailingZero() {
+    public void NormalizeIdFixesUnderscoresAndTrailingZero()
+    {
         Assert.Equal("1.7.10-pre4", ClientListParser.NormalizeId("1.7.10_pre4"));
         Assert.Equal("1.8", ClientListParser.NormalizeId("1.8.0"));
         Assert.Equal("1.0", ClientListParser.NormalizeId("1.0"));
     }
 
     [Fact]
-    public void ContainsVersionChecksIdExactly() {
+    public void ContainsVersionChecksIdExactly()
+    {
         var json = JsonNodeUtils.ParseObject(Manifest("1.20.1", "1.21"));
         Assert.True(ClientListParser.ContainsVersion(json, "1.21"));
         Assert.False(ClientListParser.ContainsVersion(json, "1.21.0"));
     }
 
     [Fact]
-    public void RealMojangManifestParses() {
+    public void RealMojangManifestParses()
+    {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "mojang-manifest.json")));
         var root = ClientListParser.Parse(json, "Mojang 官方源");
         Assert.True(root["versions"]!.AsArray().Count >= 200);
     }
 
     [Fact]
-    public void RealBmclapiManifestParses() {
+    public void RealBmclapiManifestParses()
+    {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "bmclapi-manifest.json")));
         var root = ClientListParser.Parse(json, "BMCLAPI");
         Assert.NotEmpty(ClientListParser.ComputeDrops(root));

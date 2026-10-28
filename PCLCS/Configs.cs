@@ -1,5 +1,7 @@
 namespace PCLCS;
-public static class Configs {
+
+public static class Configs
+{
 
     public static readonly DynamicConfigEntry<McInstallManifest> McInstallManifest = new("MinecraftInstallManifest", null);
 
@@ -16,10 +18,13 @@ public static class Configs {
 
     public static readonly ConfigEntry<bool> HintModifyInstanceWarning = new("HintModifyInstanceWarning", false);
 
-    static Configs() {
+    static Configs()
+    {
         /// 当 JavaForced 获取到一个不在 JavaList 中的值时，将其重置为 null。
-        JavaForced.PreviewGet += (args, provider) => {
-            if (args.Value is not null && !JavaList.Get()!.Contains(args.Value)) {
+        JavaForced.PreviewGet += (args, provider) =>
+        {
+            if (args.Value is not null && !JavaList.Get()!.Contains(args.Value))
+            {
                 args.Value = null;
                 JavaForced.Reset(provider);
             }

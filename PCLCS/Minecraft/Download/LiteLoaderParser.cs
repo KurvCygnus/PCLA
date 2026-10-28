@@ -1,5 +1,5 @@
-using System.Text.Json.Nodes;
 using PCLCS.Json;
+using System.Text.Json.Nodes;
 
 namespace PCLCS.Minecraft.Download;
 
@@ -15,23 +15,30 @@ public sealed record LiteLoaderEntry(
     JsonNode JsonToken);
 
 /// <summary>LiteLoader 版本列表解析。</summary>
-public static class LiteLoaderParser {
+public static class LiteLoaderParser
+{
     /// <summary>解析 LiteLoader 官方源或 BMCLAPI 的版本列表。</summary>
-    public static IReadOnlyList<LiteLoaderEntry> Parse(string json) {
+    public static IReadOnlyList<LiteLoaderEntry> Parse(string json)
+    {
         JsonObject root;
-        try {
+        try
+        {
             root = JsonNodeUtils.ParseObject(json);
-        } catch (System.Text.Json.JsonException ex) {
+        } catch (System.Text.Json.JsonException ex)
+        {
             throw new DownloadSourceException(DownloadFailureKind.InvalidPayload,
                 "LiteLoader 返回的内容不是合法 JSON", "LiteLoader", DownloadDiagnostics.Snippet(json), ex);
         }
-        if (root["versions"] is not JsonObject versions) {
+        if (root["versions"] is not JsonObject versions)
+        {
             throw new DownloadSourceException(DownloadFailureKind.MissingField,
                 "LiteLoader 响应缺少 versions 对象", "LiteLoader", DownloadDiagnostics.Snippet(json));
         }
         var entries = new List<LiteLoaderEntry>();
-        foreach (var pair in versions) {
-            if (pair.Key.StartsWith("1.6", StringComparison.Ordinal) || pair.Key.StartsWith("1.5", StringComparison.Ordinal)) {
+        foreach (var pair in versions)
+        {
+            if (pair.Key.StartsWith("1.6", StringComparison.Ordinal) || pair.Key.StartsWith("1.5", StringComparison.Ordinal))
+            {
                 continue;
             }
             var real = (pair.Value?["artefacts"] ?? pair.Value?["snapshots"])?["com.mumfrey:liteloader"]?["latest"]
@@ -56,7 +63,8 @@ public static class LiteLoaderParser {
     }
 
     //* 旧实现先按本地时区解析 Unix 秒，再把该值当作 UTC 转本地，形成双重换算；此处保真。
-    private static DateTime GetDoubleLocalTime(long timestamp) {
+    private static DateTime GetDoubleLocalTime(long timestamp)
+    {
         var local = DateTimeOffset.FromUnixTimeSeconds(timestamp).LocalDateTime;
         return DateTime.SpecifyKind(local, DateTimeKind.Utc).ToLocalTime();
     }

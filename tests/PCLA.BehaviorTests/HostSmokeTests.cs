@@ -1,6 +1,6 @@
+using PCL;
 using System;
 using System.IO;
-using PCL;
 
 namespace PCLA.BehaviorTests;
 

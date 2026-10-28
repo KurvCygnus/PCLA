@@ -2,12 +2,15 @@ using PCLCS.Results;
 
 namespace PCLCS.Tests;
 
-public class PclaCrashFallbackTests {
+public class PclaCrashFallbackTests
+{
     [Fact]
-    public void WritesCrashFileWithCodeAndException() {
+    public void WritesCrashFileWithCodeAndException()
+    {
         var folder = Path.Combine(Path.GetTempPath(), "pcla-crash-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
-        try {
+        try
+        {
             var ex = new InvalidOperationException("boom");
             var error = PclaError.Unexpected(ex);
             var path = PclaCrashFallback.TryWrite(ex, error, folder);
@@ -18,12 +21,12 @@ public class PclaCrashFallbackTests {
             Assert.Contains("unexpected", text);
             Assert.Contains("boom", text);
             Assert.Contains(nameof(InvalidOperationException), text);
-        }
-        finally { Directory.Delete(folder, true); }
+        } finally { Directory.Delete(folder, true); }
     }
 
     [Fact]
-    public void InvalidTempPathReturnsNull() {
+    public void InvalidTempPathReturnsNull()
+    {
         var path = PclaCrashFallback.TryWrite(
             new InvalidOperationException("boom"), PclaError.Unexpected(new InvalidOperationException("boom")), "\0");
         Assert.Null(path);

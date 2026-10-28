@@ -3,12 +3,16 @@ using PCLCS.Startup;
 
 namespace PCLCS.Tests;
 
-public class UserDataMigrationTests {
-    private sealed class InMemoryRegistry : IRegistry {
+public class UserDataMigrationTests
+{
+    private sealed class InMemoryRegistry : IRegistry
+    {
         private readonly Dictionary<string, Dictionary<string, object>> _keys = new(StringComparer.OrdinalIgnoreCase);
 
-        private Dictionary<string, object> Key(string path) {
-            if (!_keys.TryGetValue(path, out var key)) {
+        private Dictionary<string, object> Key(string path)
+        {
+            if (!_keys.TryGetValue(path, out var key))
+            {
                 key = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
                 _keys[path] = key;
             }
@@ -27,7 +31,8 @@ public class UserDataMigrationTests {
     /// <summary>
     /// 真实文件系统，但复制时可以按源路径前缀模拟失败；不传前缀则所有复制都失败。
     /// </summary>
-    private sealed class FailingFileSystem : IFileSystem {
+    private sealed class FailingFileSystem : IFileSystem
+    {
         private readonly PhysicalFileSystem _inner = new();
         private readonly string? _failUnder;
 
@@ -39,8 +44,10 @@ public class UserDataMigrationTests {
         public IEnumerable<string> EnumerateFiles(string path) => _inner.EnumerateFiles(path);
         public IEnumerable<string> EnumerateDirectories(string path) => _inner.EnumerateDirectories(path);
 
-        public void Copy(string source, string destination) {
-            if (_failUnder == null || source.StartsWith(_failUnder, StringComparison.OrdinalIgnoreCase)) {
+        public void Copy(string source, string destination)
+        {
+            if (_failUnder == null || source.StartsWith(_failUnder, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new IOException("模拟复制失败");
             }
             _inner.Copy(source, destination);
@@ -54,7 +61,8 @@ public class UserDataMigrationTests {
     /// <summary>
     /// 模拟复制到一半就中断：向暂存路径写入残缺内容后抛异常，并记录收到的暂存路径。
     /// </summary>
-    private sealed class TornCopyFileSystem : IFileSystem {
+    private sealed class TornCopyFileSystem : IFileSystem
+    {
         private readonly PhysicalFileSystem _inner = new();
 
         public bool Fail { get; set; } = true;
@@ -66,9 +74,11 @@ public class UserDataMigrationTests {
         public IEnumerable<string> EnumerateFiles(string path) => _inner.EnumerateFiles(path);
         public IEnumerable<string> EnumerateDirectories(string path) => _inner.EnumerateDirectories(path);
 
-        public void Copy(string source, string destination) {
+        public void Copy(string source, string destination)
+        {
             LastStagingPath = destination;
-            if (Fail) {
+            if (Fail)
+            {
                 File.WriteAllText(destination, "torn");
                 throw new IOException("模拟复制中断");
             }
@@ -83,7 +93,8 @@ public class UserDataMigrationTests {
     /// <summary>
     /// 复制成功但改名失败，用于验证标记不会在目标文件真正落盘前写入。
     /// </summary>
-    private sealed class MoveFailingFileSystem : IFileSystem {
+    private sealed class MoveFailingFileSystem : IFileSystem
+    {
         private readonly PhysicalFileSystem _inner = new();
 
         public string? LastStagingPath { get; private set; }
@@ -94,7 +105,8 @@ public class UserDataMigrationTests {
         public IEnumerable<string> EnumerateFiles(string path) => _inner.EnumerateFiles(path);
         public IEnumerable<string> EnumerateDirectories(string path) => _inner.EnumerateDirectories(path);
 
-        public void Copy(string source, string destination) {
+        public void Copy(string source, string destination)
+        {
             LastStagingPath = destination;
             _inner.Copy(source, destination);
         }
@@ -107,12 +119,15 @@ public class UserDataMigrationTests {
     /// <summary>
     /// 一旦枚举到 Cache 目录就抛异常，证明排除目录在进入前已经被剪掉。
     /// </summary>
-    private sealed class CacheTripwireFileSystem : IFileSystem {
+    private sealed class CacheTripwireFileSystem : IFileSystem
+    {
         private readonly PhysicalFileSystem _inner = new();
 
-        private static void Guard(string path) {
+        private static void Guard(string path)
+        {
             var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (string.Equals(name, "Cache", StringComparison.OrdinalIgnoreCase)) {
+            if (string.Equals(name, "Cache", StringComparison.OrdinalIgnoreCase))
+            {
                 throw new InvalidOperationException("不应枚举旧版 Cache 目录");
             }
         }
@@ -121,12 +136,14 @@ public class UserDataMigrationTests {
         public bool FileExists(string path) => _inner.FileExists(path);
         public void CreateDirectory(string path) => _inner.CreateDirectory(path);
 
-        public IEnumerable<string> EnumerateFiles(string path) {
+        public IEnumerable<string> EnumerateFiles(string path)
+        {
             Guard(path);
             return _inner.EnumerateFiles(path);
         }
 
-        public IEnumerable<string> EnumerateDirectories(string path) {
+        public IEnumerable<string> EnumerateDirectories(string path)
+        {
             Guard(path);
             return _inner.EnumerateDirectories(path);
         }
@@ -137,7 +154,8 @@ public class UserDataMigrationTests {
         public void WriteAllText(string path, string text) => _inner.WriteAllText(path, text);
     }
 
-    private static (string Root, MigrationOptions Options) CreateRoot() {
+    private static (string Root, MigrationOptions Options) CreateRoot()
+    {
         var root = Path.Combine(Path.GetTempPath(), "pcla-migration-" + Guid.NewGuid().ToString("N"));
         var appData = Path.Combine(root, "AppData");
         var baseDir = Path.Combine(root, "Base");
@@ -146,14 +164,17 @@ public class UserDataMigrationTests {
         return (root, new MigrationOptions { AppDataRoot = appData, BaseDirectory = baseDir });
     }
 
-    private static void Cleanup(string root) {
+    private static void Cleanup(string root)
+    {
         if (Directory.Exists(root)) Directory.Delete(root, true);
     }
 
     [Fact]
-    public void CopiesMissingFilesAndWritesMarker() {
+    public void CopiesMissingFilesAndWritesMarker()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
@@ -165,14 +186,15 @@ public class UserDataMigrationTests {
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
             Assert.True(File.Exists(Path.Combine(source, "options.txt")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void DoesNotOverwriteExistingTarget() {
+    public void DoesNotOverwriteExistingTarget()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             var target = Path.Combine(options.AppDataRoot, "PCLA");
             Directory.CreateDirectory(source);
@@ -183,14 +205,15 @@ public class UserDataMigrationTests {
             UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
 
             Assert.Equal("new", File.ReadAllText(Path.Combine(target, "options.txt")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void ExistingTargetAndStagingLookalikeBothSurvive() {
+    public void ExistingTargetAndStagingLookalikeBothSurvive()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             var target = Path.Combine(options.AppDataRoot, "PCLA");
             Directory.CreateDirectory(source);
@@ -206,14 +229,15 @@ public class UserDataMigrationTests {
             Assert.Equal("lookalike", File.ReadAllText(Path.Combine(target, "foo.pcla-tmp")));
             Assert.Equal("source-foo", File.ReadAllText(Path.Combine(source, "foo")));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void SourceFilesWithStagingLookalikeNamesBothMigrate() {
+    public void SourceFilesWithStagingLookalikeNamesBothMigrate()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "foo"), "a");
@@ -232,14 +256,15 @@ public class UserDataMigrationTests {
                     .Select(path => Path.GetFileName(path))
                     .Where(name => name != options.FilesMarker)
                     .OrderBy(name => name, StringComparer.Ordinal));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void SkipsLogsCacheOldExeAndLatest() {
+    public void SkipsLogsCacheOldExeAndLatest()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(Path.Combine(source, "Cache"));
             File.WriteAllText(Path.Combine(source, "Log1.txt"), "log");
@@ -257,14 +282,15 @@ public class UserDataMigrationTests {
                     .Select(path => Path.GetFileName(path))
                     .Where(name => name != options.FilesMarker)
                     .OrderBy(name => name));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void NestedCacheIsPrunedBeforeEnumeration() {
+    public void NestedCacheIsPrunedBeforeEnumeration()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(Path.Combine(source, "Cache"));
             Directory.CreateDirectory(Path.Combine(source, "Sub", "Cache"));
@@ -282,14 +308,15 @@ public class UserDataMigrationTests {
                     .Select(path => Path.GetFileName(path))
                     .Where(name => name != options.FilesMarker)
                     .OrderBy(name => name));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void RetryAfterTornCopyProducesCompleteTarget() {
+    public void RetryAfterTornCopyProducesCompleteTarget()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
@@ -319,14 +346,15 @@ public class UserDataMigrationTests {
             Assert.False(File.Exists(retryStaging));
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void MoveFailureDoesNotWriteMarkerAndRetries() {
+    public void MoveFailureDoesNotWriteMarkerAndRetries()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
@@ -347,14 +375,15 @@ public class UserDataMigrationTests {
             AssertSuccess(retryReport);
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.True(File.Exists(Path.Combine(target, ".pcla-import-files")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void SecondRunDoesNotCopyNewSourceData() {
+    public void SecondRunDoesNotCopyNewSourceData()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
@@ -369,14 +398,15 @@ public class UserDataMigrationTests {
             AssertSuccess(report);
             Assert.Equal("old", File.ReadAllText(Path.Combine(target, "options.txt")));
             Assert.False(File.Exists(Path.Combine(target, "added.txt")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void OneBlockFailureDoesNotAbortOtherBlocks() {
+    public void OneBlockFailureDoesNotAbortOtherBlocks()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             var portable = Path.Combine(options.BaseDirectory, "PCL");
             Directory.CreateDirectory(source);
@@ -394,25 +424,27 @@ public class UserDataMigrationTests {
             Assert.Equal("portable", File.ReadAllText(Path.Combine(options.BaseDirectory, "PCLA", "portable.txt")));
             Assert.Equal("1", registry.GetValue(options.NewRegistryPath, "A"));
             Assert.Equal(1, registry.GetValue(options.NewRegistryPath, options.RegistryMarker));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void MissingSourceStillWritesMarker() {
+    public void MissingSourceStillWritesMarker()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             UserDataMigration.Run(new PhysicalFileSystem(), new InMemoryRegistry(), options);
             Assert.True(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
             Assert.True(File.Exists(Path.Combine(options.BaseDirectory, "PCLA", ".pcla-import-portable")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void CopiesRegistryValuesButSkipsLastVersion() {
+    public void CopiesRegistryValuesButSkipsLastVersion()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var registry = new InMemoryRegistry();
             registry.SetValue(options.OldRegistryPath, "A", "1");
             registry.SetValue(options.OldRegistryPath, "SystemLastVersionReg", 413);
@@ -423,14 +455,15 @@ public class UserDataMigrationTests {
             Assert.Equal("1", registry.GetValue(options.NewRegistryPath, "A"));
             Assert.False(registry.ValueExists(options.NewRegistryPath, "SystemLastVersionReg"));
             Assert.Equal(1, registry.GetValue(options.NewRegistryPath, options.RegistryMarker));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void SkipsLastVersionRegardlessOfCase() {
+    public void SkipsLastVersionRegardlessOfCase()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var registry = new InMemoryRegistry();
             registry.SetValue(options.OldRegistryPath, "SYSTEMLASTVERSIONREG", 413);
 
@@ -439,14 +472,15 @@ public class UserDataMigrationTests {
             AssertSuccess(report);
             Assert.False(registry.ValueExists(options.NewRegistryPath, "SystemLastVersionReg"));
             Assert.Equal(1, registry.GetValue(options.NewRegistryPath, options.RegistryMarker));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void DoesNotOverwriteExistingRegistryValue() {
+    public void DoesNotOverwriteExistingRegistryValue()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var registry = new InMemoryRegistry();
             registry.SetValue(options.OldRegistryPath, "A", "old");
             registry.SetValue(options.NewRegistryPath, "A", "new");
@@ -454,14 +488,15 @@ public class UserDataMigrationTests {
             UserDataMigration.Run(new PhysicalFileSystem(), registry, options);
 
             Assert.Equal("new", registry.GetValue(options.NewRegistryPath, "A"));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void FailureReturnsWarningAndDoesNotWriteMarker() {
+    public void FailureReturnsWarningAndDoesNotWriteMarker()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var source = Path.Combine(options.AppDataRoot, "PCL");
             Directory.CreateDirectory(source);
             File.WriteAllText(Path.Combine(source, "options.txt"), "old");
@@ -471,14 +506,15 @@ public class UserDataMigrationTests {
             AssertFailure(report, MigrationSection.Files, "用户数据", "模拟复制失败");
             Assert.False(File.Exists(Path.Combine(options.AppDataRoot, "PCLA", ".pcla-import-files")));
             Assert.Empty(Directory.EnumerateFiles(Path.Combine(options.AppDataRoot, "PCLA")));
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     [Fact]
-    public void RunDefaultStartupFailureReturnsStartupSection() {
+    public void RunDefaultStartupFailureReturnsStartupSection()
+    {
         var (root, options) = CreateRoot();
-        try {
+        try
+        {
             var report = UserDataMigration.RunDefault(
                 () => throw new IOException("无法构造文件系统"),
                 () => new InMemoryRegistry(),
@@ -489,8 +525,7 @@ public class UserDataMigrationTests {
             Assert.True(startup.Outcome.IsFailure);
             Assert.Equal("migration.startup", startup.Outcome.Error.Code);
             Assert.Contains("无法构造文件系统", startup.Outcome.Error.Cause!.Message);
-        }
-        finally { Cleanup(root); }
+        } finally { Cleanup(root); }
     }
 
     private static MigrationSectionResult Section(MigrationReport report, MigrationSection section) =>
@@ -502,7 +537,8 @@ public class UserDataMigrationTests {
                 section.Outcome.IsFailure ? section.Outcome.Error.Message : ""));
 
     private static void AssertFailure(MigrationReport report, MigrationSection section, string messagePart,
-        string causeMessagePart) {
+        string causeMessagePart)
+    {
         var result = Section(report, section);
         Assert.True(result.Outcome.IsFailure);
         Assert.Contains(messagePart, result.Outcome.Error.Message);

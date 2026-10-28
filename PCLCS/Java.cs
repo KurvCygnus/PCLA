@@ -6,7 +6,9 @@ namespace PCLCS;
 /// <summary>
 /// 单个 Java 的实例。
 /// </summary>
-[Serializable] public class Java(string folder, Version? version = null) : IEquatable<Java> {
+[Serializable]
+public class Java(string folder, Version? version = null) : IEquatable<Java>
+{
 
     /// <summary>
     /// java.exe 文件所在的文件夹路径，这通常是 bin 文件夹。以 \ 结尾。
@@ -35,8 +37,10 @@ namespace PCLCS;
 
     /// <summary>检查 Java 是否可用；失败写入 LastError，取消不记为失败。</summary>
     public async Task<Result<Java, JavaCheckError>> CheckAsync(
-        CancellationToken cancellationToken = default, IJavaProcessRunner? runner = null) {
-        if (Interlocked.Exchange(ref isChecked, 1) == 1 && available is not null) {
+        CancellationToken cancellationToken = default, IJavaProcessRunner? runner = null)
+    {
+        if (Interlocked.Exchange(ref isChecked, 1) == 1 && available is not null)
+        {
             return available.Value
                 ? Result<Java, JavaCheckError>.Ok(this)
                 : Result<Java, JavaCheckError>.Err(
@@ -44,34 +48,41 @@ namespace PCLCS;
         }
 
         JavaProcessOutput? output = null;
-        try {
-            if (runner is null && !FileUtils.Exists(JavaExePath)) {
+        try
+        {
+            if (runner is null && !FileUtils.Exists(JavaExePath))
+            {
                 return Fail(JavaFailureReason.MissingExe, "未找到 java.exe 文件", null, null);
             }
 
             output = await (runner ?? new ProcessJavaRunner())
                 .RunAsync(JavaExePath, "-XshowSettings:properties -version", 15000, cancellationToken)
                 .NoCapture();
-            if (output.TimedOut) {
+            if (output.TimedOut)
+            {
                 return Fail(JavaFailureReason.Timeout, "Java 检查超时", output.ExitCode, output.Output);
             }
 
             var rawOutput = output.Output;
             var text = rawOutput.Lower();
-            if (output.ExitCode != 0) {
+            if (output.ExitCode != 0)
+            {
                 return Fail(JavaFailureReason.ProcessFailed, "Java 进程返回了非零退出码",
                     output.ExitCode, text);
             }
-            if (text == "") {
+            if (text == "")
+            {
                 return Fail(JavaFailureReason.OutputUnreadable, "运行该 Java 失败", output.ExitCode, text);
             }
 
             Logger.Trace($"Java 检查输出：{JavaExePath}{Environment.NewLine}{text}");
-            if (text.Contains("/lib/ext exists")) {
+            if (text.Contains("/lib/ext exists"))
+            {
                 return Fail(JavaFailureReason.ProcessFailed, "无法运行该 Java，请删除 Java 文件夹中的 /lib/ext 文件夹后重试",
                     output.ExitCode, text);
             }
-            if (text.Contains("a fatal error") || text.Contains("error: ")) {
+            if (text.Contains("a fatal error") || text.Contains("error: "))
+            {
                 return Fail(JavaFailureReason.ProcessFailed, "无法运行该 Java，请检查 Java 或系统环境",
                     output.ExitCode, text);
             }
@@ -79,7 +90,8 @@ namespace PCLCS;
             var versionString = (text.RegexSeek(@"(?<=version "")[^""]+")
                 ?? text.RegexSeek("(?<=openjdk )[0-9]+"))
                 ?.Replace("_", ".").Replace("+", ".").BeforeFirst("-");
-            if (string.IsNullOrEmpty(versionString)) {
+            if (string.IsNullOrEmpty(versionString))
+            {
                 return Fail(JavaFailureReason.OutputUnreadable, "未找到该 Java 的版本号",
                     output.ExitCode, text);
             }
@@ -87,16 +99,19 @@ namespace PCLCS;
             var segments = versionString!.Split(".", true).ToList();
             while (segments.Count < 4) segments.Add("0");
             Version = new Version(segments.Take(4).Join("."));
-            if (Version.Major is <= 4 or >= 100) {
+            if (Version.Major is <= 4 or >= 100)
+            {
                 return Fail(JavaFailureReason.UnsupportedVersion, $"Java 版本不受支持：{Version}",
                     output.ExitCode, text);
             }
-            if (!text.Contains("64-bit")) {
+            if (!text.Contains("64-bit"))
+            {
                 return Fail(JavaFailureReason.Not64Bit, "该 Java 为 32 位版本，请安装 64 位 Java",
                     output.ExitCode, text);
             }
 
-            string? GetProperty(string name) {
+            string? GetProperty(string name)
+            {
                 var prefix = name + " = ";
                 var line = rawOutput.Split('\n').Select(l => l.Trim())
                     .FirstOrDefault(l => l.StartsWithF(prefix));
@@ -110,24 +125,28 @@ namespace PCLCS;
             LastError = null;
             Logger.Info($"检查 Java 成功：{this}");
             return Result<Java, JavaCheckError>.Ok(this);
-        } catch (OperationCanceledException) {
+        } catch (OperationCanceledException)
+        {
             isChecked = 0;
             throw;
-        } catch (Exception ex) {
+        } catch (Exception ex)
+        {
             return Fail(JavaFailureReason.Unexpected, "检查 Java 时发生未预期错误",
                 output?.ExitCode, output?.Output, ex);
         }
     }
 
     private Result<Java, JavaCheckError> Fail(JavaFailureReason reason, string message, int? exitCode,
-        string? output, Exception? cause = null) {
+        string? output, Exception? cause = null)
+    {
         available = false;
         LastError = new JavaCheckError(reason, message, Folder, exitCode, output, cause);
         Logger.Warn($"检查 Java 失败：{JavaExePath}（{LastError.Code}：{message}）");
         return Result<Java, JavaCheckError>.Err(LastError);
     }
 
-    public void InvalidateChecked() {
+    public void InvalidateChecked()
+    {
         isChecked = 0;
         available = null;
         LastError = null;
@@ -148,13 +167,15 @@ namespace PCLCS;
         => $"Java {Version?.Major.ToString() ?? "尚未检查"} ({Version})：{Folder}";
 }
 
-public static class JavaUtils {
+public static class JavaUtils
+{
 
     /// <summary>
     /// 检查所有指定的 Java 是否存在问题，并获取其版本号。
     /// </summary>
     /// <returns>所有通过检查的 Java。</returns>
-    public static async Task<List<Java>> CheckAllAsync(IEnumerable<Java> javas, CancellationToken cancellationToken = default, ProgressProvider? progress = null) {
+    public static async Task<List<Java>> CheckAllAsync(IEnumerable<Java> javas, CancellationToken cancellationToken = default, ProgressProvider? progress = null)
+    {
         await TaskUtils.WhenAll(javas.Where(j => j.available == null).Select(
             async java => await java.CheckAsync(cancellationToken).NoCapture()
         ), progress).NoCapture();
@@ -165,9 +186,11 @@ public static class JavaUtils {
     /// 将 Java 列表进行排序。
     /// 这同时会检查所有未检查的 Java。
     /// </summary>
-    public static async Task<List<Java>> SortAsync(List<Java> javas, CancellationToken cancellationToken = default, ProgressProvider? progress = null) {
+    public static async Task<List<Java>> SortAsync(List<Java> javas, CancellationToken cancellationToken = default, ProgressProvider? progress = null)
+    {
         javas = await JavaUtils.CheckAllAsync(javas, cancellationToken, progress).NoCapture();
-        javas.Sort((left, right) => {
+        javas.Sort((left, right) =>
+        {
             // 优先使用带完整 Java 的文件夹列表中的 Java
             var isLeftInCandidateFolder = JavaUtils.CandidateFolders.Value.Any(folder => PathUtils.IsParentOf(folder, left.Folder));
             var isRightInCandidateFolder = JavaUtils.CandidateFolders.Value.Any(folder => PathUtils.IsParentOf(folder, right.Folder));
@@ -185,7 +208,8 @@ public static class JavaUtils {
     /// <summary>
     /// 存在完整 Java 的文件夹列表。
     /// </summary>
-    internal static readonly Lazy<List<string>> CandidateFolders = new(() => {
+    internal static readonly Lazy<List<string>> CandidateFolders = new(() =>
+    {
         List<string> folders = [
             Paths.AppData + @".minecraft\runtime\", // 这也是 PCL 下载 Java 的路径
             Paths.AppData + @".hmcl\java\",
@@ -209,21 +233,25 @@ public static class JavaUtils {
             ..(Environment.GetEnvironmentVariable("JDK_HOME") + ";" + Environment.GetEnvironmentVariable("JAVA_HOME")).
                 Split(";", true).Select(path => path.Trim(' ', '"'))
         ];
-        return folders.Select(f => {
-            try {
+        return folders.Select(f =>
+        {
+            try
+            {
                 return PathUtils.ForCompare(f);
-            } catch (Exception ex) {
+            } catch (Exception ex)
+            {
                 Logger.Warn(ex, $"Java 候选文件夹路径无效（{f}）");
                 return null;
             }
         }).Where(f => f is not null).Cast<string>().ToList();
     });
-    
+
 
     /// <summary>
     /// 从常见文件夹和环境变量中搜索 Java，并将搜索结果写入设置。
     /// </summary>
-    public static async Task RefreshListAsync(CancellationToken c = default, ProgressProvider? p = null) {
+    public static async Task RefreshListAsync(CancellationToken c = default, ProgressProvider? p = null)
+    {
         // 搜索
         List<Java> javaList = await SearchFoldersAsync(true, CandidateFolders.Value, c, p?.SplitTo(0.5)).NoCapture();
         // 将新发现的 Java 排在最前，原有列表保留既有顺序排在后面
@@ -236,27 +264,34 @@ public static class JavaUtils {
         // 删掉已被移除的 Java
         javaList.RemoveIf(j => Configs.JavaRemovedList.Get()!.Contains(j.Folder, StringComparer.OrdinalIgnoreCase));
         // 写入设置
-        Configs.JavaList.Set([..javaList]);
+        Configs.JavaList.Set([.. javaList]);
         Logger.Info($"Java 搜索完成，发现 {javaList.Count} 个 Java");
     }
 
     /// <summary>
     /// 并行搜索所有指定的文件夹及其子文件夹中的 Java，并检查其有效性。
     /// </summary>
-    public static async Task<List<Java>> SearchFoldersAsync(bool includeSubDirectories, IEnumerable<string> folders, CancellationToken cancellationToken = default, ProgressProvider? progress = null) {
+    public static async Task<List<Java>> SearchFoldersAsync(bool includeSubDirectories, IEnumerable<string> folders, CancellationToken cancellationToken = default, ProgressProvider? progress = null)
+    {
         // 并行搜索
         ConcurrentBag<(string Folder, bool HasReparsePoint, bool IsSpecialPath)> results = [];
-        await TaskUtils.ForEachAsync(folders.Distinct(StringComparer.OrdinalIgnoreCase), 4, async (folder, cp) => {
-            await Task.Run(() => {
-                try {
-                    foreach (var file in DirectoryUtils.EnumerateFiles(folder, includeSubDirectories, "java.exe")) {
+        await TaskUtils.ForEachAsync(folders.Distinct(StringComparer.OrdinalIgnoreCase), 4, async (folder, cp) =>
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    foreach (var file in DirectoryUtils.EnumerateFiles(folder, includeSubDirectories, "java.exe"))
+                    {
                         cancellationToken.ThrowIfCancellationRequested();
                         string targetFolder = PathUtils.AddSlashSuffix(PathUtils.ForCompare(PathUtils.RemoveLastPart(file)));
                         // 判断文件夹是否包含重解析点（例如符号链接）
-                        static bool HasReparsePoint(FileSystemInfo? info) {
+                        static bool HasReparsePoint(FileSystemInfo? info)
+                        {
                             if (info is null) return false;
                             if (PathUtils.IsParentOf(Paths.AppData + @".minecraft\runtime\", info.FullName)) return false; // 不筛查 PCL 的下载路径（#8928）
-                            do {
+                            do
+                            {
                                 if (info.Attributes.HasFlagF(FileAttributes.ReparsePoint)) return true;
                                 // FileInfo.Directory 与 DirectoryInfo.Parent 在根处返回 null，由 while 条件终止循环。
                                 info = info is FileInfo fileInfo ? fileInfo.Directory : ((DirectoryInfo) info).Parent;
@@ -268,9 +303,11 @@ public static class JavaUtils {
                         var isSpecialPath = targetFolder.ContainsIgnoreCase("java8path_target_") || targetFolder.ContainsIgnoreCase("javapath_target_") || targetFolder.ContainsIgnoreCase("javatmp") || targetFolder.ContainsIgnoreCase("system32");
                         results.Add((targetFolder, hasReparsePoint, isSpecialPath));
                     }
-                } catch (UnauthorizedAccessException) {
+                } catch (UnauthorizedAccessException)
+                {
                     Logger.Info($"快速查找 Java 时没有权限（{folder}）");
-                } catch (Exception ex) {
+                } catch (Exception ex)
+                {
                     ex.ThrowIfCanceled();
                     Logger.Warn(ex, $"快速查找 Java 时出错（{folder}）");
                 }
@@ -279,18 +316,22 @@ public static class JavaUtils {
         if (!results.Any()) return [];
 
         // 筛除重解析点
-        if (results.All(r => r.HasReparsePoint)) {
+        if (results.All(r => r.HasReparsePoint))
+        {
             Logger.Warn("找到的所有 Java 都包含重解析点，保留全部结果");
-        } else if (results.Any(r => r.HasReparsePoint)) {
+        } else if (results.Any(r => r.HasReparsePoint))
+        {
             Logger.Warn($"找到的以下 Java 包含重解析点，将它们从列表中排除：{results.Where(r => r.HasReparsePoint).Select(r => r.Folder).Join('、')}");
-            results = [..results.Where(r => !r.HasReparsePoint)];
+            results = [.. results.Where(r => !r.HasReparsePoint)];
         }
         // 筛除特殊路径
-        if (results.All(r => r.IsSpecialPath)) {
+        if (results.All(r => r.IsSpecialPath))
+        {
             Logger.Warn("找到的所有 Java 都包含特殊路径，保留全部结果");
-        } else if (results.Any(r => r.IsSpecialPath)) {
+        } else if (results.Any(r => r.IsSpecialPath))
+        {
             Logger.Warn($"找到的以下 Java 包含特殊路径，将它们从列表中排除：{results.Where(r => r.IsSpecialPath).Select(r => r.Folder).Join('、')}");
-            results = [..results.Where(r => !r.IsSpecialPath)];
+            results = [.. results.Where(r => !r.IsSpecialPath)];
         }
 
         // 检查并返回

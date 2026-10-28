@@ -2,8 +2,10 @@ using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
 
-public class OptiFineListParserTests {
-    private static string BuildOfficialHtml(int count = 10) {
+public class OptiFineListParserTests
+{
+    private static string BuildOfficialHtml(int count = 10)
+    {
         var rows = Enumerable.Range(0, count).Select(i =>
             $"<td class='colForge'>Forge 14.23.5.{2859 + i}</td>" +
             $"<td class='colDate'>2.15.2024</td>" +
@@ -12,7 +14,8 @@ public class OptiFineListParserTests {
     }
 
     [Fact]
-    public void OfficialHtmlBuildsDisplayAndInstanceNames() {
+    public void OfficialHtmlBuildsDisplayAndInstanceNames()
+    {
         var entries = OptiFineListParser.ParseOfficialHtml(BuildOfficialHtml());
         Assert.Equal(10, entries.Count);
         Assert.Equal("1.12.2 G0", entries[0].DisplayName);
@@ -24,7 +27,8 @@ public class OptiFineListParserTests {
     }
 
     [Fact]
-    public void OfficialHtmlMarksPreviewEntries() {
+    public void OfficialHtmlMarksPreviewEntries()
+    {
         var html = BuildOfficialHtml().Replace("OptiFine_1.12.2_HD_U_G0", "OptiFine_preview_1.12.2_HD_U_G0");
         var entries = OptiFineListParser.ParseOfficialHtml(html);
         Assert.True(entries[0].IsPreview);
@@ -32,13 +36,15 @@ public class OptiFineListParserTests {
     }
 
     [Fact]
-    public void OfficialHtmlRejectsMismatchedColumns() {
+    public void OfficialHtmlRejectsMismatchedColumns()
+    {
         var ex = Assert.Throws<DownloadSourceException>(() => OptiFineListParser.ParseOfficialHtml(BuildOfficialHtml().Replace("colDate'>2.15.2024</td>", "")));
         Assert.Equal(DownloadFailureKind.InvalidPayload, ex.Kind);
     }
 
     [Fact]
-    public void BmclapiJsonMapsFields() {
+    public void BmclapiJsonMapsFields()
+    {
         var json = "[{\"mcversion\":\"1.12.2\",\"type\":\"HD_U\",\"patch\":\"G5\",\"filename\":\"OptiFine_1.12.2_HD_U_G5.jar\",\"forge\":\"Forge 14.23.5.2859\"}]";
         var entry = OptiFineListParser.ParseBmclapiJson(json).Single();
         Assert.Equal("1.12.2 G5", entry.DisplayName);
@@ -47,7 +53,8 @@ public class OptiFineListParserTests {
     }
 
     [Fact]
-    public void RealOfficialPageParses() {
+    public void RealOfficialPageParses()
+    {
         var html = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "optifine-official.html")));
         var entries = OptiFineListParser.ParseOfficialHtml(html);
         Assert.NotEmpty(entries);
@@ -56,7 +63,8 @@ public class OptiFineListParserTests {
     }
 
     [Fact]
-    public void RealBmclapiListParses() {
+    public void RealBmclapiListParses()
+    {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "optifine-bmclapi.json")));
         var entries = OptiFineListParser.ParseBmclapiJson(json);
         Assert.NotEmpty(entries);

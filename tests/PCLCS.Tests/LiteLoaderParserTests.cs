@@ -2,7 +2,8 @@ using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
 
-public class LiteLoaderParserTests {
+public class LiteLoaderParserTests
+{
     private const string Json = """
     {
       "versions": {
@@ -16,14 +17,16 @@ public class LiteLoaderParserTests {
     """;
 
     [Fact]
-    public void ParseSkipsOneFiveAndOneSix() {
+    public void ParseSkipsOneFiveAndOneSix()
+    {
         var entries = LiteLoaderParser.Parse(Json);
         Assert.Equal(3, entries.Count);
         Assert.DoesNotContain(entries, entry => entry.Inherit is "1.5.2" or "1.6.4");
     }
 
     [Fact]
-    public void ParseMapsLegacyEntryAndDoubleLocalTime() {
+    public void ParseMapsLegacyEntryAndDoubleLocalTime()
+    {
         var entry = LiteLoaderParser.Parse(Json).Single(item => item.Inherit == "1.7.10");
         Assert.Equal("liteloader-installer-1.7.10-00-SNAPSHOT.jar", entry.FileName);
         Assert.True(entry.IsLegacy);
@@ -34,7 +37,8 @@ public class LiteLoaderParserTests {
     }
 
     [Fact]
-    public void ParseAddsDotZeroToEightAndNineFileNames() {
+    public void ParseAddsDotZeroToEightAndNineFileNames()
+    {
         var entries = LiteLoaderParser.Parse(Json);
         var v18 = entries.Single(item => item.Inherit == "1.8");
         Assert.Equal("liteloader-installer-1.8.0-00-SNAPSHOT.jar", v18.FileName);
@@ -48,14 +52,16 @@ public class LiteLoaderParserTests {
     }
 
     //* 旧实现把 Unix 时间先按本地时区解析，再把该值当作 UTC 转本地，共叠加两次本地偏移。
-    private static string ExpectedDoubleLocalTime(long timestamp) {
+    private static string ExpectedDoubleLocalTime(long timestamp)
+    {
         var utc = DateTimeOffset.FromUnixTimeSeconds(timestamp);
         var local = utc.ToLocalTime();
         return local.Add(TimeZoneInfo.Local.GetUtcOffset(utc)).ToString("yyyy/MM/dd HH:mm");
     }
 
     [Fact]
-    public void RealLiteLoaderListParses() {
+    public void RealLiteLoaderListParses()
+    {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "liteloader.json")));
         var entries = LiteLoaderParser.Parse(json);
         Assert.NotEmpty(entries);

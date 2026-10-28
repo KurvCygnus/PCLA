@@ -3,12 +3,14 @@ using PCLCS.Minecraft.Download;
 namespace PCLCS.Results;
 
 /// <summary>下载清单解析/源切换失败；保留旧异常的诊断字段。</summary>
-public sealed class DownloadError : PclaError {
+public sealed class DownloadError : PclaError
+{
     public DownloadError(DownloadFailureKind failureKind, string message, string? source = null,
         string? diagnostic = null, Exception? cause = null)
         : base(CodeFor(failureKind), message,
             failureKind == DownloadFailureKind.Unexpected ? PclaErrorKind.Unexpected : PclaErrorKind.Expected,
-            cause) {
+            cause)
+    {
         FailureKind = failureKind;
         Source = source;
         Diagnostic = diagnostic;
@@ -22,7 +24,8 @@ public sealed class DownloadError : PclaError {
     public static DownloadError From(DownloadSourceException exception) =>
         new(exception.Kind, exception.Message, exception.Source, exception.Diagnostic, exception);
 
-    private static string CodeFor(DownloadFailureKind kind) => kind switch {
+    private static string CodeFor(DownloadFailureKind kind) => kind switch
+    {
         DownloadFailureKind.NotFound => "download.not-found",
         DownloadFailureKind.InvalidPayload => "download.invalid-payload",
         DownloadFailureKind.TooFewEntries => "download.too-few-entries",

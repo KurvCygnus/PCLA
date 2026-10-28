@@ -5,7 +5,8 @@ namespace PCLCS.Minecraft.Launch;
 /// <summary>
 /// 从版本 JSON 收集 JVM 与游戏参数。
 /// </summary>
-public static class VersionArguments {
+public static class VersionArguments
+{
     // 防御异常 JSON 造成的无限继承链；正常版本最多两三层。
     private const int MaxInheritDepth = 64;
 
@@ -24,23 +25,29 @@ public static class VersionArguments {
         Func<string, JsonObject?> resolveParent,
         RuleEnvironment environment,
         Action<string>? warn = null,
-        string? inheritName = null) {
+        string? inheritName = null)
+    {
         var chain = BuildChain(version, resolveParent, inheritName);
         var result = new List<string>();
-        if (chain.Any(level => level["arguments"]?["jvm"] is not null)) {
-            for (var i = 0; i < chain.Count; i++) {
+        if (chain.Any(level => level["arguments"]?["jvm"] is not null))
+        {
+            for (var i = 0; i < chain.Count; i++)
+            {
                 EmitSection(chain[i], "jvm", environment, warn, value => result.Add(value.Trim()));
             }
-            for (var i = 0; i < result.Count; i++) {
+            for (var i = 0; i < result.Count; i++)
+            {
                 var argument = result[i];
                 // 1.17.1 的 "-Dos.name=Windows 10" 不加引号会让 10 被当成独立参数。
                 if (argument.Contains(' ')
                     && !argument.StartsWith("\"", StringComparison.Ordinal)
-                    && !argument.EndsWith("\"", StringComparison.Ordinal)) {
+                    && !argument.EndsWith("\"", StringComparison.Ordinal))
+                {
                     result[i] = "\"" + argument.Replace("\"", "\\\"") + "\"";
                 }
             }
-        } else {
+        } else
+        {
             result.Add("-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump");
             result.Add("-Djava.library.path=${natives_directory}");
             result.Add("-cp");
@@ -60,7 +67,8 @@ public static class VersionArguments {
         Func<string, JsonObject?> resolveParent,
         RuleEnvironment environment,
         Action<string>? warn = null,
-        string? inheritName = null) {
+        string? inheritName = null)
+    {
         var chain = BuildChain(version, resolveParent, inheritName);
         var builder = new StringBuilder();
         // 合并时子版本的 minecraftArguments 覆盖父版本，等效于从选中版本向上取最近的一级。
@@ -68,13 +76,16 @@ public static class VersionArguments {
             .Where(level => level["minecraftArguments"] is not null)
             .Select(level => level["minecraftArguments"]!.ToString())
             .FirstOrDefault();
-        if (!string.IsNullOrEmpty(legacy)) {
+        if (!string.IsNullOrEmpty(legacy))
+        {
             builder.Append(' ').Append(legacy);
             // 总是补宽高，之后去重时覆盖 MC 自带的值。
             builder.Append(" --height ${resolution_height} --width ${resolution_width}");
         }
-        if (chain.Any(level => level["arguments"]?["game"] is not null)) {
-            for (var i = 0; i < chain.Count; i++) {
+        if (chain.Any(level => level["arguments"]?["game"] is not null))
+        {
+            for (var i = 0; i < chain.Count; i++)
+            {
                 EmitSection(chain[i], "game", environment, warn, value => Append(builder, value));
             }
         }
@@ -86,10 +97,12 @@ public static class VersionArguments {
     private static List<JsonObject> BuildChain(
         JsonObject version,
         Func<string, JsonObject?> resolveParent,
-        string? inheritName = null) {
+        string? inheritName = null)
+    {
         var chain = new List<JsonObject>();
         JsonObject? current = version;
-        for (var depth = 0; current is not null && depth < MaxInheritDepth; depth++) {
+        for (var depth = 0; current is not null && depth < MaxInheritDepth; depth++)
+        {
             chain.Add(current);
             // 老 LiteLoader 的 JSON 没有 inheritsFrom，由调用方通过 inheritName 提供真实父级；
             // 空字符串表示明确没有父级（HMCL 格式），此时不能回退到 JSON。
@@ -107,40 +120,49 @@ public static class VersionArguments {
         string section,
         RuleEnvironment environment,
         Action<string>? warn,
-        Action<string> emit) {
+        Action<string> emit)
+    {
         if (level["arguments"] is not JsonObject arguments || arguments[section] is not JsonArray list) return;
-        foreach (var token in list) {
+        foreach (var token in list)
+        {
             if (token is null) continue;
-            switch (token) {
-                case JsonValue:
-                    emit(token.ToString());
-                    break;
-                case JsonObject: {
-                    if (token["rules"] is not null
-                        && !VersionArgumentRules.IsAllowed(token["rules"], environment, warn)) continue;
-                    var value = token["value"];
-                    if (value is null) continue;
-                    if (value is JsonValue) {
-                        emit(value.ToString());
-                    } else if (value.AsArray() is { } itemArray) {
-                        foreach (var item in itemArray) emit(item?.ToString() ?? "");
-                    }
-                    break;
+            switch (token)
+            {
+            case JsonValue:
+                emit(token.ToString());
+                break;
+            case JsonObject:
+            {
+                if (token["rules"] is not null
+                    && !VersionArgumentRules.IsAllowed(token["rules"], environment, warn)) continue;
+                var value = token["value"];
+                if (value is null) continue;
+                if (value is JsonValue)
+                {
+                    emit(value.ToString());
+                } else if (value.AsArray() is { } itemArray)
+                {
+                    foreach (var item in itemArray) emit(item?.ToString() ?? "");
                 }
-                default:
-                    warn?.Invoke($"忽略无法识别的参数项类型 {token.GetType().Name}");
-                    break;
+                break;
+            }
+            default:
+                warn?.Invoke($"忽略无法识别的参数项类型 {token.GetType().Name}");
+                break;
             }
         }
     }
 
-    private static void Append(StringBuilder builder, string value) {
+    private static void Append(StringBuilder builder, string value)
+    {
         builder.Append(' ');
         if (value.Contains(' ')
             && !value.StartsWith("\"", StringComparison.Ordinal)
-            && !value.EndsWith("\"", StringComparison.Ordinal)) {
+            && !value.EndsWith("\"", StringComparison.Ordinal))
+        {
             builder.Append('"').Append(value.Replace("\"", "\\\"")).Append('"');
-        } else {
+        } else
+        {
             builder.Append(value);
         }
     }

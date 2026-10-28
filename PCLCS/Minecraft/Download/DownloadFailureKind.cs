@@ -1,7 +1,8 @@
 namespace PCLCS.Minecraft.Download;
 
 /// <summary>下载清单的失败分类。</summary>
-public enum DownloadFailureKind {
+public enum DownloadFailureKind
+{
     NotFound,
     InvalidPayload,
     TooFewEntries,

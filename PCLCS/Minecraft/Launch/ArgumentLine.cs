@@ -5,31 +5,39 @@ namespace PCLCS.Minecraft.Launch;
 /// <summary>
 /// 启动参数行的拆分与去重。
 /// </summary>
-public static class ArgumentLine {
+public static class ArgumentLine
+{
     /// <summary>
     /// 按空格拆分参数行，保留引号与转义。
     /// </summary>
-    public static IReadOnlyList<string> Split(string? raw) {
+    public static IReadOnlyList<string> Split(string? raw)
+    {
         var result = new List<string>();
         if (string.IsNullOrEmpty(raw)) return result;
         var text = NormalizeLineEndings(raw!).Trim();
         if (text.Length == 0) return result;
         var current = new StringBuilder();
         var quoted = false;
-        for (var i = 0; i < text.Length; i++) {
+        for (var i = 0; i < text.Length; i++)
+        {
             var c = text[i];
-            if (c == '\\' && i + 1 < text.Length && text[i + 1] == '"') {
+            if (c == '\\' && i + 1 < text.Length && text[i + 1] == '"')
+            {
                 current.Append("\\\"");
                 i++;
-            } else if (c == '"') {
+            } else if (c == '"')
+            {
                 quoted = !quoted;
                 current.Append(c);
-            } else if (c == ' ' && !quoted) {
-                if (current.Length > 0) {
+            } else if (c == ' ' && !quoted)
+            {
+                if (current.Length > 0)
+                {
                     result.Add(current.ToString());
                     current.Clear();
                 }
-            } else {
+            } else
+            {
                 current.Append(c);
             }
         }
@@ -44,18 +52,22 @@ public static class ArgumentLine {
     public static IReadOnlyList<string> Deduplicate(
         IReadOnlyList<string> args,
         bool isJvm,
-        ICollection<string>? diagnostics = null) {
+        ICollection<string>? diagnostics = null)
+    {
         var result = new List<string>();
         var index = 0;
-        while (index < args.Count) {
+        while (index < args.Count)
+        {
             var key = args[index];
             var isPair = key.StartsWith("-", StringComparison.Ordinal)
                          && index + 1 < args.Count
                          && !(args[index + 1].StartsWith("-", StringComparison.Ordinal)
                               && VbVal(args[index + 1].Substring(1)) == 0);
-            if (!isPair) {
+            if (!isPair)
+            {
                 index++;
-                if (result.Contains(key)) {
+                if (result.Contains(key))
+                {
                     diagnostics?.Add($"已去重单个{(isJvm ? " JVM " : "游戏")}参数：{key}");
                     continue;
                 }
@@ -66,16 +78,19 @@ public static class ArgumentLine {
             var value = args[index + 1];
             index += 2;
             var handled = false;
-            for (var i = 0; i + 1 < result.Count; i++) {
+            for (var i = 0; i + 1 < result.Count; i++)
+            {
                 if (result[i] != key) continue;
                 // 游戏对重复的 --width、--uuid 之类参数会整组失效，覆盖成最后一个值比保留多个更安全；--tweakClass 允许出现多次。
-                if (!isJvm && key != "--tweakClass") {
+                if (!isJvm && key != "--tweakClass")
+                {
                     diagnostics?.Add($"已覆盖重复的{(isJvm ? " JVM " : "游戏")}参数：{key} {result[i + 1]} → {key} {value}");
                     result[i + 1] = value;
                     handled = true;
                     break;
                 }
-                if (result[i + 1] == value) {
+                if (result[i + 1] == value)
+                {
                     diagnostics?.Add($"已去重{(isJvm ? " JVM " : "游戏")}参数对：{key} {value}");
                     handled = true;
                     break;
@@ -88,11 +103,14 @@ public static class ArgumentLine {
         return result;
     }
 
-    private static string NormalizeLineEndings(string raw) {
+    private static string NormalizeLineEndings(string raw)
+    {
         var builder = new StringBuilder(raw.Length);
-        for (var i = 0; i < raw.Length; i++) {
+        for (var i = 0; i < raw.Length; i++)
+        {
             var c = raw[i];
-            if (!IsLineEnding(c)) {
+            if (!IsLineEnding(c))
+            {
                 builder.Append(c);
                 continue;
             }
@@ -108,11 +126,14 @@ public static class ArgumentLine {
 
     // 复刻 VB Val 的数值前缀解析，用于区分 "-xPos -50" 中的负数值。
     // 与 VB 的已知差异：超长的 &H/&O 在 VB 里会抛 OverflowException（足以让启动崩溃），这里只返回有限值；调用方只判断是否为 0。
-    private static double VbVal(string text) {
+    private static double VbVal(string text)
+    {
         var s = text.TrimStart();
         // 进制前缀只在无符号时生效：Val("&H10") = 16，而 Val("-&H10") = 0。
-        if (s.Length > 1 && s[0] == '&') {
-            var radix = s[1] switch {
+        if (s.Length > 1 && s[0] == '&')
+        {
+            var radix = s[1] switch
+            {
                 'H' or 'h' => 16,
                 'O' or 'o' => 8,
                 _ => 0
@@ -120,7 +141,8 @@ public static class ArgumentLine {
             if (radix == 0) return 0;
             var value = 0d;
             var count = 0;
-            for (var i = 2; i < s.Length; i++) {
+            for (var i = 2; i < s.Length; i++)
+            {
                 var digit = DigitValue(s[i], radix);
                 if (digit < 0) break;
                 value = value * radix + digit;
@@ -130,7 +152,8 @@ public static class ArgumentLine {
         }
         var index = 0;
         var negative = false;
-        if (index < s.Length && (s[index] == '+' || s[index] == '-')) {
+        if (index < s.Length && (s[index] == '+' || s[index] == '-'))
+        {
             negative = s[index] == '-';
             index++;
             // VB 允许符号与数字之间有空白：Val("- 5") = -5。
@@ -138,7 +161,8 @@ public static class ArgumentLine {
         }
         var start = index;
         while (index < s.Length && char.IsDigit(s[index])) index++;
-        if (index < s.Length && s[index] == '.') {
+        if (index < s.Length && s[index] == '.')
+        {
             index++;
             while (index < s.Length && char.IsDigit(s[index])) index++;
         }
@@ -148,8 +172,10 @@ public static class ArgumentLine {
             : 0;
     }
 
-    private static int DigitValue(char c, int radix) {
-        var value = c switch {
+    private static int DigitValue(char c, int radix)
+    {
+        var value = c switch
+        {
             >= '0' and <= '9' => c - '0',
             >= 'a' and <= 'f' => c - 'a' + 10,
             >= 'A' and <= 'F' => c - 'A' + 10,

@@ -2,14 +2,16 @@ using PCLCS.Minecraft.Download;
 
 namespace PCLCS.Tests;
 
-public class SourcePolicyTests {
+public class SourcePolicyTests
+{
     [Theory]
     [InlineData(0, false, 30, 90)]
     [InlineData(1, true, 5, 35)]
     [InlineData(2, true, 60, 120)]
     [InlineData(9, true, 60, 120)]
     [InlineData(-1, true, 60, 120)]
-    public void PlanMatchesLegacyTimeoutTable(int version, bool officialFirst, int first, int second) {
+    public void PlanMatchesLegacyTimeoutTable(int version, bool officialFirst, int first, int second)
+    {
         var plan = SourcePolicy.GetPlan(version);
         Assert.Equal(officialFirst, plan.OfficialFirst);
         Assert.Equal(first, plan.FirstSeconds);
@@ -23,7 +25,8 @@ public class SourcePolicyTests {
     [InlineData(0, true, false)]
     [InlineData(0, false, false)]
     [InlineData(-1, true, false)]
-    public void VersionListPrefersOfficialOnExplicitSettingOrFastMirror(int version, bool downloadPrefer, bool expected) {
+    public void VersionListPrefersOfficialOnExplicitSettingOrFastMirror(int version, bool downloadPrefer, bool expected)
+    {
         Assert.Equal(expected, SourcePolicy.PreferMojangForVersionList(version, downloadPrefer));
     }
 }

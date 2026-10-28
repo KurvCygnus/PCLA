@@ -3,7 +3,8 @@ namespace PCLCS.Minecraft.Launch;
 /// <summary>
 /// 启动时的 GC 参数策略。
 /// </summary>
-public static class GcPolicy {
+public static class GcPolicy
+{
     // 与 ModLaunch.vb 中的清理正则保持一致。
     private const string GcArgumentPattern =
         "( )*-XX:[+-]?(Use\\w+GC|ZGenerational|UseCompactObjectHeaders|G1\\w+Percent|G1\\w+Size|(Max|Min)(GCPauseMillis|HeapFreeRatio))";
@@ -19,7 +20,8 @@ public static class GcPolicy {
     /// <param name="setupType">0 分代/非分代自动，1 仅 Java 21+ 分代，2 仅 G1，4 优化 G1；3 由调用方跳过。</param>
     /// <param name="javaMajor">Java 主版本号。</param>
     /// <param name="windowsVersion">当前 Windows 版本。</param>
-    public static bool UsesG1Gc(int setupType, int javaMajor, Version windowsVersion) {
+    public static bool UsesG1Gc(int setupType, int javaMajor, Version windowsVersion)
+    {
         var useG1 = setupType is 2 or 4
                     || (setupType == 0 && javaMajor < 15)
                     || (setupType == 1 && javaMajor < 21);
@@ -34,7 +36,8 @@ public static class GcPolicy {
     /// <param name="javaMajor">Java 主版本号。</param>
     /// <param name="windowsVersion">当前 Windows 版本。</param>
     /// <param name="debug">是否为调试模式。</param>
-    public static IReadOnlyList<string> Build(int setupType, int javaMajor, Version windowsVersion, bool debug) {
+    public static IReadOnlyList<string> Build(int setupType, int javaMajor, Version windowsVersion, bool debug)
+    {
         var result = new List<string>();
         if (setupType == 3) return result;
 
@@ -43,7 +46,8 @@ public static class GcPolicy {
 
         result.Add("-XX:+UnlockExperimentalVMOptions");
         if (javaMajor >= 24) result.Add("-XX:+UseCompactObjectHeaders");
-        if (useG1 && setupType == 4) {
+        if (useG1 && setupType == 4)
+        {
             result.Add("-XX:+UseG1GC");
             result.Add("-XX:G1NewSizePercent=20");
             result.Add("-XX:G1ReservePercent=20");
@@ -57,14 +61,16 @@ public static class GcPolicy {
             if (javaMajor >= 12) result.Add("-XX:MinHeapFreeRatio=25");
             // 需要比 MinHeapFreeRatio 略高。
             if (javaMajor >= 12) result.Add("-XX:MaxHeapFreeRatio=40");
-        } else if (useG1) {
+        } else if (useG1)
+        {
             result.Add("-XX:+UseG1GC");
             result.Add("-XX:G1NewSizePercent=20");
             result.Add("-XX:G1ReservePercent=20");
             result.Add("-XX:G1HeapRegionSize=32M");
             result.Add("-XX:MaxGCPauseMillis=50");
             if (javaMajor <= 7) result.Add("-XX:MaxPermSize=512m");
-        } else {
+        } else
+        {
             // Java 23 起默认启用分代 ZGC，不需要再添加参数。
             result.Add("-XX:+UseZGC");
             if (javaMajor is 21 or 22) result.Add("-XX:+ZGenerational");

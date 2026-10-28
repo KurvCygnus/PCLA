@@ -4,7 +4,8 @@ namespace PCLCS;
 /// 社区资源的类型。
 /// </summary>
 [Flags]
-public enum ResourceTypes {
+public enum ResourceTypes
+{
     /// <summary>Mod。</summary>
     Mod = 1,
     /// <summary>整合包。</summary>
@@ -29,7 +30,8 @@ public enum ResourceTypes {
 /// 社区资源的来源平台。
 /// </summary>
 [Flags]
-public enum ResourcePlatforms {
+public enum ResourcePlatforms
+{
     CurseForge = 1,
     Modrinth = 2,
     Any = CurseForge | Modrinth,
@@ -39,7 +41,8 @@ public enum ResourcePlatforms {
 /// Mod 加载器的类型。
 /// </summary>
 [Flags]
-public enum ModLoaders {
+public enum ModLoaders
+{
     None = 0,
     Forge = 1,
     LiteLoader = 2,
@@ -51,7 +54,8 @@ public enum ModLoaders {
 /// <summary>
 /// 在爱发电中的赞助等级。
 /// </summary>
-public enum DonationRank {
+public enum DonationRank
+{
     None = 0,
     Rank6 = 6,
     Rank12 = 12,
@@ -60,7 +64,8 @@ public enum DonationRank {
     Rank98 = 98,
 }
 
-public static class Versions {
+public static class Versions
+{
     /// <summary>
     /// 土豆码版本号。
     /// </summary>

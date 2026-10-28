@@ -3,9 +3,12 @@ using System.Text;
 namespace PCLCS.Results;
 
 /// <summary>日志系统本身失败时的最后兜底；绝不抛出。</summary>
-public static class PclaCrashFallback {
-    public static string? TryWrite(Exception exception, PclaError error, string? tempPath) {
-        try {
+public static class PclaCrashFallback
+{
+    public static string? TryWrite(Exception exception, PclaError error, string? tempPath)
+    {
+        try
+        {
             var folder = string.IsNullOrWhiteSpace(tempPath)
                 ? Path.Combine(Path.GetTempPath(), "PCLA")
                 : tempPath;
@@ -22,7 +25,8 @@ public static class PclaCrashFallback {
                 .ToString();
             File.WriteAllText(path, text, Encoding.UTF8);
             return path;
-        } catch {
+        } catch
+        {
             return null;
         }
     }

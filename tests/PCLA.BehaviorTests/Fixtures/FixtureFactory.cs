@@ -1,7 +1,7 @@
-using System.IO;
-using System.Linq;
 using Newtonsoft.Json.Linq;
 using PCL;
+using System.IO;
+using System.Linq;
 
 namespace PCLA.BehaviorTests.Fixtures;
 
@@ -23,8 +23,7 @@ internal static class FixtureFactory
         if (c.BrokenJson)
         {
             File.WriteAllText(Path.Combine(versionDir, c.Name + ".json"), "{");
-        }
-        else if (!c.MissingJson)
+        } else if (!c.MissingJson)
         {
             WriteVersion(root, c);
         }

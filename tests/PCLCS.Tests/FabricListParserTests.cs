@@ -1,12 +1,14 @@
-using System.Text.Json.Nodes;
 using PCLCS.Minecraft.Download;
 using PCLCS.Results;
+using System.Text.Json.Nodes;
 
 namespace PCLCS.Tests;
 
-public class FabricListParserTests {
+public class FabricListParserTests
+{
     [Fact]
-    public void ParseReturnsRootWithAllSections() {
+    public void ParseReturnsRootWithAllSections()
+    {
         const string json = """
         {"game":[{"version":"1.21.1"}],"loader":[{"version":"0.16.0"}],"installer":[{"version":"1.0.1"}]}
         """;
@@ -21,7 +23,8 @@ public class FabricListParserTests {
     [InlineData("""{"loader":[],"installer":[]}""")]
     [InlineData("""{"game":[],"installer":[]}""")]
     [InlineData("""{"game":[],"loader":[]}""")]
-    public void ParseRejectsMissingSection(string json) {
+    public void ParseRejectsMissingSection(string json)
+    {
         var result = FabricListParser.Parse(json);
 
         Assert.True(result.IsFailure);
@@ -31,7 +34,8 @@ public class FabricListParserTests {
     }
 
     [Fact]
-    public void ParseRejectsInvalidJson() {
+    public void ParseRejectsInvalidJson()
+    {
         var result = FabricListParser.Parse("{");
 
         Assert.True(result.IsFailure);
@@ -41,14 +45,16 @@ public class FabricListParserTests {
     }
 
     [Fact]
-    public void ParseOrThrowThrowsPclaExceptionWithDownloadError() {
+    public void ParseOrThrowThrowsPclaExceptionWithDownloadError()
+    {
         var ex = Assert.Throws<PclaException>(() => FabricListParser.ParseOrThrow("{"));
         var error = Assert.IsType<DownloadError>(ex.Error);
         Assert.Equal(DownloadFailureKind.InvalidPayload, error.FailureKind);
     }
 
     [Fact]
-    public void RealFabricListParses() {
+    public void RealFabricListParses()
+    {
         var json = File.ReadAllText(TestPaths.Fixture(Path.Combine("Download", "fabric.json")));
         var result = FabricListParser.Parse(json);
 

@@ -3,8 +3,10 @@ using PCLCS.Results;
 namespace PCLCS.Startup;
 
 /// <summary>单个迁移区块的结果。</summary>
-public sealed class MigrationSectionResult {
-    public MigrationSectionResult(MigrationSection section, Result<Unit, MigrationError> outcome) {
+public sealed class MigrationSectionResult
+{
+    public MigrationSectionResult(MigrationSection section, Result<Unit, MigrationError> outcome)
+    {
         Section = section;
         Outcome = outcome;
     }
@@ -14,8 +16,10 @@ public sealed class MigrationSectionResult {
 }
 
 /// <summary>一次迁移的完整报告；Startup 只用于 RunDefault 初始化失败。</summary>
-public sealed class MigrationReport {
-    public MigrationReport(IReadOnlyList<MigrationSectionResult> sections) {
+public sealed class MigrationReport
+{
+    public MigrationReport(IReadOnlyList<MigrationSectionResult> sections)
+    {
         Sections = sections;
     }
 

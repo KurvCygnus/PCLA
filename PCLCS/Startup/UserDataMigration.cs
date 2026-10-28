@@ -7,7 +7,8 @@ namespace PCLCS.Startup;
 /// 文件系统的最小抽象，便于在测试中模拟复制、移动与清理失败。
 /// 枚举方法只返回当前目录的内容，不递归。
 /// </summary>
-public interface IFileSystem {
+public interface IFileSystem
+{
     bool DirectoryExists(string path);
     bool FileExists(string path);
     void CreateDirectory(string path);
@@ -22,7 +23,8 @@ public interface IFileSystem {
 /// <summary>
 /// 当前用户注册表的最小抽象，路径均为 <c>HKCU</c> 下的相对路径。
 /// </summary>
-public interface IRegistry {
+public interface IRegistry
+{
     bool KeyExists(string path);
     bool ValueExists(string path, string name);
     object? GetValue(string path, string name);
@@ -33,7 +35,8 @@ public interface IRegistry {
 /// <summary>
 /// 旧数据导入的路径、名称与排除规则。默认值来自 <see cref="LauncherIdentity"/>。
 /// </summary>
-public sealed class MigrationOptions {
+public sealed class MigrationOptions
+{
     public string AppDataRoot { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
     public string BaseDirectory { get; init; } = AppDomain.CurrentDomain.BaseDirectory;
     public string OldFolderName { get; init; } = "PCL";
@@ -64,17 +67,21 @@ public sealed class MigrationOptions {
 /// 暂存名，成功后再改名为目标文件，避免把写了一半的内容当成完整数据。进程被强制终止时可能留下
 /// 这种随机名暂存文件；迁移不会清理它们，因为无法证明它们属于迁移而不是用户数据。
 /// </remarks>
-public static class UserDataMigration {
+public static class UserDataMigration
+{
 
     /// <summary>使用真实文件系统与当前用户注册表执行迁移；初始化失败也返回报告。</summary>
     public static MigrationReport RunDefault() =>
         RunDefault(() => new PhysicalFileSystem(), () => new RegistryStore(), new MigrationOptions());
 
     internal static MigrationReport RunDefault(Func<IFileSystem> fileSystemFactory,
-        Func<IRegistry> registryFactory, MigrationOptions options) {
-        try {
+        Func<IRegistry> registryFactory, MigrationOptions options)
+    {
+        try
+        {
             return Run(fileSystemFactory(), registryFactory(), options);
-        } catch (Exception ex) {
+        } catch (Exception ex)
+        {
             return new MigrationReport([
                 new MigrationSectionResult(MigrationSection.Startup,
                     Result<Unit, MigrationError>.Err(
@@ -84,7 +91,8 @@ public static class UserDataMigration {
     }
 
     /// <summary>执行三个区块的迁移；区块失败不阻断其他区块。</summary>
-    public static MigrationReport Run(IFileSystem fs, IRegistry registry, MigrationOptions options) {
+    public static MigrationReport Run(IFileSystem fs, IRegistry registry, MigrationOptions options)
+    {
         var filesPath = Path.Combine(options.AppDataRoot, options.NewFolderName);
         var portablePath = Path.Combine(options.BaseDirectory, options.NewFolderName);
         return new MigrationReport([
@@ -100,23 +108,28 @@ public static class UserDataMigration {
     }
 
     private static MigrationSectionResult RunSection(MigrationSection section, string path, string label,
-        Action action) {
-        try {
+        Action action)
+    {
+        try
+        {
             action();
             return new MigrationSectionResult(section, Result<Unit, MigrationError>.Ok(Unit.Value));
-        } catch (Exception ex) {
+        } catch (Exception ex)
+        {
             return new MigrationSectionResult(section,
                 Result<Unit, MigrationError>.Err(new MigrationError(section, path, $"{label}导入失败：{ex.Message}", ex)));
         }
     }
 
     private static void MigrateDirectory(IFileSystem fs, string source, string target, string marker,
-        MigrationOptions options) {
+        MigrationOptions options)
+    {
         var markerPath = Path.Combine(target, marker);
         // 标记文件代表该区块已经处理过；它只在整块成功后写入，因此失败的区块会在下次启动重试。
         if (fs.FileExists(markerPath)) return;
         fs.CreateDirectory(target);
-        if (!fs.DirectoryExists(source)) {
+        if (!fs.DirectoryExists(source))
+        {
             fs.WriteAllText(markerPath, DateTime.UtcNow.ToString("O"));
             return;
         }
@@ -126,13 +139,16 @@ public static class UserDataMigration {
     }
 
     private static void MigrateDirectoryContents(IFileSystem fs, string source, string target,
-        MigrationOptions options) {
-        foreach (var file in fs.EnumerateFiles(source)) {
+        MigrationOptions options)
+    {
+        foreach (var file in fs.EnumerateFiles(source))
+        {
             var name = Path.GetFileName(file);
             if (options.ExcludedNames.Contains(name)) continue;
             CopyAtomically(fs, file, Path.Combine(target, name));
         }
-        foreach (var directory in fs.EnumerateDirectories(source)) {
+        foreach (var directory in fs.EnumerateDirectories(source))
+        {
             var name = Path.GetFileName(directory);
             // 在进入之前就剪掉排除目录，避免枚举 Cache 这类可能很大的旧缓存。
             if (options.ExcludedDirectories.Contains(name)) continue;
@@ -142,37 +158,44 @@ public static class UserDataMigration {
         }
     }
 
-    private static void CopyAtomically(IFileSystem fs, string source, string destination) {
+    private static void CopyAtomically(IFileSystem fs, string source, string destination)
+    {
         // 目标文件已经存在就视为完整数据（包括用户或开发环境预先创建的文件），绝不覆盖。
         if (fs.FileExists(destination)) return;
         fs.CreateDirectory(Path.GetDirectoryName(destination)!);
         // 每次复制使用唯一暂存名：不会与用户文件（包括 foo.pcla-tmp 这类名字）冲突，
         // 也不需要删除任何预先存在的路径。崩溃残留的随机名文件不会影响后续重试。
         var staging = destination + ".pcla-" + Guid.NewGuid().ToString("N") + ".tmp";
-        try {
+        try
+        {
             fs.Copy(source, staging);
             fs.Move(staging, destination);
-        }
-        catch {
+        } catch
+        {
             TryDelete(fs, staging);
             throw;
         }
     }
 
-    private static void TryDelete(IFileSystem fs, string path) {
-        try {
+    private static void TryDelete(IFileSystem fs, string path)
+    {
+        try
+        {
             if (fs.FileExists(path)) fs.DeleteFile(path);
-        }
-        catch (Exception) {
+        } catch (Exception)
+        {
             // 清理失败不能掩盖原始异常；随机名暂存文件不会影响后续重试。
         }
     }
 
-    private static void MigrateRegistry(IRegistry registry, MigrationOptions options) {
+    private static void MigrateRegistry(IRegistry registry, MigrationOptions options)
+    {
         // 注册表只有一个标记值；没有 LastVersionReg 才不会把旧版更新状态带进新版。
         if (registry.ValueExists(options.NewRegistryPath, options.RegistryMarker)) return;
-        if (registry.KeyExists(options.OldRegistryPath)) {
-            foreach (var name in registry.GetValueNames(options.OldRegistryPath)) {
+        if (registry.KeyExists(options.OldRegistryPath))
+        {
+            foreach (var name in registry.GetValueNames(options.OldRegistryPath))
+            {
                 // 注册表值名的比较规则与 Windows 一致，不区分大小写。
                 if (string.Equals(name, "SystemLastVersionReg", StringComparison.OrdinalIgnoreCase)) continue;
                 if (registry.ValueExists(options.NewRegistryPath, name)) continue;
@@ -187,7 +210,8 @@ public static class UserDataMigration {
 /// <summary>
 /// <see cref="IFileSystem"/> 的真实实现。
 /// </summary>
-public sealed class PhysicalFileSystem : IFileSystem {
+public sealed class PhysicalFileSystem : IFileSystem
+{
     public bool DirectoryExists(string path) => Directory.Exists(path);
     public bool FileExists(string path) => File.Exists(path);
     public void CreateDirectory(string path) => Directory.CreateDirectory(path);
@@ -202,29 +226,35 @@ public sealed class PhysicalFileSystem : IFileSystem {
 /// <summary>
 /// <see cref="IRegistry"/> 的真实实现，操作当前用户的注册表。
 /// </summary>
-public sealed class RegistryStore : IRegistry {
-    public bool KeyExists(string path) {
+public sealed class RegistryStore : IRegistry
+{
+    public bool KeyExists(string path)
+    {
         using var key = Registry.CurrentUser.OpenSubKey(path);
         return key != null;
     }
 
-    public bool ValueExists(string path, string name) {
+    public bool ValueExists(string path, string name)
+    {
         using var key = Registry.CurrentUser.OpenSubKey(path);
         return key?.GetValue(name) != null;
     }
 
-    public object? GetValue(string path, string name) {
+    public object? GetValue(string path, string name)
+    {
         using var key = Registry.CurrentUser.OpenSubKey(path);
         return key?.GetValue(name);
     }
 
-    public void SetValue(string path, string name, object value) {
+    public void SetValue(string path, string name, object value)
+    {
         using var key = Registry.CurrentUser.CreateSubKey(path)
             ?? throw new InvalidOperationException($@"无法创建注册表项 HKCU\{path}。");
         key.SetValue(name, value);
     }
 
-    public IEnumerable<string> GetValueNames(string path) {
+    public IEnumerable<string> GetValueNames(string path)
+    {
         using var key = Registry.CurrentUser.OpenSubKey(path);
         return key?.GetValueNames() ?? Array.Empty<string>();
     }

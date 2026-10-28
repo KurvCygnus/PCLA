@@ -3,9 +3,11 @@ using PCLCS.Results;
 
 namespace PCLCS.Tests;
 
-public class DomainErrorTests {
+public class DomainErrorTests
+{
     [Fact]
-    public void DownloadErrorFromPreservesFields() {
+    public void DownloadErrorFromPreservesFields()
+    {
         var exception = new DownloadSourceException(
             DownloadFailureKind.NotFound, "没有找到版本", "BMCLAPI", "HTTP 404");
         var error = DownloadError.From(exception);
@@ -20,8 +22,10 @@ public class DomainErrorTests {
     }
 
     [Fact]
-    public void DownloadErrorMapsEveryKind() {
-        var expected = new Dictionary<DownloadFailureKind, string> {
+    public void DownloadErrorMapsEveryKind()
+    {
+        var expected = new Dictionary<DownloadFailureKind, string>
+        {
             [DownloadFailureKind.NotFound] = "download.not-found",
             [DownloadFailureKind.InvalidPayload] = "download.invalid-payload",
             [DownloadFailureKind.TooFewEntries] = "download.too-few-entries",
@@ -31,7 +35,8 @@ public class DomainErrorTests {
             [DownloadFailureKind.Unexpected] = "download.unexpected",
         };
 
-        foreach (var pair in expected) {
+        foreach (var pair in expected)
+        {
             var error = new DownloadError(pair.Key, "消息");
             Assert.Equal(pair.Value, error.Code);
             Assert.Equal(
@@ -44,7 +49,8 @@ public class DomainErrorTests {
     }
 
     [Fact]
-    public void JavaErrorTruncatesOutput() {
+    public void JavaErrorTruncatesOutput()
+    {
         var output = new string('x', 600);
         var error = new JavaCheckError(
             JavaFailureReason.OutputUnreadable, "无法读取版本", @"C:\Java\", 1, output);
@@ -56,14 +62,16 @@ public class DomainErrorTests {
     }
 
     [Fact]
-    public void JavaUnexpectedIsUnexpectedKind() {
+    public void JavaUnexpectedIsUnexpectedKind()
+    {
         var error = new JavaCheckError(JavaFailureReason.Unexpected, "未预期");
         Assert.Equal("java.unexpected", error.Code);
         Assert.Equal(PclaErrorKind.Unexpected, error.Kind);
     }
 
     [Fact]
-    public void MigrationErrorMapsSectionCodes() {
+    public void MigrationErrorMapsSectionCodes()
+    {
         Assert.Equal("migration.files",
             new MigrationError(MigrationSection.Files, "path", "失败").Code);
         Assert.Equal("migration.portable",

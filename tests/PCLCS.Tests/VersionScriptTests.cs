@@ -2,10 +2,13 @@ using System.Diagnostics;
 
 namespace PCLCS.Tests;
 
-public class VersionScriptTests {
-    private static Dictionary<string, string> Run(string channel, string commit) {
+public class VersionScriptTests
+{
+    private static Dictionary<string, string> Run(string channel, string commit)
+    {
         var script = Path.Combine(TestPaths.RepoRoot, "tools", "version.ps1");
-        var psi = new ProcessStartInfo("pwsh") {
+        var psi = new ProcessStartInfo("pwsh")
+        {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -29,7 +32,8 @@ public class VersionScriptTests {
     [InlineData("nightly", "abc1234def", "0.1.0-nightly-abc1234", "1", "abc1234def")]
     [InlineData("snapshot", "abc1234def", "0.1.0-snapshot", "2", "")]
     public void ProducesChannelVersion(string channel, string commit, string expectedVersion,
-        string expectedCode, string expectedCommitHash) {
+        string expectedCode, string expectedCommitHash)
+    {
         var map = Run(channel, commit);
         Assert.Equal(expectedVersion, map["VersionFull"]);
         Assert.Equal(expectedCode, map["ChannelCode"]);
@@ -40,9 +44,11 @@ public class VersionScriptTests {
     }
 
     [Fact]
-    public void NightlyRequiresCommit() {
+    public void NightlyRequiresCommit()
+    {
         var script = Path.Combine(TestPaths.RepoRoot, "tools", "version.ps1");
-        var psi = new ProcessStartInfo("pwsh") {
+        var psi = new ProcessStartInfo("pwsh")
+        {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

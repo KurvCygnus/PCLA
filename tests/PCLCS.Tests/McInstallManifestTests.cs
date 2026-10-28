@@ -1,16 +1,19 @@
-using System.Text.Json.Nodes;
 using MeloongCore;
 using PCLCS;
+using System.Text.Json.Nodes;
 
 namespace PCLCS.Tests;
 
-public class McInstallManifestTests {
+public class McInstallManifestTests
+{
 
     private static readonly string TestConfigPath = Path.Combine(Path.GetTempPath(), "PCLCS.Tests", Path.GetRandomFileName() + ".json");
 
     /// <summary>构建一个含 OptiFine 条目与多加载器的完整清单。</summary>
-    private static McInstallManifest BuildManifest() {
-        var optiFineEntry = new JsonObject {
+    private static McInstallManifest BuildManifest()
+    {
+        var optiFineEntry = new JsonObject
+        {
             ["InstanceName"] = "1.12.2-OptiFine_HD_U_G7",
             ["Path"] = "versions/1.12.2/1.12.2-OptiFine_HD_U_G7"
         };
@@ -27,8 +30,10 @@ public class McInstallManifestTests {
     }
 
     [Fact]
-    public void JsonConfigProvider_Roundtrip_PreservesManifest() {
-        try {
+    public void JsonConfigProvider_Roundtrip_PreservesManifest()
+    {
+        try
+        {
             var provider = new JsonConfigProvider(TestConfigPath);
             var entry = new DynamicConfigEntry<McInstallManifest>("MinecraftInstallManifest", null);
             var manifest = BuildManifest();
@@ -51,14 +56,17 @@ public class McInstallManifestTests {
             Assert.Equal(manifest.ManagedFiles.Count, reloaded.ManagedFiles.Count);
             Assert.Equal("OptiFine", reloaded.ManagedFiles[0].Component);
             Assert.Equal(manifest.LastModifiedUtc.ToUniversalTime(), reloaded.LastModifiedUtc.ToUniversalTime());
-        } finally {
+        } finally
+        {
             if (File.Exists(TestConfigPath)) File.Delete(TestConfigPath);
         }
     }
 
     [Fact]
-    public void OptiFineEntry_JsonObject_TypingSurvivesRoundtrip() {
-        try {
+    public void OptiFineEntry_JsonObject_TypingSurvivesRoundtrip()
+    {
+        try
+        {
             var provider = new JsonConfigProvider(TestConfigPath);
             var entry = new DynamicConfigEntry<McInstallManifest>("MinecraftInstallManifest", null);
             entry.Set(BuildManifest(), provider);
@@ -70,7 +78,8 @@ public class McInstallManifestTests {
             Assert.NotNull(reloaded!.Components.OptiFineEntry);
             Assert.Equal("1.12.2-OptiFine_HD_U_G7", reloaded.Components.OptiFineEntry!["InstanceName"]!.GetValue<string>());
             Assert.Equal("HD_U_G7", reloaded.Components.OptiFineVersion);
-        } finally {
+        } finally
+        {
             if (File.Exists(TestConfigPath)) File.Delete(TestConfigPath);
         }
     }

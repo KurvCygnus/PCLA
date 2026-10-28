@@ -6,13 +6,16 @@ namespace PCLCS;
 /// <summary>
 /// Minecraft 版本号和组件信息
 /// </summary>
-public sealed class McVersion {
+public sealed class McVersion
+{
     /// <summary>
     /// 原版版本名，如 26.1、26.1-snapshot-1、1.12.2、16w01a。
     /// </summary>
-    public string VanillaName {
+    public string VanillaName
+    {
         get => _vanillaName;
-        set {
+        set
+        {
             _vanillaName = value ?? "Unknown";
             Vanilla = NameToVersion(_vanillaName);
         }
@@ -48,8 +51,10 @@ public sealed class McVersion {
     /// <summary>
     /// 可供比较的 OptiFine 版本序数。
     /// </summary>
-    public int OptiFineCode {
-        get {
+    public int OptiFineCode
+    {
+        get
+        {
             if (OptiFine is null or "未知版本" || OptiFine.Length == 0) return 0;
             // 字母编号，如 G2 中的 G（7）
             int result = char.ToUpperInvariant(OptiFine[0]) - 'A' + 1;
@@ -66,16 +71,20 @@ public sealed class McVersion {
     /// <summary>
     /// 可供比较的类 Forge 版本序数。
     /// </summary>
-    public int ForgelikeCode {
-        get {
-            if (!ModLoaderVersions.TryGetValue(ModLoaders.Forge, out string? version)) {
+    public int ForgelikeCode
+    {
+        get
+        {
+            if (!ModLoaderVersions.TryGetValue(ModLoaders.Forge, out string? version))
+            {
                 ModLoaderVersions.TryGetValue(ModLoaders.NeoForge, out version);
             }
             if (version is null or "未知版本") return 0;
             // 提取所有数字段，以兼容 beta、alpha 和 snapshot 等非数字后缀。
             int[] segments = version.RegexSearch(@"\d+")
                 .Select(segment => int.TryParse(segment, out int value) ? value : 0).ToArray();
-            return segments.Length switch {
+            return segments.Length switch
+            {
                 >= 4 => segments[0] * 1000000 + segments[1] * 10000 + segments[3],
                 3 => segments[0] * 1000000 + segments[1] * 10000 + segments[2],
                 2 => segments[0] * 1000000 + segments[1] * 10000,
@@ -90,7 +99,8 @@ public sealed class McVersion {
     /// </summary>
     /// <param name="vanillaName">原版版本名。</param>
     /// <param name="reliable">版本名是否来自可靠依据。</param>
-    public McVersion(string vanillaName, bool reliable = true) {
+    public McVersion(string vanillaName, bool reliable = true)
+    {
         Reliable = reliable;
         VanillaName = vanillaName;
         IsFool = IsFoolName(VanillaName);
@@ -100,7 +110,8 @@ public sealed class McVersion {
     /// <summary>
     /// 通过 Components 创建 Minecraft 版本信息。
     /// </summary>
-    public McVersion(McComponents components) : this(components.MinecraftVersion) {
+    public McVersion(McComponents components) : this(components.MinecraftVersion)
+    {
         OptiFine = components.OptiFineVersion?.AfterLast("HD_").AfterFirst("_");
         foreach (var loader in components.ModLoaderVersions) ModLoaderVersions[loader.Key] = loader.Value;
     }
@@ -111,17 +122,22 @@ public sealed class McVersion {
     /// <param name="instanceName">实例文件夹名。</param>
     /// <param name="json">展开的版本 JSON。</param>
     /// <param name="jarVersionJson">版本 JAR 中的 version.json。</param>
-    public McVersion(string instanceName, JsonObject json, JsonObject? jarVersionJson = null) {
+    public McVersion(string instanceName, JsonObject json, JsonObject? jarVersionJson = null)
+    {
         string jsonText = json.ToJsonString();
         DateTime releaseTime = new(1970, 1, 1, 15, 0, 0); // 未知版本也可能显示为 1970 年
-        try {
-            if (json["releaseTime"] is JsonNode releaseTimeNode) {
+        try
+        {
+            if (json["releaseTime"] is JsonNode releaseTimeNode)
+            {
                 // ISO 8601 按不变区域与 RoundtripKind 解析；失败时保留 1970 默认值，与旧 ToObject 抛错回退一致
-                if (DateTime.TryParse(releaseTimeNode.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedReleaseTime)) {
+                if (DateTime.TryParse(releaseTimeNode.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedReleaseTime))
+                {
                     releaseTime = parsedReleaseTime;
                 }
             }
-        } catch {
+        } catch
+        {
         }
         bool reliable = true;
         // 获取游戏版本
@@ -132,32 +148,37 @@ public sealed class McVersion {
         // 确定版本分类
         string jsonType = json["type"]?.GetValue<string>() ?? "";
         // OptiFine
-        OptiFine = jsonText.ContainsIgnoreCase("optifine") ? jsonText.RegexSeek(@"(?<=HD_U_)[^\"":/]+") ?? "未知版本": null;
+        OptiFine = jsonText.ContainsIgnoreCase("optifine") ? jsonText.RegexSeek(@"(?<=HD_U_)[^\"":/]+") ?? "未知版本" : null;
         // 愚人节与快照版本
         DateTime fixedReleaseTime = releaseTime.ToUniversalTime().AddHours(2);
         IsFool = jsonType == "fool" || IsFoolName(vanillaName) || (fixedReleaseTime.Month == 4 && fixedReleaseTime.Day == 1 && jsonType == "snapshot");
         IsSnapshot = IsSnapshotName(vanillaName) || instanceName.ContainsIgnoreCase("combat") || jsonType is "snapshot" or "pending" or "fool";
         if (!Reliable) Logger.Info($"无法完全确认 MC 版本号的版本：{VanillaName}");
         // LiteLoader
-        if (jsonText.ContainsIgnoreCase("liteloader")) {
+        if (jsonText.ContainsIgnoreCase("liteloader"))
+        {
             ModLoaderVersions[ModLoaders.LiteLoader] = jsonText.RegexSeek(@"(?<=com\.mumfrey:liteloader:)[^\"":/]+") ?? "未知版本";
         }
         // Fabric、Forge、NeoForge
-        if (jsonText.ContainsIgnoreCase("net.fabricmc:fabric-loader") || jsonText.ContainsIgnoreCase("org.quiltmc:quilt-loader")) {
+        if (jsonText.ContainsIgnoreCase("net.fabricmc:fabric-loader") || jsonText.ContainsIgnoreCase("org.quiltmc:quilt-loader"))
+        {
             ModLoaderVersions[ModLoaders.Fabric] = jsonText.RegexSeek(@"(?<=(net\.fabricmc:fabric-loader:|org\.quiltmc:quilt-loader:))[0-9\.]+(\+build.[0-9]+)?")?
                                                         .Replace("+build", "") ?? "未知版本";
-        } else if (jsonText.ContainsIgnoreCase("net.neoforge")) {
+        } else if (jsonText.ContainsIgnoreCase("net.neoforge"))
+        {
             // 1.20.1 JSON 范例："--fml.forgeVersion", "47.1.99"
             // 1.20.2+ JSON 范例："--fml.neoForgeVersion", "20.6.119-beta"
             ModLoaderVersions[ModLoaders.NeoForge] = FindArgumentValue(json, "--fml.neoForgeVersion") ?? FindArgumentValue(json, "--fml.forgeVersion") ?? "未知版本";
-        } else if (jsonText.ContainsIgnoreCase("minecraftforge")) {
+        } else if (jsonText.ContainsIgnoreCase("minecraftforge"))
+        {
             ModLoaderVersions[ModLoaders.Forge] = jsonText.RegexSeek(@"(?<=forge:[0-9\.]+(?:_pre[0-9]*)?-)[0-9\.]+")
                                                     ?? jsonText.RegexSeek(@"(?<=net\.minecraftforge:minecraftforge:)[0-9\.]+")
                                                     ?? jsonText.RegexSeek(@"(?<=net\.minecraftforge:fmlloader:[0-9\.]+-)[0-9\.]+") ?? "未知版本";
         }
     }
 
-    private static string? GetVanillaName(string instanceName, JsonObject json, JsonObject? jarVersionJson, DateTime releaseTime, ref bool reliable) {
+    private static string? GetVanillaName(string instanceName, JsonObject json, JsonObject? jarVersionJson, DateTime releaseTime, ref bool reliable)
+    {
         // 获取发布时间并判断是否为老版本
         if (releaseTime.Year is > 2000 and < 2013) return "Old";
         // 实验性快照
@@ -165,7 +186,8 @@ public sealed class McVersion {
         // 从 PCL 下载的版本信息中获取版本号
         if (json["clientVersion"] is JsonNode clientVersion) return clientVersion.ToString();
         // 从 HMCL 下载的版本信息中获取版本号
-        if (json["patches"] is JsonArray patches) {
+        if (json["patches"] is JsonArray patches)
+        {
             JsonNode? gameVersion = patches.OfType<JsonObject>().FirstOrDefault(patch => patch["id"]?.GetValue<string>() == "game")?["version"];
             if (gameVersion is not null) return gameVersion.ToString();
         }
@@ -173,7 +195,8 @@ public sealed class McVersion {
         if (FindArgumentValue(json, "--fml.mcVersion") is { Length: > 0 } fmlVersion) return fmlVersion;
         // 从继承版本中获取版本号
         string inherit = json["inheritsFrom"]?.ToString() ?? "";
-        if (inherit.Length > 0) {
+        if (inherit.Length > 0)
+        {
             string jar = json["jar"]?.ToString() ?? ""; // LiteLoader 优先使用 Jar
             return jar.Length > 0 ? jar : inherit;
         }
@@ -188,13 +211,15 @@ public sealed class McVersion {
             @"(?<=optifine:OptiFine:)[0-9]{1,2}.[0-9+.]+",
             @"(?<=((fabricmc)|(quiltmc)):intermediary:)[^\""]*"
         ];
-        foreach (string pattern in libraryPatterns) {
+        foreach (string pattern in libraryPatterns)
+        {
             if (librariesText.RegexSeek(pattern) is string match) return match;
         }
         // 从 jar 项中获取版本号
         if (json["jar"] is JsonNode jarToken) return jarToken.ToString();
         // 从 jar 文件的 version.json 中获取版本号
-        if (jarVersionJson?["name"] is JsonNode jarNameToken && jarNameToken.ToString() is { Length: < 32 } jarName) { // 因为 wiki 说这玩意儿可能是个 hash，虽然我没发现
+        if (jarVersionJson?["name"] is JsonNode jarNameToken && jarNameToken.ToString() is { Length: < 32 } jarName)
+        { // 因为 wiki 说这玩意儿可能是个 hash，虽然我没发现
             Logger.Info($"从版本 jar 中的 version.json 获取到版本号：{jarName}");
             return jarName;
         }
@@ -212,7 +237,8 @@ public sealed class McVersion {
         return withoutLibraries.ToJsonString().RegexSeek(VersionPattern, RegexOptions.IgnoreCase);
     }
 
-    private static bool IsFoolName(string name) {
+    private static bool IsFoolName(string name)
+    {
         name = name.Lower();
         return name.StartsWithF("2.0") || name is "15w14a" or "1.rv-pre1" or
             "3d shareware v1.34" or "20w14∞" or "22w13oneblockatatime" or "23w13a_or_b" or
@@ -225,9 +251,11 @@ public sealed class McVersion {
     /// <summary>
     /// 读取 arguments 中指定参数的字符串值。
     /// </summary>
-    private static string? FindArgumentValue(JsonObject json, string name) {
+    private static string? FindArgumentValue(JsonObject json, string name)
+    {
         if (json["arguments"]?["game"] is not JsonArray arguments) return null;
-        for (int i = 0; i + 1 < arguments.Count; i++) {
+        for (int i = 0; i + 1 < arguments.Count; i++)
+        {
             if (arguments[i]?.ToString() == name) return arguments[i + 1]?.ToString();
         }
         return null;
@@ -236,7 +264,8 @@ public sealed class McVersion {
     /// <summary>
     /// 判断版本字符串是否符合 Minecraft 原版格式，例如 1.x、26.x。
     /// </summary>
-    public static bool IsStandardFormat(string? version) {
+    public static bool IsStandardFormat(string? version)
+    {
         if (version is null) return false;
         if (Regex.IsMatch(version, @"^1\.\d")) return true;
         return double.TryParse(version.RegexSeek(@"^[2-9]\d\.\d+"), NumberStyles.Float,
@@ -246,7 +275,8 @@ public sealed class McVersion {
     /// <summary>
     /// 将版本名转换为 Drop 序数；无法转换时返回 209。
     /// </summary>
-    public static int VersionToDrop(string? vanillaName) {
+    public static int VersionToDrop(string? vanillaName)
+    {
         if (vanillaName is null) return 209;
         Version version = NameToVersion(vanillaName);
         return version.Major >= 1000 ? 209 : version.Major * 10 + version.Minor;
@@ -255,7 +285,8 @@ public sealed class McVersion {
     /// <summary>
     /// 将 Drop 序数转换为版本字符串。
     /// </summary>
-    public static string DropToVersion(int drop) {
+    public static string DropToVersion(int drop)
+    {
         if (drop >= 250) return $"{drop / 10}.{drop % 10}";
         if (drop != 209) return $"1.{drop / 10}";
         Logger.Warn(new Exception("尝试将旧快照版 Drop 序数转换为版本字符串，这不应该发生！"));
@@ -268,7 +299,8 @@ public sealed class McVersion {
     /// 对愚人节版本，返回其基于的正式版版本号。
     /// 若没有版本号，例如旧快照，则为 9999.0.0。
     /// </summary>
-    public static Version NameToVersion(string? name) {
+    public static Version NameToVersion(string? name)
+    {
         if (name is null) return new Version(9999, 0, 0);
         name = name.Lower().Replace("_unobfuscated", "").Replace(" unobfuscated", "");
         // 愚人节版本
@@ -283,17 +315,21 @@ public sealed class McVersion {
         if (name == "25w14craftmine") return NameToVersion("1.21.4");
         if (name == "26w14a") return NameToVersion("26.1.1");
         // 其余版本
-        static int ParseSegment(string[] segments, int index) {
+        static int ParseSegment(string[] segments, int index)
+        {
             if (index >= segments.Length) return 0;
             // 只读取该段开头连续的数字，忽略其后的预览版标记。
             return int.TryParse(segments[index].RegexSeek(@"^\d+"), out int value) ? value : 0;
         }
         string[] segments = name.Split([' ', '_', '-', '.'], StringSplitOptions.None);
-        if (name.StartsWithF("1.")) {
+        if (name.StartsWithF("1."))
+        {
             return new Version(ParseSegment(segments, 1), 0, ParseSegment(segments, 2));
-        } else if (name.RegexCheck(@"^[2-9][0-9]\.")) {
+        } else if (name.RegexCheck(@"^[2-9][0-9]\."))
+        {
             return new Version(ParseSegment(segments, 0), ParseSegment(segments, 1), ParseSegment(segments, 2));
-        } else {
+        } else
+        {
             return new Version(9999, 0, 0);
         }
     }

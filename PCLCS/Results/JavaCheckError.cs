@@ -1,6 +1,7 @@
 namespace PCLCS.Results;
 
-public enum JavaFailureReason {
+public enum JavaFailureReason
+{
     MissingExe,
     ProcessFailed,
     UnsupportedVersion,
@@ -11,12 +12,14 @@ public enum JavaFailureReason {
 }
 
 /// <summary>Java 探测失败；OutputSnippet 截断到 500 字符，避免日志膨胀。</summary>
-public sealed class JavaCheckError : PclaError {
+public sealed class JavaCheckError : PclaError
+{
     public JavaCheckError(JavaFailureReason reason, string message, string? javaFolder = null,
         int? exitCode = null, string? outputSnippet = null, Exception? cause = null)
         : base(CodeFor(reason), message,
             reason == JavaFailureReason.Unexpected ? PclaErrorKind.Unexpected : PclaErrorKind.Expected,
-            cause) {
+            cause)
+    {
         Reason = reason;
         JavaFolder = javaFolder;
         ExitCode = exitCode;
@@ -30,7 +33,8 @@ public sealed class JavaCheckError : PclaError {
     public int? ExitCode { get; }
     public string? OutputSnippet { get; }
 
-    private static string CodeFor(JavaFailureReason reason) => reason switch {
+    private static string CodeFor(JavaFailureReason reason) => reason switch
+    {
         JavaFailureReason.MissingExe => "java.missing-exe",
         JavaFailureReason.ProcessFailed => "java.process-failed",
         JavaFailureReason.UnsupportedVersion => "java.unsupported-version",

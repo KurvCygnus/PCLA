@@ -1,5 +1,5 @@
-﻿using System.Text.Json.Nodes;
 using PCLCS.Minecraft.Launch;
+using System.Text.Json.Nodes;
 
 namespace PCLCS.Tests;
 

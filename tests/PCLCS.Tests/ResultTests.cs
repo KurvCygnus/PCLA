@@ -2,18 +2,22 @@ using PCLCS.Results;
 
 namespace PCLCS.Tests;
 
-public class ResultTests {
-    private sealed class TestError : PclaError {
+public class ResultTests
+{
+    private sealed class TestError : PclaError
+    {
         public TestError(string message = "失败", Exception? cause = null)
             : base("test.failure", message, PclaErrorKind.Expected, cause) { }
     }
 
-    private sealed class OtherError : PclaError {
+    private sealed class OtherError : PclaError
+    {
         public OtherError(string message) : base("test.other", message, PclaErrorKind.Unexpected) { }
     }
 
     [Fact]
-    public void OkExposesValue() {
+    public void OkExposesValue()
+    {
         var result = Result<int, TestError>.Ok(42);
         Assert.True(result.IsSuccess);
         Assert.False(result.IsFailure);
@@ -21,7 +25,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void ErrExposesError() {
+    public void ErrExposesError()
+    {
         var error = new TestError();
         var result = Result<int, TestError>.Err(error);
         Assert.True(result.IsFailure);
@@ -29,24 +34,28 @@ public class ResultTests {
     }
 
     [Fact]
-    public void ValueOnFailureThrows() {
+    public void ValueOnFailureThrows()
+    {
         var result = Result<int, TestError>.Err(new TestError());
         Assert.Throws<InvalidOperationException>(() => _ = result.Value);
     }
 
     [Fact]
-    public void ErrorOnSuccessThrows() {
+    public void ErrorOnSuccessThrows()
+    {
         var result = Result<int, TestError>.Ok(1);
         Assert.Throws<InvalidOperationException>(() => _ = result.Error);
     }
 
     [Fact]
-    public void OkRejectsNull() {
+    public void OkRejectsNull()
+    {
         Assert.Throws<ArgumentNullException>(() => Result<string, TestError>.Ok(null!));
     }
 
     [Fact]
-    public void MapTransformsSuccessAndShortCircuitsFailure() {
+    public void MapTransformsSuccessAndShortCircuitsFailure()
+    {
         Assert.Equal(84, Result<int, TestError>.Ok(42).Map(value => value * 2).Value);
 
         var failure = Result<int, TestError>.Err(new TestError());
@@ -56,7 +65,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void BindChainsAndShortCircuits() {
+    public void BindChainsAndShortCircuits()
+    {
         var success = Result<int, TestError>.Ok(2).Bind(value => Result<int, TestError>.Ok(value + 3));
         Assert.Equal(5, success.Value);
 
@@ -68,13 +78,15 @@ public class ResultTests {
     }
 
     [Fact]
-    public void BindRejectsNullResult() {
+    public void BindRejectsNullResult()
+    {
         var result = Result<int, TestError>.Ok(1);
         Assert.Throws<InvalidOperationException>(() => result.Bind<int>(_ => null!));
     }
 
     [Fact]
-    public void MapErrorTransformsFailureOnly() {
+    public void MapErrorTransformsFailureOnly()
+    {
         var mapped = Result<int, TestError>.Err(new TestError("旧错误"))
             .MapError(error => new OtherError(error.Message));
         Assert.Equal("test.other", mapped.Error.Code);
@@ -88,7 +100,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void MatchCallsExactlyOneBranch() {
+    public void MatchCallsExactlyOneBranch()
+    {
         var successBranch = 0;
         var failureBranch = 0;
 
@@ -108,7 +121,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void TapAndTapErrorRunOnlyOnMatchingState() {
+    public void TapAndTapErrorRunOnlyOnMatchingState()
+    {
         var tapped = 0;
         var tappedError = 0;
 
@@ -128,7 +142,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void OrElseAndOrElseGetUseFallbackOnlyOnFailure() {
+    public void OrElseAndOrElseGetUseFallbackOnlyOnFailure()
+    {
         Assert.Equal(1, Result<int, TestError>.Ok(1).OrElse(9));
         Assert.Equal(9, Result<int, TestError>.Err(new TestError()).OrElse(9));
         Assert.Equal(1, Result<int, TestError>.Ok(1).OrElseGet(_ => 9));
@@ -136,7 +151,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void OrThrowThrowsPclaException() {
+    public void OrThrowThrowsPclaException()
+    {
         var error = new TestError("失败了");
         var result = Result<int, TestError>.Err(error);
         var ex = Assert.Throws<PclaException>(() => result.OrThrow());
@@ -145,14 +161,16 @@ public class ResultTests {
     }
 
     [Fact]
-    public void UnitHasSingleValue() {
+    public void UnitHasSingleValue()
+    {
         Assert.Equal(Unit.Value, default);
         Assert.True(default(Unit).Equals(Unit.Value));
         Assert.Equal("()", Unit.Value.ToString());
     }
 
     [Fact]
-    public void TryCatchesOrdinaryException() {
+    public void TryCatchesOrdinaryException()
+    {
         var success = Result.Try(() => 42);
         Assert.Equal(42, success.Value);
 
@@ -163,7 +181,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public void TryWithMapperUsesMapper() {
+    public void TryWithMapperUsesMapper()
+    {
         var failure = Result.Try<int, TestError>(
             () => throw new InvalidOperationException("boom"),
             ex => new TestError(ex.Message));
@@ -172,26 +191,30 @@ public class ResultTests {
     }
 
     [Fact]
-    public void TryMapperExceptionPropagates() {
+    public void TryMapperExceptionPropagates()
+    {
         Assert.Throws<ArgumentException>(() => Result.Try<int, TestError>(
             () => throw new InvalidOperationException(),
             _ => throw new ArgumentException("mapper")));
     }
 
     [Fact]
-    public void TryRethrowsCancellation() {
+    public void TryRethrowsCancellation()
+    {
         Assert.Throws<OperationCanceledException>(() =>
             Result.Try<int>(() => throw new OperationCanceledException()));
     }
 
     [Fact]
-    public void TryDoesNotCatchFatalExceptions() {
+    public void TryDoesNotCatchFatalExceptions()
+    {
         Assert.Throws<OutOfMemoryException>(() =>
             Result.Try<int>(() => throw new OutOfMemoryException()));
     }
 
     [Fact]
-    public async Task TryAsyncCatchesOrdinaryException() {
+    public async Task TryAsyncCatchesOrdinaryException()
+    {
         var success = await Result.TryAsync(() => Task.FromResult(42));
         Assert.Equal(42, success.Value);
 
@@ -202,7 +225,8 @@ public class ResultTests {
     }
 
     [Fact]
-    public async Task TryAsyncRethrowsCancellation() {
+    public async Task TryAsyncRethrowsCancellation()
+    {
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await Result.TryAsync<int>(() => Task.FromException<int>(new OperationCanceledException())));
     }

@@ -10,20 +10,25 @@ namespace PCLCS;
 /// <param name="Components"> 安装目标及受管理组件版本。</param>
 /// <param name="LastModifiedUtc"> 最后修改时间（UTC）。</param>
 /// <param name="ManagedFiles"> 受管理文件；没有文件时为空列表。</param>
-public record McInstallManifest(int SchemaVersion, McComponents Components, DateTime LastModifiedUtc, IReadOnlyList<McInstallManifest.ManagedFile> ManagedFiles) {
+public record McInstallManifest(int SchemaVersion, McComponents Components, DateTime LastModifiedUtc, IReadOnlyList<McInstallManifest.ManagedFile> ManagedFiles)
+{
     /// <summary>
     /// 清理以 Mod 形式安装的、已删除或修改的组件的记录，并更新清单。
     /// </summary>
-    public McInstallManifest RefreshModComponents(string gameFolder) {
+    public McInstallManifest RefreshModComponents(string gameFolder)
+    {
         List<ManagedFile> invalidFiles = [];
-        foreach (ManagedFile entry in ManagedFiles) {
+        foreach (ManagedFile entry in ManagedFiles)
+        {
             if (entry.Component is null) continue; // 不检查非组件文件
             FileInfo file = new(Path.Combine(gameFolder, entry.RelativePath));
             if (!file.Exists || file.LastWriteTimeUtc != entry.LastWriteTimeUtc.ToUniversalTime()) invalidFiles.Add(entry);
         }
         if (!invalidFiles.Any()) return this;
-        return this with {
-            Components = Components with {
+        return this with
+        {
+            Components = Components with
+            {
                 OptiFineEntry = invalidFiles.Any(file => file.Component == "OptiFine") ? null : Components.OptiFineEntry,
                 FabricApiVersion = invalidFiles.Any(file => file.Component == "FabricApi") ? null : Components.FabricApiVersion,
                 OptiFabricVersion = invalidFiles.Any(file => file.Component == "OptiFabric") ? null : Components.OptiFabricVersion
@@ -53,12 +58,14 @@ public record McInstallManifest(int SchemaVersion, McComponents Components, Date
 public record McComponents(string MinecraftVersion, Dictionary<ModLoaders, string> ModLoaderVersions,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonObject? OptiFineEntry = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FabricApiVersion = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OptiFabricVersion = null) {
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OptiFabricVersion = null)
+{
     [JsonIgnore]
     public string? OptiFineVersion => OptiFineEntry?["InstanceName"]?.GetValue<string>()?.AfterLast("-OptiFine_");
     public McComponents(string minecraftVersion, JsonObject? optiFineEntry, string? forgeVersion,
         string? neoForgeVersion, string? fabricVersion, string? fabricApiVersion, string? optiFabricVersion, string? liteLoaderVersion)
-        : this(minecraftVersion, [], optiFineEntry, fabricApiVersion, optiFabricVersion) {
+        : this(minecraftVersion, [], optiFineEntry, fabricApiVersion, optiFabricVersion)
+    {
         if (forgeVersion is not null) ModLoaderVersions[ModLoaders.Forge] = forgeVersion;
         if (neoForgeVersion is not null) ModLoaderVersions[ModLoaders.NeoForge] = neoForgeVersion;
         if (fabricVersion is not null) ModLoaderVersions[ModLoaders.Fabric] = fabricVersion;

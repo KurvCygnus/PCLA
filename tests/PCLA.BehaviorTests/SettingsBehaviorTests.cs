@@ -1,8 +1,8 @@
+using PCL;
+using PCLA.BehaviorTests.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using PCL;
-using PCLA.BehaviorTests.Fixtures;
 
 namespace PCLA.BehaviorTests;
 
@@ -56,8 +56,7 @@ public sealed class SettingsBehaviorTests : IDisposable
         {
             Settings.Set("WindowWidth", 1024);
             Assert.Equal(1024, Settings.Get<int>("WindowWidth"));
-        }
-        finally
+        } finally
         {
             ResetWindowWidth();
         }
@@ -72,8 +71,7 @@ public sealed class SettingsBehaviorTests : IDisposable
             Settings.Reset("WindowWidth");
             Assert.Equal(900, Settings.Get<int>("WindowWidth"));
             Assert.False(Settings.HasSaved("WindowWidth"));
-        }
-        finally
+        } finally
         {
             ResetWindowWidth();
         }
@@ -92,8 +90,7 @@ public sealed class SettingsBehaviorTests : IDisposable
 
             Assert.True(Settings.Get<bool>("VersionArgumentIndieV2", a));
             Assert.False(Settings.Get<bool>("VersionArgumentIndieV2", b));
-        }
-        finally
+        } finally
         {
             DeleteRoot(rootA);
             DeleteRoot(rootB);
@@ -123,8 +120,7 @@ public sealed class SettingsBehaviorTests : IDisposable
             Assert.True(Settings.HasSaved("WindowWidth"));
             Settings.Reset("WindowWidth");
             Assert.False(Settings.HasSaved("WindowWidth"));
-        }
-        finally
+        } finally
         {
             ResetWindowWidth();
         }
@@ -149,8 +145,7 @@ public sealed class SettingsBehaviorTests : IDisposable
         {
             Settings.Set("WindowWidth", "not-a-number");
             Assert.Equal(900, Settings.Get<int>("WindowWidth"));
-        }
-        finally
+        } finally
         {
             ResetWindowWidth();
         }
@@ -170,8 +165,7 @@ public sealed class SettingsBehaviorTests : IDisposable
         {
             Settings.Set("LaunchArgumentInfo", value);
             Assert.Equal(value, Settings.Get<string>("LaunchArgumentInfo"));
-        }
-        finally
+        } finally
         {
             ResetLaunchArgumentInfo();
         }
