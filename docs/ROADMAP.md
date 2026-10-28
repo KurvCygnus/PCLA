@@ -16,6 +16,7 @@
 - 启动参数抽离（已完成，`docs\superpowers\specs\2026-10-21-launch-argument-extraction-design.md`）
 - 下载源与清单解析抽离（已完成，2026-10-22 实机验收，`docs\superpowers\plans\2026-10-21-download-metadata-extraction.md`）
 - 重复逻辑与样板代码治理（调研见 `docs\superpowers\research\2026-10-21-duplication-survey.md`）
+- C# 化前加固四件套（S1–S4，2026-10-28 全部完成并合并）：品牌与发布基线（`docs\superpowers\specs\2026-10-22-brand-release-baseline-design.md`）、异常兜底与 Result（`docs\superpowers\specs\2026-10-23-error-handling-design.md`）、行为黄金语料（`docs\superpowers\specs\2026-10-23-behavior-golden-corpus-design.md`）、.NET 解耦与 NativeAOT（`docs\superpowers\specs\2026-10-23-dotnet-decoupling-aot-design.md`）
 
 ## 提前项：全面 C# 化与 UI 框架更换
 
