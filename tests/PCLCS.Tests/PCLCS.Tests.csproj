@@ -19,6 +19,12 @@
 		</PackageReference>
 	</ItemGroup>
 
+	<!-- JarVersionJson 构造 jar 所需的框架程序集（net48） -->
+	<ItemGroup>
+		<Reference Include="System.IO.Compression" />
+		<Reference Include="System.IO.Compression.FileSystem" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<Using Include="Xunit" />
 	</ItemGroup>

@@ -24,6 +24,11 @@
 		</PackageReference>
 	</ItemGroup>
 
+	<!-- net48 消费 FileUtils.OpenZip（ZipArchive）所需的框架外观程序集 -->
+	<ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+		<Reference Include="System.IO.Compression" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<Using Include="System.Diagnostics.CodeAnalysis" />
 		<Using Include="System.Collections" />
