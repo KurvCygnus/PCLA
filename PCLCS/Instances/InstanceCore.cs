@@ -49,6 +49,12 @@ public sealed class InstanceCore
         // VB New 中还会创建 JsonConfigProvider（:578），该类型留在 VB，由 wrapper 负责
     }
 
+    /// <summary>当前 Minecraft 根文件夹，以 \ 结尾（ModMinecraft.vb 模块属性 McFolderSelected 的 C# 面）。</summary>
+    public string McFolderSelected => _mcFolderSelected;
+
+    /// <summary>实例设置的存储键（构造参数 instanceSettingsKey），供实例级设置读取。</summary>
+    public string InstanceSettingsKey => _instanceSettingsKey;
+
     /// <summary>该版本的版本文件夹名称（ModMinecraft.vb:286-292）。</summary>
     public string Name
     {

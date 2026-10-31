@@ -1,3 +1,5 @@
+Imports System.Text.Json.Nodes
+
 '说明：McInstance 的 JSON 管线已切换到 PCLCS.Instances.InstanceCore；McInstance.JsonObject 暴露的是
 '由 LegacyJsonExtensions.ToJToken(_core.VersionJson) 生成的 Newtonsoft JObject 快照——W3 迁移完成前，
 '外部对快照的修改不会写回核心（现有 VB 读取方均为只读，已核实）。
@@ -1198,176 +1200,36 @@ OnLoaded:
     ''' </summary>
     ''' <param name="RuleToken">Json 中的 "rules" 项目。</param>
     Public Function McJsonRuleCheck(RuleToken As JToken) As Boolean
-        Return PCLCS.Minecraft.Launch.VersionArgumentRules.IsAllowed(
-            RuleToken.ToJsonNode(),
-            New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
-            Sub(message) Logger.Warn(message))
+        Return Instances.Libraries.RuleCheck(RuleToken.ToJsonNode())
     End Function
-    Private OSVersion As String = My.Computer.Info.OSVersion
+
+    ''' <summary>
+    ''' 将 C# LibEntry 数据面转换回 VB McLibEntry（转发层；字段语义见 PCLCS\Instances\Libraries.cs）。
+    ''' </summary>
+    Private Function ToLibEntry(Entry As Instances.LibEntry) As McLibEntry
+        Return New McLibEntry With {
+            .LocalPath = Entry.Path,
+            .Size = CLng(Val(Entry.Size)),
+            .IsNatives = Entry.IsNative,
+            .SHA1 = Entry.Checksum,
+            .Url = Entry.Url,
+            .OriginalName = Entry.Name}
+    End Function
 
     ''' <summary>
     ''' 递归获取 Minecraft 某一版本的完整支持库列表。
     ''' </summary>
     Public Function McLibListGet(Instance As McInstance, IncludeMainJar As Boolean) As List(Of McLibEntry)
-
-        '获取当前支持库列表
-        Logger.Info($"获取支持库列表：{Instance.Name}")
-        Dim Result = McLibListGetWithJson(Instance.JsonObject)
-
-        '需要添加原版 Jar
-        If IncludeMainJar Then
-            Dim RealInstance As McInstance
-            Dim RequiredJar As String = Instance.JsonObject("jar")?.ToString
-            If Instance.IsHmclFormatJson OrElse RequiredJar Is Nothing Then
-                'HMCL 项直接使用自身的 Jar
-                '根据 Inherit 获取最深层版本
-                Dim OriginalInstance As McInstance = Instance
-                '1.17+ 的 Forge 不寻找 Inherit
-                If Not ((Instance.Version.ModLoaders.HasFlagF(ModLoaders.Forge) OrElse Instance.Version.ModLoaders.HasFlagF(ModLoaders.NeoForge)) AndAlso Instance.Version.Vanilla.Major >= 17) Then
-                    Do Until OriginalInstance.InheritName = ""
-                        If OriginalInstance.InheritName = OriginalInstance.Name Then Exit Do
-                        OriginalInstance = New McInstance(McFolderSelected & "versions\" & OriginalInstance.InheritName & "\")
-                    Loop
-                End If
-                '需要新建对象，否则后面的 Check 会导致 McInstanceCurrent 的 State 变回 Original
-                '复现：启动一个 Snapshot 版本
-                RealInstance = New McInstance(OriginalInstance.PathVersion)
-            Else
-                'Json 已提供 Jar 字段，使用该字段的信息
-                RealInstance = New McInstance(RequiredJar)
-            End If
-            Dim ClientUrl As String, ClientSHA1 As String
-            '判断需求的版本是否存在
-            '不能调用 RealVersion.Check()，可能会莫名其妙地触发 CheckPermission 正被另一进程使用，导致误判前置不存在
-            If Not FileUtils.Exists(RealInstance.PathVersion & RealInstance.Name & ".json") Then
-                RealInstance = Instance
-                Logger.Warn($"可能缺少前置版本 {RealInstance.Name}，找不到对应的 json 文件")
-            End If
-            '获取详细下载信息
-            If RealInstance.JsonObject("downloads") IsNot Nothing AndAlso RealInstance.JsonObject("downloads")("client") IsNot Nothing Then
-                ClientUrl = RealInstance.JsonObject("downloads")("client")("url")
-                ClientSHA1 = RealInstance.JsonObject("downloads")("client")("sha1")
-            Else
-                ClientUrl = Nothing
-                ClientSHA1 = Nothing
-            End If
-            '把所需的原版 Jar 添加进去
-            Result.Add(New McLibEntry With {.LocalPath = RealInstance.PathVersion & RealInstance.Name & ".jar", .Size = 0, .IsNatives = False, .Url = ClientUrl, .SHA1 = ClientSHA1})
-        End If
-
-        Return Result
+        Return Instances.Libraries.ListGet(Instance.Core, IncludeMainJar).Select(AddressOf ToLibEntry).ToList()
     End Function
     ''' <summary>
     ''' 获取 Minecraft 某一版本忽视继承的支持库列表，即结果中没有继承项。
     ''' </summary>
     Public Function McLibListGetWithJson(JsonObject As JObject, Optional KeepSameNameDifferentVersionResult As Boolean = False, Optional CustomMcFolder As String = Nothing) As List(Of McLibEntry)
-        CustomMcFolder = If(CustomMcFolder, McFolderSelected)
-
-        '转换为 LibToken
-        Dim BasicArray As New List(Of McLibEntry)
-        For Each Library As JObject In CType(JsonObject("libraries"), JArray).Children
-
-            '清理 null 项（BakaXL 会把没有的项序列化为 null，但会被 Newtonsoft 转换为 JValue，导致 Is Nothing = false；这导致了 #409）
-            For i = Library.Properties.Count - 1 To 0 Step -1
-                If Library.Properties(i).Value.Type = JTokenType.Null Then Library.Remove(Library.Properties(i).Name)
-            Next
-
-            '检查是否需要（Rules）
-            If Not McJsonRuleCheck(Library("rules")) Then Continue For
-
-            '获取根节点下的 url
-            Dim RootUrl As String = Library("url")
-            If RootUrl IsNot Nothing Then
-                RootUrl += McLibGet(Library("name"), False, True, CustomMcFolder).Replace("\", "/")
-            End If
-
-            '根据是否本地化处理（Natives）
-            If Library("natives") Is Nothing Then '没有 Natives
-                Dim LocalPath As String
-                LocalPath = McLibGet(Library("name"), CustomMcFolder:=CustomMcFolder)
-                Try
-                    If Library("downloads") IsNot Nothing AndAlso Library("downloads")("artifact") IsNot Nothing Then
-                        BasicArray.Add(New McLibEntry With {
-                            .OriginalName = Library("name"),
-                            .Url = If(Library("downloads")("artifact")("url"), RootUrl),
-                            .LocalPath = If(Library("downloads")("artifact")("path") Is Nothing, McLibGet(Library("name"),
-                                CustomMcFolder:=CustomMcFolder), CustomMcFolder & "libraries\" & Library("downloads")("artifact")("path").ToString.Replace("/", "\")),
-                            .Size = Val(Library("downloads")("artifact")("size").ToString),
-                            .IsNatives = False,
-                            .SHA1 = Library("downloads")("artifact")("sha1")?.ToString})
-                    Else
-                        BasicArray.Add(New McLibEntry With {.OriginalName = Library("name"), .Url = RootUrl, .LocalPath = LocalPath, .Size = 0, .IsNatives = False, .SHA1 = Nothing})
-                    End If
-                Catch ex As Exception
-                    Logger.Warn(ex, $"处理实际支持库列表失败（无 Natives，{If(Library("name"), "Nothing")}）")
-                    BasicArray.Add(New McLibEntry With {.OriginalName = Library("name"), .Url = RootUrl, .LocalPath = LocalPath, .Size = 0, .IsNatives = False, .SHA1 = Nothing})
-                End Try
-            ElseIf Library("natives")("windows") IsNot Nothing Then '有 Windows Natives
-                Dim NativeName As String = Library("natives")("windows")
-                Try
-                    If Library("downloads") IsNot Nothing AndAlso Library("downloads")("classifiers") IsNot Nothing AndAlso Library("downloads")("classifiers")(NativeName) IsNot Nothing Then
-                        Dim NativeData = Library("downloads")("classifiers")(NativeName)
-                        BasicArray.Add(New McLibEntry With {
-                             .OriginalName = Library("name"),
-                             .Url = If(NativeData("url"), RootUrl),
-                             .LocalPath = If(NativeData("path") Is Nothing,
-                                 McLibGet(Library("name"), CustomMcFolder:=CustomMcFolder).
-                                    Replace(".jar", "-" & NativeName & ".jar").
-                                    Replace("${arch}", If(Environment.Is64BitOperatingSystem, "64", "32")),
-                                    $"{CustomMcFolder}libraries\{NativeData("path").ToString.Replace("/", "\")}"),
-                             .Size = Val(NativeData("size").ToString),
-                             .IsNatives = True,
-                             .SHA1 = NativeData("sha1").ToString})
-                    Else
-                        BasicArray.Add(
-                        New McLibEntry With {.OriginalName = Library("name"), .Url = RootUrl, .Size = 0, .IsNatives = True, .SHA1 = Nothing,
-                            .LocalPath = McLibGet(Library("name"), CustomMcFolder:=CustomMcFolder).
-                                 Replace(".jar", $"-{NativeName}.jar").
-                                 Replace("${arch}", If(Environment.Is64BitOperatingSystem, "64", "32"))
-                        })
-                    End If
-                Catch ex As Exception
-                    Logger.Warn(ex, $"处理实际支持库列表失败（有 Natives，{If(Library("name"), "Nothing")}）")
-                    BasicArray.Add(
-                        New McLibEntry With {.OriginalName = Library("name"), .Url = RootUrl, .Size = 0, .IsNatives = True, .SHA1 = Nothing,
-                             .LocalPath = McLibGet(Library("name"), CustomMcFolder:=CustomMcFolder).
-                                 Replace(".jar", $"-{NativeName}.jar").
-                                 Replace("${arch}", If(Environment.Is64BitOperatingSystem, "64", "32"))
-                        })
-                End Try
-            End If
-
-        Next
-
-        '去重
-        Dim ResultArray As New Dictionary(Of String, McLibEntry)
-        Dim GetVersion =
-        Function(Token As McLibEntry) As String
-            '测试例：
-            'D:\Minecraft\test\libraries\net\neoforged\mergetool\2.0.0\mergetool-2.0.0-api.jar
-            'D:\Minecraft\test\libraries\org\apache\commons\commons-collections4\4.2\commons-collections4-4.2.jar
-            'D:\Minecraft\test\libraries\com\google\guava\guava\31.1-jre\guava-31.1-jre.jar
-            Return PathUtils.GetLastPart(PathUtils.RemoveLastPart(Token.LocalPath))
-        End Function
-        For i = 0 To BasicArray.Count - 1
-            Dim Key As String = BasicArray(i).Name & BasicArray(i).IsNatives.ToString
-            If ResultArray.ContainsKey(Key) Then
-                Dim BasicArrayVersion As String = GetVersion(BasicArray(i))
-                Dim ResultArrayVersion As String = GetVersion(ResultArray(Key))
-                If BasicArrayVersion <> ResultArrayVersion AndAlso KeepSameNameDifferentVersionResult Then
-                    Logger.Info($"发现疑似重复的支持库：{BasicArray(i)} ({BasicArrayVersion}) 与 {ResultArray(Key)} ({ResultArrayVersion})")
-                    ResultArray.Add(Key & GetUuid(), BasicArray(i))
-                Else
-                    Logger.Info($"发现重复的支持库：{BasicArray(i)} ({BasicArrayVersion}) 与 {ResultArray(Key)} ({ResultArrayVersion})，已忽略其中之一")
-                    If McUtils.CompareVersionGE(BasicArrayVersion, ResultArrayVersion) Then
-                        ResultArray(Key) = BasicArray(i)
-                    End If
-                End If
-            Else
-                ResultArray.Add(Key, BasicArray(i))
-            End If
-        Next
-        Return ResultArray.Values.ToList
+        Return Instances.Libraries.ListGetJson(
+            JsonObject.ToJsonNode().AsObject(),
+            KeepSameNameDifferentVersionResult,
+            If(CustomMcFolder, McFolderSelected)).Select(AddressOf ToLibEntry).ToList()
     End Function
 
     ''' <summary>
@@ -1512,21 +1374,14 @@ OnLoaded:
     ''' <param name="Original">原始地址，如 com.mumfrey:liteloader:1.12.2-SNAPSHOT。</param>
     ''' <param name="WithHead">是否包含 Lib 文件夹头部，若不包含，则会类似以 com\xxx\ 开头。</param>
     Public Function McLibGet(Original As String, Optional WithHead As Boolean = True, Optional IgnoreLiteLoader As Boolean = False, Optional CustomMcFolder As String = Nothing) As String
-        CustomMcFolder = If(CustomMcFolder, McFolderSelected)
-        '有时候原始的有四段，例如 net.minecraftforge:forge:1.21.4-54.0.34:client
-        '文件夹名应该忽略最后一段（client），但文件名需要保留
-        '参见 #7306（以及 #5376 也是因为这里没有处理好导致的）
-        Dim Splited = Original.Split(":")
-        Dim Result = If(WithHead, CustomMcFolder & "libraries\", "") &
-            $"{Splited(0).Replace(".", "\")}\{Splited(1)}\{Splited(2)}\{Splited.Skip(1).Join("-")}.jar"
-        Return Result
+        Return Instances.Libraries.GetLocalPath(Original, WithHead, IgnoreLiteLoader, If(CustomMcFolder, McFolderSelected))
     End Function
 
     ''' <summary>
     ''' 检查设置，是否应当忽略文件检查？
     ''' </summary>
     Public Function ShouldIgnoreFileCheck(Instance As McInstance)
-        Return Settings.Get(Of Boolean)("VersionAdvanceAssetsV2", Instance:=Instance) OrElse (Settings.Get(Of Integer)("VersionAdvanceAssets", Instance:=Instance) = 2)
+        Return Instances.Libraries.ShouldIgnoreFileCheck(Instance.Core)
     End Function
 
 #End Region
@@ -1538,121 +1393,26 @@ OnLoaded:
     ''' 获取某版本资源文件索引的对应 Json 项，详见版本 Json 中的 assetIndex 项。失败会抛出异常。
     ''' </summary>
     Public Function McAssetsGetIndex(Instance As McInstance, Optional ReturnLegacyOnError As Boolean = False, Optional CheckURLEmpty As Boolean = False) As JToken
-        Dim AssetsName As String
-        Try
-            Do While True
-                Dim Index As JToken = Instance.JsonObject("assetIndex")
-                If Index IsNot Nothing AndAlso Index("id") IsNot Nothing Then Return Index
-                If Instance.JsonObject("assets") IsNot Nothing Then AssetsName = Instance.JsonObject("assets").ToString
-                If CheckURLEmpty AndAlso Index("url") IsNot Nothing Then Return Index
-                '下一个版本
-                If Instance.InheritName = "" Then Exit Do
-                Instance = New McInstance(McFolderSelected & "versions\" & Instance.InheritName)
-            Loop
-        Catch
-        End Try
-        '无法获取到下载地址
-        If ReturnLegacyOnError Then
-            '返回 assets 文件名会由于没有下载地址导致全局失败
-            'If AssetsName IsNot Nothing AndAlso AssetsName <> "legacy" Then
-            '    Log("[Minecraft] 无法获取资源文件索引下载地址，使用 assets 项提供的资源文件名：" & AssetsName)
-            '    Return ("{""id"": """ & AssetsName & """}").DeserializeJson()
-            'Else
-            Logger.Info("无法获取资源文件索引下载地址，使用默认的 legacy 下载地址")
-            Return "{
-                ""id"": ""legacy"",
-                ""sha1"": ""c0fd82e8ce9fbc93119e40d96d5a4e62cfa3f729"",
-                ""size"": 134284,
-                ""url"": ""https://launchermeta.mojang.com/mc-staging/assets/legacy/c0fd82e8ce9fbc93119e40d96d5a4e62cfa3f729/legacy.json"",
-                ""totalSize"": 111220701
-            }".DeserializeJson()
-            'End If
-        Else
-            Throw New Exception("该版本不存在资源文件索引信息")
-        End If
+        Return Instances.AssetsIndex.GetIndex(Instance.Core, ReturnLegacyOnError, CheckURLEmpty)?.ToJToken()
     End Function
     ''' <summary>
     ''' 获取某版本资源文件索引名，优先使用 assetIndex，其次使用 assets。失败会返回 legacy。
     ''' </summary>
     Public Function McAssetsGetIndexName(Instance As McInstance) As String
-        Try
-            Do While True
-                If Instance.JsonObject("assetIndex") IsNot Nothing AndAlso Instance.JsonObject("assetIndex")("id") IsNot Nothing Then
-                    Return Instance.JsonObject("assetIndex")("id").ToString
-                End If
-                If Instance.JsonObject("assets") IsNot Nothing Then
-                    Return Instance.JsonObject("assets").ToString
-                End If
-                If Instance.InheritName = "" Then Exit Do
-                Instance = New McInstance(McFolderSelected & "versions\" & Instance.InheritName)
-            Loop
-        Catch ex As Exception
-            Logger.Warn(ex, "获取资源文件索引名失败")
-        End Try
-        Return "legacy"
+        Return Instances.AssetsIndex.GetIndexName(Instance.Core)
     End Function
 
-    '获取列表
-    Private Structure McAssetsToken
-        ''' <summary>
-        ''' 文件的完整本地路径。
-        ''' </summary>
-        Public LocalPath As String
-        ''' <summary>
-        ''' Json 中书写的源路径。例如 minecraft/sounds/mob/stray/death2.ogg 。
-        ''' </summary>
-        Public SourcePath As String
-        ''' <summary>
-        ''' 文件大小。若无有效数据即为 0。
-        ''' </summary>
-        Public Size As Long
-        ''' <summary>
-        ''' 文件的 Hash 校验码。
-        ''' </summary>
-        Public Hash As String
-
-        Public Overrides Function ToString() As String
-            Return StringUtils.FormatByteSize(Size) & " | " & LocalPath
-        End Function
-    End Structure
     ''' <summary>
-    ''' 获取 Minecraft 的资源文件列表。失败会抛出异常。
+    ''' 将 C# 资源文件描述（path/hash/size，PCLCS\Instances\AssetsIndex.cs FixList）映射为 NetFile，
+    ''' 字段映射照抄原 McAssetsFixList（旧 :1664-1668 与 :1685）。
     ''' </summary>
-    Private Function McAssetsListGet(Instance As McInstance) As List(Of McAssetsToken)
-        Dim IndexName = McAssetsGetIndexName(Instance)
-        Try
-
-            '初始化
-            If Not FileUtils.Exists($"{McFolderSelected}assets\indexes\{IndexName}.json") Then Throw New FileNotFoundException("未找到 Asset Index", McFolderSelected & "assets\indexes\" & IndexName & ".json")
-            Dim Result As New List(Of McAssetsToken)
-            Dim Json As JObject = LegacyFileUtils.ReadAsJson($"{McFolderSelected}assets\indexes\{IndexName}.json")
-
-            '读取列表
-            For Each File As JProperty In Json("objects").Children
-                Dim LocalPath As String
-                If Json("map_to_resources") IsNot Nothing AndAlso Json("map_to_resources").ToObject(Of Boolean) Then
-                    'Remap
-                    LocalPath = $"{Instance.PathIndie}resources\{File.Name}"
-                ElseIf Json("virtual") IsNot Nothing AndAlso Json("virtual").ToObject(Of Boolean) Then
-                    'Virtual
-                    LocalPath = $"{McFolderSelected}assets\virtual\legacy\{File.Name}"
-                Else
-                    '正常
-                    LocalPath = $"{McFolderSelected}assets\objects\{Left(File.Value()("hash").ToString, 2)}\{File.Value()("hash")}"
-                End If
-                Result.Add(New McAssetsToken With {
-                    .LocalPath = LocalPath.Replace("/", "\"),
-                    .SourcePath = File.Name,
-                    .Hash = File.Value()("hash").ToString,
-                    .Size = File.Value()("size").ToString
-                })
-            Next
-            Return Result
-
-        Catch ex As Exception
-            Logger.Warn(ex, $"获取资源文件列表失败：{IndexName}")
-            Throw
-        End Try
+    Private Function McAssetsNetFile(Token As JsonObject) As NetFile
+        Dim Hash As String = Token("hash")?.ToString()
+        Dim Size As Long = CLng(Val(Token("size")?.ToString()))
+        Return New NetFile(
+            DlSourceAssetsGet($"https://resources.download.minecraft.net/{Left(If(Hash, ""), 2)}/{Hash}"),
+            LocalPath:=Token("path")?.ToString(),
+            Checker:=New FileChecker With {.ActualSize = If(Size = 0, -1, Size), .Hash = Hash})
     End Function
 
     ''' <summary>
@@ -1661,28 +1421,16 @@ OnLoaded:
     Public Function McAssetsFixList(Instance As McInstance, CheckHash As Boolean, Optional ByRef ProgressFeed As LoaderBase = Nothing) As List(Of NetFile)
         '如果需要检查 Hash，则留到下载时处理，以借助多线程加快检查速度
         If CheckHash Then
-            Return McAssetsListGet(Instance).
-                Select(Function(Token As McAssetsToken) New NetFile(
-                    DlSourceAssetsGet($"https://resources.download.minecraft.net/{Left(Token.Hash, 2)}/{Token.Hash}"),
-                    LocalPath:=Token.LocalPath,
-                    Checker:=New FileChecker With {.ActualSize = If(Token.Size = 0, -1, Token.Size), .Hash = Token.Hash})).ToList
+            Return Instances.AssetsIndex.FixList(Instance.Core, True).Select(AddressOf McAssetsNetFile).ToList
         End If
-        '如果不检查 Hash，则立即处理
+        '如果不检查 Hash，则立即处理（文件存在性检查在 C# 侧完成，进度按缺失项计）
         Dim Result As New List(Of NetFile)
-        Dim AssetsList As List(Of McAssetsToken)
         Try
-            AssetsList = McAssetsListGet(Instance)
-            Dim Token As McAssetsToken
+            Dim AssetsList = Instances.AssetsIndex.FixList(Instance.Core, False)
             If ProgressFeed IsNot Nothing Then ProgressFeed.Progress = 0.04
             For i = 0 To AssetsList.Count - 1
-                '初始化
-                Token = AssetsList(i)
                 If ProgressFeed IsNot Nothing Then ProgressFeed.Progress = 0.05 + 0.94 * i / AssetsList.Count
-                '检查文件是否存在
-                Dim File = FileUtils.GetInfo(Token.LocalPath)
-                If File.Exists AndAlso (Token.Size = 0 OrElse Token.Size = File.Length) Then Continue For
-                '文件不存在，添加下载
-                Result.Add(New NetFile(DlSourceAssetsGet($"https://resources.download.minecraft.net/{Left(Token.Hash, 2)}/{Token.Hash}"), Token.LocalPath, New FileChecker With {.ActualSize = If(Token.Size = 0, -1, Token.Size), .Hash = Token.Hash}))
+                Result.Add(McAssetsNetFile(AssetsList(i)))
             Next
         Catch ex As Exception
             Logger.Warn(ex, "获取版本缺失的资源文件下载列表失败")
