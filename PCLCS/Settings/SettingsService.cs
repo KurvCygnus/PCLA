@@ -192,6 +192,15 @@ public static class SettingsService
         Caches.TryRemove(bucket, out _);
     }
 
+    /// <summary>移除某个设置项在某个实例（或全局 ""）缓存桶中的内存缓存值；持久化值保留。</summary>
+    //* VB Setting.ValueCache.Remove 的转发目标（ModMinecraft.ResetSettingsCache 的单键兼容面），
+    //* 与 ResetInstanceCache 同为仅内存语义；桶不存在时静默返回
+    public static void RemoveInstanceCacheEntry(string key, string instanceKey)
+    {
+        if (!Caches.TryGetValue(NormalizeInstanceKey(instanceKey), out var cache)) return;
+        cache.TryRemove(key, out _);
+    }
+
     /// <summary>全局数据目录根，由 <see cref="Configure"/> 指定。</summary>
     internal static string GlobalFolder { get; private set; } = "";
 

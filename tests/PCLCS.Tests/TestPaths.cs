@@ -4,6 +4,10 @@ internal static class TestPaths
 {
     public static string Fixture(string name) => Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
 
+    /// <summary>设置目录对拍快照（tests\PCLCS.Tests\Settings\snapshot.txt，随仓库提交）。</summary>
+    public static string SettingsSnapshot
+        => Path.Combine(RepoRoot, "tests", "PCLCS.Tests", "Settings", "snapshot.txt");
+
     public static string RepoRoot
     {
         get

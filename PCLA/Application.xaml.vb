@@ -11,6 +11,7 @@ Public Class Application
             MeloongCore.Wpf.Main.Init()
             If Not (e.Args.Contains("--update") OrElse e.Args.Contains("--gpu") OrElse e.Args.Contains("--memory")) Then '若是通过命令行调用，则不检查单例、不轮换日志（#9137）
                 WaitingMutex(e)
+                '依赖顺序：Settings 的首次触碰发生在任何 UI 读取设置之前（下方 Logger 初始化读取 ModeDebug 即触发其 Shared ctor，已含 SettingsImport.EnsureImported）
                 '在创建日志与读取设置前导入旧版 PCL 数据；导入失败不阻断启动，只汇总提示一次
                 Dim MigrationReport = PCLCS.Startup.UserDataMigration.RunDefault()
                 Logger.Instance = New PclLogger With {.logFolder = Paths.BaseThenName, .MinLevel = If(ModeDebug, LogLevel.Trace, LogLevel.Info)}
