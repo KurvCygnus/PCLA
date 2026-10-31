@@ -182,18 +182,14 @@ public static class SettingsService
         return entry.Encrypted ? document.Encrypted.ContainsKey(entry.Key) : document.Values.ContainsKey(entry.Key);
     }
 
-    /// <summary>清空某个实例的全部设置缓存与持久化设置，使其回落默认。</summary>
-    //* 对应 VB ResetSettingsCache 的第三段（ValueCache.Remove(PathVersion)）；测试钉住“默认值回落”，
-    //* 故同时清空该实例的持久化文档（VB 里由调用方随版本目录一并删除）
+    /// <summary>清空某个实例的设置缓存（仅内存）；持久化值保留，随后的 Get 重新从磁盘读回。</summary>
+    //* 对应 VB McInstance.ResetSettingsCache 的第三段（ModMinecraft.vb:563-570，
+    //* ValueCache.Remove(PathVersion)）：仅清内存缓存，与 VB 一致；磁盘值刻意保留
     public static void ResetInstanceCache(string instanceKey)
     {
         var bucket = NormalizeInstanceKey(instanceKey);
         if (bucket.Length == 0) return;
         Caches.TryRemove(bucket, out _);
-        var document = AcquireInstanceDocument(bucket);
-        document.Values.Clear();
-        document.Encrypted.Clear();
-        SaveInstanceDocument(bucket);
     }
 
     /// <summary>全局数据目录根，由 <see cref="Configure"/> 指定。</summary>

@@ -108,11 +108,13 @@ public class SettingsServiceTests : IDisposable
         => Assert.Throws<KeyNotFoundException>(static () => SettingsService.Get("NoSuchKey"));
 
     [Fact]
-    public void ResetInstanceCache_clears_only_that_instance()
+    public void ResetInstanceCache_is_memory_only_and_preserves_persisted_values()
     {
         SettingsService.Set("VersionRamType", 1, InstanceKey);
-        SettingsService.ResetInstanceCache(InstanceKey);
-        Assert.Equal(2, SettingsService.Get<int>("VersionRamType", InstanceKey));   // 默认值回落
+        SettingsService.ResetInstanceCache(InstanceKey);                            // 仅清内存缓存（对齐 VB 第三段）
+        Assert.Equal(1, SettingsService.Get<int>("VersionRamType", InstanceKey));   // 持久化值 1 重新读回，而非默认 2
+        SettingsService.Configure(_root);                                           // 模拟重启：全量重载磁盘
+        Assert.Equal(1, SettingsService.Get<int>("VersionRamType", InstanceKey));   // 持久化值未被 reset 破坏
     }
 
     [Fact]
