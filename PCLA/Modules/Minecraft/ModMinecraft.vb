@@ -242,6 +242,15 @@ Public Module ModMinecraft
         Private ReadOnly _core As Instances.InstanceCore
 
         ''' <summary>
+        ''' 核心引用，供版本列表编排建立 core→wrapper 回映并参与 C# 分类（Instances.InstanceScanner.ClassifyAndSort）。
+        ''' </summary>
+        Friend ReadOnly Property Core As Instances.InstanceCore
+            Get
+                Return _core
+            End Get
+        End Property
+
+        ''' <summary>
         ''' 版本文件夹路径，以 \ 结尾。
         ''' </summary>
         Public ReadOnly Property PathVersion As String
@@ -512,6 +521,10 @@ Public Module ModMinecraft
                 '确定版本收藏状态与显示种类（旧 :699-701）
                 IsStar = ReadIni(PathVersion & "PCL\Setup.ini", "IsStar", False)
                 DisplayType = ReadIni(PathVersion & "PCL\Setup.ini", "DisplayType", McInstanceCardType.Auto)
+                'ini 读取完成后同步给核心（InstanceCore.Load 的约定：IsStar/DisplayType 由 wrapper 赋值），
+                '供列表分类（InstanceScanner.ClassifyAndSort）与核心 Modable 判定读取
+                _core.IsStar = IsStar
+                _core.DisplayType = CInt(DisplayType)
                 '写入缓存（旧 :703-707）：State 与 ReleaseTime/VersionXxx 项已经由 PersistInstanceCache 写入，
                 'Info 需按 CustomInfo 覆盖后的值补写（值未变时 WriteIni 自动跳过），Logo 项留在本类
                 If DirectoryUtils.Exists(PathVersion) Then
@@ -772,9 +785,9 @@ Public Module ModMinecraft
                 WriteIni(PathMc & "PCL.ini", "InstanceCache", "") '清空缓存
                 GoTo OnLoaded
             End If
-            '有可用版本
-            Dim FolderListCheck As Integer = (Versions.McInstanceCacheVersion & "#" & FolderList.Join("#"c)).GetStableHashCode() Mod (Integer.MaxValue - 1) '根据文件夹名列表生成辨识码
-            If Not McInstanceListForceRefresh AndAlso Val(ReadIni(PathMc & "PCL.ini", "InstanceCache")) = FolderListCheck Then
+            '有可用版本；根据文件夹名列表生成辨识码（旧 :976 的哈希已迁至 C# InstanceScanner.CacheCheckCode）
+            Dim FolderListCheck As String = Instances.InstanceScanner.CacheCheckCode(PathMc, FolderList)
+            If Not McInstanceListForceRefresh AndAlso ReadIni(PathMc & "PCL.ini", "InstanceCache") = FolderListCheck Then
                 '可以使用缓存
                 Dim Result = InitMcInstanceListWithCache(PathMc)
                 If Result Is Nothing Then
@@ -936,175 +949,34 @@ OnLoaded:
         End Try
     End Function
     Private Function InitMcInstanceListWithoutCache(Folder As String) As Dictionary(Of McInstanceCardType, List(Of McInstance))
-        Dim InstanceList As New List(Of McInstance)
-
-#Region "循环加载每个版本的信息"
-        For Each VersionFolderInfo As DirectoryInfo In DirectoryUtils.GetInfo(Folder & "versions").GetDirectories
-            If Not VersionFolderInfo.Exists OrElse Not VersionFolderInfo.EnumerateFiles.Any Then
-                Logger.Info($"跳过空文件夹：{VersionFolderInfo.FullName}")
-                Continue For
-            End If
-            If (VersionFolderInfo.Name = "cache" OrElse VersionFolderInfo.Name = "BLClient" OrElse VersionFolderInfo.Name = "PCL") AndAlso
-                Not FileUtils.Exists(VersionFolderInfo.FullName & "\" & VersionFolderInfo.Name & ".json") Then
-                Logger.Info($"跳过可能不是版本文件夹的项目：{VersionFolderInfo.FullName}")
-                Continue For
-            End If
-            Dim VersionFolder As String = VersionFolderInfo.FullName & "\"
-            If FileUtils.Exists(VersionFolder & ".pclignore") Then
-                If IsFirstMcInstanceListLoad Then
-                    Logger.Info($"清理残留的忽略项目：{VersionFolder}") '#2781
-                    FileUtils.Delete(VersionFolder & ".pclignore")
-                Else
-                    Logger.Info($"跳过要求忽略的项目：{VersionFolder}")
-                    Continue For
-                End If
-            End If
+        '扫描版本文件夹并加载（旧 :1141-1168 的文件系统规则已迁至 C# InstanceScanner.ScanVersionFolders）；
+        '建立 core→wrapper 回映，供分类结果组装 wrapper 列表
+        Dim CoreMap As New Dictionary(Of Instances.InstanceCore, McInstance)
+        Dim Cores As New List(Of Instances.InstanceCore)
+        For Each VersionFolder As String In Instances.InstanceScanner.ScanVersionFolders(Folder, IsFirstMcInstanceListLoad)
             Dim Instance As New McInstance(VersionFolder)
-            InstanceList.Add(Instance)
             Instance.Load()
+            Cores.Add(Instance.Core)
+            CoreMap.Add(Instance.Core, Instance)
         Next
-#End Region
 
         Dim Results As New Dictionary(Of McInstanceCardType, List(Of McInstance))
 
-#Region "将版本分类到各个卡片"
+        '将版本分类到各个卡片并排序（旧 :1171-1324 已迁至 C# InstanceScanner.ClassifyAndSort）；
+        '错误边界保留在此：分类失败时清空结果并记录，随后与旧行为一致地继续写卡片缓存并返回
         Try
-
-            '未经过自定义的版本列表
-            Dim InstanceListOriginal As New Dictionary(Of McInstanceCardType, List(Of McInstance))
-
-            '单独列出收藏的版本
-            Dim InstanceStar As New List(Of McInstance)
-            For Each Instance As McInstance In InstanceList.ToList
-                If Not Instance.IsStar Then Continue For
-                If Instance.DisplayType = McInstanceCardType.Hidden Then Continue For
-                InstanceStar.Add(Instance)
-                InstanceList.Remove(Instance)
-            Next
-            If InstanceStar.Any Then InstanceListOriginal.Add(McInstanceCardType.Star, InstanceStar)
-
-            '预先筛选出愚人节和错误的版本
-            McInstanceFilter(InstanceList, InstanceListOriginal, {McInstance.McInstanceState.Error}, McInstanceCardType.Error)
-            McInstanceFilter(InstanceList, InstanceListOriginal, {McInstance.McInstanceState.Fool}, McInstanceCardType.Fool)
-
-            '筛选 API 版本
-            McInstanceFilter(InstanceList, InstanceListOriginal, {McInstance.McInstanceState.Forge, McInstance.McInstanceState.NeoForge, McInstance.McInstanceState.LiteLoader, McInstance.McInstanceState.Fabric}, McInstanceCardType.API)
-
-            '将老版本预先分类入不常用，只剩余原版、快照、OptiFine
-            Dim InstanceUseful As New List(Of McInstance)
-            Dim InstanceRubbish As New List(Of McInstance)
-            McInstanceFilter(InstanceList, {McInstance.McInstanceState.Old}, InstanceRubbish)
-
-            '确认最新版本，若为快照则加入常用列表
-            Dim LargestInstance As McInstance = InstanceList.
-                Where(Function(v) v.State = McInstance.McInstanceState.Original OrElse v.State = McInstance.McInstanceState.Snapshot).
-                MaxBy(Function(v) v.ReleaseTime)
-            If LargestInstance IsNot Nothing AndAlso LargestInstance.State = McInstance.McInstanceState.Snapshot Then
-                InstanceUseful.Add(LargestInstance)
-                InstanceList.Remove(LargestInstance)
-            End If
-
-            '将剩余的快照全部拖进不常用列表
-            McInstanceFilter(InstanceList, {McInstance.McInstanceState.Snapshot}, InstanceRubbish)
-
-            '获取每个 Drop 下最新的原版与 OptiFine
-            Dim NewerInstance As New Dictionary(Of String, McInstance)
-            Dim ExistDrops As New List(Of Integer)
-            For Each Instance As McInstance In InstanceList
-                If Not Instance.Version.Valid Then Continue For
-                If Not ExistDrops.Contains(Instance.Version.Drop) Then ExistDrops.Add(Instance.Version.Drop)
-                Dim Key As String = Instance.Version.Drop & "-" & Instance.State
-                If Not NewerInstance.ContainsKey(Key) Then
-                    NewerInstance.Add(Key, Instance)
-                    Continue For
-                End If
-                If Instance.State = McInstance.McInstanceState.OptiFine Then
-                    If Instance.Version.OptiFineCode > NewerInstance(Key).Version.OptiFineCode Then NewerInstance(Key) = Instance 'OptiFine 根据版本号判断
-                Else
-                    If Instance.ReleaseTime > NewerInstance(Key).ReleaseTime Then NewerInstance(Key) = Instance '原版根据发布时间判断
-                End If
-            Next
-
-            '将每个 Drop 下的最常规版本加入
-            For Each Drop As Integer In ExistDrops
-                If NewerInstance.ContainsKey(Drop & "-" & McInstance.McInstanceState.OptiFine) AndAlso NewerInstance.ContainsKey(Drop & "-" & McInstance.McInstanceState.Original) Then
-                    '同时存在 OptiFine 与原版
-                    Dim VanillaInstance As McInstance = NewerInstance(Drop & "-" & McInstance.McInstanceState.Original)
-                    Dim OptiFineInstance As McInstance = NewerInstance(Drop & "-" & McInstance.McInstanceState.OptiFine)
-                    If VanillaInstance.Version.Drop > OptiFineInstance.Version.Drop Then
-                        '仅在原版比 OptiFine 更新时才加入原版
-                        InstanceUseful.Add(VanillaInstance)
-                        InstanceList.Remove(VanillaInstance)
-                    End If
-                    InstanceUseful.Add(OptiFineInstance)
-                    InstanceList.Remove(OptiFineInstance)
-                ElseIf NewerInstance.ContainsKey(Drop & "-" & McInstance.McInstanceState.OptiFine) Then
-                    '没有原版，直接加入 OptiFine
-                    InstanceUseful.Add(NewerInstance(Drop & "-" & McInstance.McInstanceState.OptiFine))
-                    InstanceList.Remove(NewerInstance(Drop & "-" & McInstance.McInstanceState.OptiFine))
-                ElseIf NewerInstance.ContainsKey(Drop & "-" & McInstance.McInstanceState.Original) Then
-                    '没有 OptiFine，直接加入原版
-                    InstanceUseful.Add(NewerInstance(Drop & "-" & McInstance.McInstanceState.Original))
-                    InstanceList.Remove(NewerInstance(Drop & "-" & McInstance.McInstanceState.Original))
-                End If
-            Next
-
-            '将剩余的东西添加进去
-            InstanceRubbish.AddRange(InstanceList)
-            If InstanceUseful.Any Then InstanceListOriginal.Add(McInstanceCardType.OriginalLike, InstanceUseful)
-            If InstanceRubbish.Any Then InstanceListOriginal.Add(McInstanceCardType.Rubbish, InstanceRubbish)
-
-            '按照自定义版本分类重新添加
-            For Each InstancePair In InstanceListOriginal
-                For Each Instance As McInstance In InstancePair.Value
-                    Dim RealType = If(Instance.DisplayType = 0 OrElse InstancePair.Key = McInstanceCardType.Star, InstancePair.Key, Instance.DisplayType)
-                    If Not Results.ContainsKey(RealType) Then Results.Add(RealType, New List(Of McInstance))
-                    Results(RealType).Add(Instance)
+            For Each Card In Instances.InstanceScanner.ClassifyAndSort(Cores)
+                Dim CardInstances As New List(Of McInstance)
+                For Each Core As Instances.InstanceCore In Card.items
+                    CardInstances.Add(CoreMap(Core))
                 Next
+                Results.Add(DirectCast(Card.cardType, McInstanceCardType), CardInstances)
             Next
-
         Catch ex As Exception
             Results.Clear()
             Logger.Error(ex, "分类版本列表失败")
         End Try
-#End Region
-#Region "对卡片与版本进行排序"
 
-        '卡片排序
-        Dim SortedInstanceList As New Dictionary(Of McInstanceCardType, List(Of McInstance))
-        For Each SortRule As String In {McInstanceCardType.Star, McInstanceCardType.API, McInstanceCardType.OriginalLike, McInstanceCardType.Rubbish, McInstanceCardType.Fool, McInstanceCardType.Error, McInstanceCardType.Hidden}
-            If Results.ContainsKey(SortRule) Then SortedInstanceList.Add(SortRule, Results(SortRule))
-        Next
-        Results = SortedInstanceList
-
-        '版本排序
-        For Each CardType In {McInstanceCardType.Star, McInstanceCardType.API, McInstanceCardType.OriginalLike, McInstanceCardType.Rubbish, McInstanceCardType.Fool}
-            If Not Results.ContainsKey(CardType) Then Continue For
-            Dim GetComponentCode =
-            Function(Instance As McInstance) As Integer
-                If Instance.Version.ForgelikeCode > 0 Then Return Instance.Version.ForgelikeCode
-                If Instance.Version.HasOptiFine Then Return Instance.Version.OptiFineCode
-                Return 0
-            End Function
-            Results(CardType) = Results(CardType).SortByComparison(
-            Function(Left As McInstance, Right As McInstance)
-                '发布时间
-                If (Left.ReleaseTime.Year >= 2000 OrElse Right.ReleaseTime.Year >= 2000) AndAlso
-                    Left.ReleaseTime <> Right.ReleaseTime Then Return Left.ReleaseTime > Right.ReleaseTime
-                '附加组件种类
-                If Left.Version.ModLoaders.HasFlagF(ModLoaders.Fabric) <> Right.Version.ModLoaders.HasFlagF(ModLoaders.Fabric) Then Return Left.Version.ModLoaders.HasFlagF(ModLoaders.Fabric)
-                If Left.Version.ModLoaders.HasFlagF(ModLoaders.NeoForge) <> Right.Version.ModLoaders.HasFlagF(ModLoaders.NeoForge) Then Return Left.Version.ModLoaders.HasFlagF(ModLoaders.NeoForge)
-                If Left.Version.ModLoaders.HasFlagF(ModLoaders.Forge) <> Right.Version.ModLoaders.HasFlagF(ModLoaders.Forge) Then Return Left.Version.ModLoaders.HasFlagF(ModLoaders.Forge)
-                If Left.Version.HasOptiFine <> Right.Version.HasOptiFine Then Return Left.Version.HasOptiFine
-                If Left.Version.ModLoaders.HasFlagF(ModLoaders.LiteLoader) <> Right.Version.ModLoaders.HasFlagF(ModLoaders.LiteLoader) Then Return Left.Version.ModLoaders.HasFlagF(ModLoaders.LiteLoader)
-                '附加组件版本
-                If GetComponentCode(Left) <> GetComponentCode(Right) Then Return GetComponentCode(Left) > GetComponentCode(Right)
-                '名称
-                Return Left.Name > Right.Name
-            End Function)
-        Next
-
-#End Region
 #Region "保存卡片缓存"
         WriteIni(Folder & "PCL.ini", "CardCount", Results.Count)
         For i = 0 To Results.Count - 1
@@ -1119,33 +991,6 @@ OnLoaded:
 
         Return Results
     End Function
-    ''' <summary>
-    ''' 筛选特定种类的版本，并直接添加为卡片。
-    ''' </summary>
-    ''' <param name="InstanceList">用于筛选的列表。</param>
-    ''' <param name="Formula">需要筛选出的版本类型。-2 代表隐藏的版本。</param>
-    ''' <param name="CardType">卡片的名称。</param>
-    Private Sub McInstanceFilter(ByRef InstanceList As List(Of McInstance), ByRef Target As Dictionary(Of McInstanceCardType, List(Of McInstance)), Formula As McInstance.McInstanceState(), CardType As McInstanceCardType)
-        Dim KeepList = InstanceList.Where(Function(v) Formula.Contains(v.State)).ToList
-        '加入版本列表，并从剩余中删除
-        If KeepList.Any Then
-            Target.Add(CardType, KeepList)
-            InstanceList = InstanceList.Except(KeepList).ToList()
-        End If
-    End Sub
-    ''' <summary>
-    ''' 筛选特定种类的版本，并增加入一个已有列表中。
-    ''' </summary>
-    ''' <param name="InstanceList">用于筛选的列表。</param>
-    ''' <param name="Formula">需要筛选出的版本类型。-2 代表隐藏的版本。</param>
-    ''' <param name="KeepList">传入需要增加入的列表。</param>
-    Private Sub McInstanceFilter(ByRef InstanceList As List(Of McInstance), Formula As McInstance.McInstanceState(), ByRef KeepList As List(Of McInstance))
-        KeepList.AddRange(InstanceList.Where(Function(v) Formula.Contains(v.State)))
-        '加入版本列表，并从剩余中删除
-        If KeepList.Any Then
-            InstanceList = InstanceList.Except(KeepList).ToList()
-        End If
-    End Sub
     Public Enum McInstanceCardType
         Star = -1
         Auto = 0 '仅用于强制版本分类的自动
