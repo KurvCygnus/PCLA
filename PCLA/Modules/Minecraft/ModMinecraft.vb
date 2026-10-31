@@ -1,3 +1,6 @@
+'说明：McInstance 的 JSON 管线已切换到 PCLCS.Instances.InstanceCore；McInstance.JsonObject 暴露的是
+'由 LegacyJsonExtensions.ToJToken(_core.VersionJson) 生成的 Newtonsoft JObject 快照——W3 迁移完成前，
+'外部对快照的修改不会写回核心（现有 VB 读取方均为只读，已核实）。
 Public Module ModMinecraft
 
 #Region "文件夹"
@@ -233,50 +236,30 @@ Public Module ModMinecraft
         End Enum
 
         ''' <summary>
+        ''' 实例数据面核心（JSON 管线、检查与隔离判定，PCLCS.Instances.InstanceCore）；
+        ''' UI 绑定字段（Info/State/Logo/IsStar/DisplayType）与 ini 编排保留在本类。
+        ''' </summary>
+        Private ReadOnly _core As Instances.InstanceCore
+
+        ''' <summary>
         ''' 版本文件夹路径，以 \ 结尾。
         ''' </summary>
         Public ReadOnly Property PathVersion As String
+            Get
+                Return _core.PathVersion
+            End Get
+        End Property
         ''' <summary>
         ''' 应用版本隔离后，该版本所对应的 Minecraft 根文件夹，以 \ 结尾。
         ''' </summary>
         Public ReadOnly Property PathIndie As String
             Get
+                '与旧实现的判定次序一致：未判定且未加载时先走完整 Load（补齐 Setup.ini 缓存与 UI 字段），
+                '并经 VB façade 触发实例旧设置的懒式导入，再交由核心判定与写回
                 If Not Settings.HasSaved("VersionArgumentIndieV2", Instance:=Me) Then
                     If Not IsLoaded Then Load()
-                    '决定该版本是否应该被隔离
-                    Dim ShouldBeIndie =
-                    Function() As Boolean
-                        '从老的版本独立设置中迁移：-1 未决定，0 使用全局设置，1 手动开启，2 手动关闭
-                        If Settings.HasSaved("VersionArgumentIndie", Instance:=Me) AndAlso Settings.Get(Of Integer)("VersionArgumentIndie", Instance:=Me) > 0 Then
-                            Logger.Info($"版本隔离初始化（{Name}）：从老的版本独立设置中迁移")
-                            Return Settings.Get(Of Integer)("VersionArgumentIndie", Instance:=Me) = 1
-                        End If
-                        '若版本文件夹下包含 mods 或 saves 文件夹，则自动开启版本隔离
-                        Dim ModFolder = DirectoryUtils.GetInfo(PathVersion & "mods\")
-                        Dim SaveFolder = DirectoryUtils.GetInfo(PathVersion & "saves\")
-                        If (ModFolder.Exists AndAlso ModFolder.EnumerateFiles.Any) OrElse (SaveFolder.Exists AndAlso SaveFolder.EnumerateDirectories.Any) Then
-                            Logger.Info($"版本隔离初始化（{Name}）：版本文件夹下存在 mods 或 saves 文件夹，自动开启")
-                            Return True
-                        End If
-                        '根据全局的默认设置决定是否隔离
-                        Dim IsRelease As Boolean = State <> McInstanceState.Fool AndAlso State <> McInstanceState.Old AndAlso State <> McInstanceState.Snapshot
-                        Logger.Info($"版本隔离初始化（{Name}）：从全局默认设置中（{Settings.Get(Of Integer)("LaunchArgumentIndieV2")}）判断，State {State}，IsRelease {IsRelease}，Modable {Modable}")
-                        Select Case Settings.Get(Of Integer)("LaunchArgumentIndieV2")
-                            Case 0 '关闭
-                                Return False
-                            Case 1 '仅隔离可安装 Mod 的版本
-                                Return Modable
-                            Case 2 '仅隔离非正式版
-                                Return Not IsRelease
-                            Case 3 '隔离非正式版与可安装 Mod 的版本
-                                Return Not IsRelease OrElse Modable
-                            Case Else '隔离所有版本
-                                Return True
-                        End Select
-                    End Function
-                    Settings.Set("VersionArgumentIndieV2", ShouldBeIndie(), Instance:=Me)
                 End If
-                Return If(Settings.Get(Of Boolean)("VersionArgumentIndieV2", Instance:=Me), PathVersion, McFolderSelected)
+                Return _core.PathIndie
             End Get
         End Property
 
@@ -322,29 +305,25 @@ Public Module ModMinecraft
             End Get
         End Property
         ''' <summary>
-        ''' 版本信息。
+        ''' 版本信息。可被外部赋值覆盖（版本列表缓存/manifest 恢复）；覆盖后 C# 核心无法感知，
+        ''' 描述计算将走本类的旧逻辑（见 VersionDisplayName）。
         ''' </summary>
         Public Property Version As McVersion
             Get
                 If _Version IsNot Nothing Then Return _Version
-                Try
-                    Dim VersionNode = JsonObject.ToJsonNode().AsObject()
-                    Dim JarNode = If(JsonVersion Is Nothing, Nothing, JsonVersion.ToJsonNode())
-                    Dim Result = New McVersion(Name, VersionNode, JarNode)
-                    _Version = Result
-                    If Result.VanillaName = "Unknown" Then Info = "PCL 无法识别该版本的 MC 版本号"
-                Catch ex As Exception
-                    Logger.Warn(ex, "识别 Minecraft 版本时出错")
-                    _Version = New McVersion("Unknown")
-                    Info = "无法识别：" & ex.Message
-                End Try
+                Dim InfoBefore As String = _core.Info
+                _Version = _core.Version '版本识别与“无法识别”的描述回写在 C# 侧完成
+                If _core.Info <> InfoBefore Then Info = _core.Info '仅同步核心识别失败时的描述回写
                 Return _Version
             End Get
             Set(value As McVersion)
                 _Version = value
+                _VersionOverridden = True
             End Set
         End Property
         Private _Version As McVersion = Nothing
+        ''' <summary>Version 是否被外部赋值覆盖（列表缓存/manifest 恢复，ModMinecraft.vb:1101）。</summary>
+        Private _VersionOverridden As Boolean = False
 
         ''' <summary>
         ''' 版本的发布时间。
@@ -359,29 +338,7 @@ Public Module ModMinecraft
         ''' 获取该版本的 JSON 路径。
         ''' </summary>
         Public Function GetJsonPath() As String
-            Dim JsonPath As String = PathVersion & Name & ".json"
-            If Not FileUtils.Exists(JsonPath) Then
-                '尝试寻找 JSON 文件
-                JsonPath = Nothing
-                For Each JsonCandidatePath In DirectoryUtils.EnumerateFiles(PathVersion, searchPattern:="*.json")
-                    Try
-                        Dim JsonCandidate As JObject = LegacyFileUtils.ReadAsJson(JsonCandidatePath)
-                        If Not JsonCandidate.ContainsKey("mainClass") Then Continue For
-                        If Not JsonCandidate.ContainsKey("type") Then Continue For
-                        If Not JsonCandidate.ContainsKey("id") Then Continue For
-                    Catch
-                        Continue For
-                    End Try
-                    JsonPath = JsonCandidatePath
-                    Exit For
-                Next
-                If JsonPath Is Nothing Then
-                    Throw New Exception($"未找到版本 JSON 文件：{PathVersion}{Name}.json")
-                Else
-                    Logger.Warn($"未找到同名版本 JSON，自动换用 {JsonPath}")
-                End If
-            End If
-            Return JsonPath
+            Return Instances.InstancePaths.GetJsonPath(PathVersion, Name) '同名探测与异常契约在 C# 侧保持一致
         End Function
         ''' <summary>
         ''' 该版本的 Json 文本。会抛出异常。
@@ -423,74 +380,8 @@ Public Module ModMinecraft
         ''' </summary>
         Public Property JsonObject As JObject
             Get
-                If _JsonObject Is Nothing Then
-                    Dim Text As String = JsonText '触发 JsonText 的 Get 事件
-                    Try
-                        _JsonObject = Text.DeserializeJson()
-                        '转换 HMCL 关键项
-                        If _JsonObject.ContainsKey("patches") AndAlso Not _JsonObject.ContainsKey("time") Then
-                            IsHmclFormatJson = True
-                            '合并 Json
-                            'Dim HasOptiFine As Boolean = False, HasForge As Boolean = False
-                            Dim CurrentObject As JObject = Nothing
-                            Dim SubjsonList As New List(Of JObject)
-                            For Each Subjson As JObject In _JsonObject("patches")
-                                SubjsonList.Add(Subjson)
-                            Next
-                            SubjsonList = SubjsonList.SortByComparison(
-                                Function(Left, Right) Val(If(Left("priority"), "0").ToString) < Val(If(Right("priority"), "0").ToString))
-                            For Each Subjson As JObject In SubjsonList
-                                Dim Id As String = Subjson("id")
-                                If Id IsNot Nothing Then
-                                    '合并 Json
-                                    Logger.Info($"合并 HMCL 分支项：{Id}")
-                                    If CurrentObject IsNot Nothing Then
-                                        CurrentObject.Merge(Subjson)
-                                    Else
-                                        CurrentObject = Subjson
-                                    End If
-                                Else
-                                    Logger.Info("存在为空的 HMCL 分支项")
-                                End If
-                            Next
-                            _JsonObject = CurrentObject
-                            '修改附加项
-                            _JsonObject("id") = Name
-                            If _JsonObject.ContainsKey("inheritsFrom") Then _JsonObject.Remove("inheritsFrom")
-                        End If
-                        '与继承版本合并
-                        Dim InstanceNameInheritFrom = Nothing
-                        Try
-                            InstanceNameInheritFrom = If(_JsonObject("inheritsFrom") Is Nothing, "", _JsonObject("inheritsFrom").ToString)
-                            If InstanceNameInheritFrom = Name Then
-                                Logger.Warn($"自引用的继承版本：{Name}")
-                                InstanceNameInheritFrom = ""
-                                Exit Try
-                            End If
-Recheck:
-                            If InstanceNameInheritFrom <> "" Then
-                                Dim InheritInstance As New McInstance(InstanceNameInheritFrom)
-                                '继续循环
-                                If InheritInstance.InheritName = InstanceNameInheritFrom Then Throw New Exception("版本依赖项出现嵌套：" & InstanceNameInheritFrom)
-                                InstanceNameInheritFrom = InheritInstance.InheritName
-                                '合并 Libraries 项：子版本放在前面，父版本放在后面（5978#：如果多个 jar 包中含有相同的类，Java 8 和之前的版本按照 -cp 指定的顺序选择第一个）
-                                Dim CurrentLib As JArray = _JsonObject("libraries").DeepClone()
-                                For Each LibToken In InheritInstance.JsonObject("libraries")
-                                    CurrentLib.Add(LibToken)
-                                Next
-                                '合并其他项：子版本优先于父版本
-                                InheritInstance.JsonObject.Merge(_JsonObject)
-                                _JsonObject = InheritInstance.JsonObject
-                                _JsonObject("libraries") = CurrentLib
-                                GoTo Recheck
-                            End If
-                        Catch ex As Exception
-                            Logger.Warn(ex, $"合并版本依赖项 JSON 失败（{If(InstanceNameInheritFrom, "null")}）")
-                        End Try
-                    Catch ex As Exception
-                        Throw New Exception("初始化版本 JSON 时失败（" & If(Name, "null") & "）", ex)
-                    End Try
-                End If
+                '快照：W3 迁移完成前，外部对快照的修改不会写回核心（现有读取方均为只读，见文件头说明）
+                If _JsonObject Is Nothing Then _JsonObject = CType(_core.VersionJson.ToJToken(), JObject)
                 Return _JsonObject
             End Get
             Set(value As JObject)
@@ -503,13 +394,17 @@ Recheck:
         ''' </summary>
         Public ReadOnly Property IsOldJson As Boolean
             Get
-                Return JsonObject("minecraftArguments") IsNot Nothing AndAlso JsonObject("minecraftArguments") <> ""
+                Return _core.IsOldJson
             End Get
         End Property
         ''' <summary>
         ''' Json 是否为 HMCL 格式。
         ''' </summary>
-        Public Property IsHmclFormatJson As Boolean = False
+        Public ReadOnly Property IsHmclFormatJson As Boolean
+            Get
+                Return _core.IsHmclFormatJson 'HMCL patches 合并在核心构建 VersionJson 时完成
+            End Get
+        End Property
 
         ''' <summary>
         ''' 版本 jar 中的 version.json 文件对象。
@@ -543,21 +438,9 @@ Recheck:
         ''' </summary>
         Public ReadOnly Property InheritName As String
             Get
-                If _InheritName Is Nothing Then
-                    _InheritName = If(JsonObject("inheritsFrom"), "").ToString
-                    '由于过老的 LiteLoader 中没有 Inherits（例如 1.5.2），需要手动判断以获取真实继承版本
-                    '此外，由于这里的加载早于版本种类判断，所以需要手动判断是否为 LiteLoader
-                    '如果版本提供了不同的 Jar，代表所需的 Jar 可能已被更改，则跳过 Inherit 替换
-                    If JsonText.Contains("liteloader") AndAlso Version.VanillaName <> Name AndAlso Not JsonText.Contains("logging") Then
-                        If If(JsonObject("jar"), Version.VanillaName).ToString = Version.VanillaName Then _InheritName = Version.VanillaName
-                    End If
-                    'HMCL 版本无 Json
-                    If IsHmclFormatJson Then _InheritName = ""
-                End If
-                Return _InheritName
+                Return _core.InheritName '继承合并与 LiteLoader 特判在核心完成
             End Get
         End Property
-        Private _InheritName As String = Nothing
 
         Public Config As JsonConfigProvider
         Public Sub ResetSettingsCache()
@@ -573,8 +456,8 @@ Recheck:
         ''' 从版本名，或版本文件夹的完整路径初始化。
         ''' </summary>
         Public Sub New(NameOrFullPath As String)
-            NameOrFullPath = PathUtils.RemoveExtendedPrefix(NameOrFullPath)
-            PathVersion = PathUtils.AddSlashSuffix(If(NameOrFullPath.Contains(":"), "", McFolderSelected & "versions\") & NameOrFullPath)
+            Dim VersionFolder As String = Instances.InstancePaths.ResolveVersionFolder(NameOrFullPath, McFolderSelected)
+            _core = New Instances.InstanceCore(VersionFolder, McFolderSelected, VersionFolder, AddressOf RunInUi)
             Config = New JsonConfigProvider(Path.Combine(PathVersion, "PCL\config.json"))
         End Sub
 
@@ -582,92 +465,25 @@ Recheck:
         ''' 检查 Minecraft 版本，若检查通过 State 则为 Original 且返回 True。
         ''' </summary>
         Public Function Check() As Boolean
-
-            '检查文件夹
-            If Not DirectoryUtils.Exists(PathVersion) Then
-                State = McInstanceState.Error
-                Info = "未找到版本 " & Name
-                Return False
-            End If
-            '确认 Json 可用性
-            Try
-                If JsonObject("mainClass") Is Nothing Then Throw New Exception("版本 JSON 中没有 mainClass 项！") '这里也会触发 JsonObject 的 Get 事件
-            Catch ex As Exception
-                Logger.Warn(ex, $"版本 JSON 可用性检查失败（{PathVersion}）")
-                JsonText = ""
-                JsonObject = Nothing
-                Info = ex.Message
-                State = McInstanceState.Error
-                Return False
-            End Try
-            '检查版本号获取
-            Try
-                If String.IsNullOrEmpty(Version.VanillaName) Then Throw New Exception("无法获取版本号，结果为空")
-            Catch ex As Exception
-                Logger.Warn(ex, $"版本号获取失败（{Name}）")
-                State = McInstanceState.Error
-                Info = "版本号获取失败：" & ex.GetDisplay(False)
-                Return False
-            End Try
-            '检查依赖版本
-            Try
-                If Not InheritName = "" Then
-                    If Not FileUtils.Exists($"{PathUtils.RemoveLastPart(PathVersion)}\{InheritName}\{InheritName}.json") Then
-                        State = McInstanceState.Error
-                        Info = "需要安装 " & InheritName & " 作为前置版本"
-                        Return False
-                    End If
-                End If
-            Catch ex As Exception
-                Logger.Warn(ex, $"依赖版本检查出错（{Name}）")
-                State = McInstanceState.Error
-                Info = "未知错误：" & ex.GetDisplay(False)
-                Return False
-            End Try
-
-            State = McInstanceState.Original
-            Return True
+            Dim Result = _core.Check()
+            State = MapState(_core.State)
+            Info = _core.Info
+            _JsonObject = Nothing '快照按核心最新状态重建（含旧 Check 中 JSON 失败时的缓存失效）
+            Return Result
         End Function
         ''' <summary>
         ''' 加载 Minecraft 版本的详细信息。不使用其缓存，且会更新缓存。
         ''' </summary>
         Public Function Load() As McInstance
             Try
-                '检查版本，若出错则跳过数据确定阶段
-                If Not Check() Then GoTo ExitDataLoad
-#Region "确定版本分类"
-                Select Case Version.VanillaName '在获取 Version.Original 对象时会完成它的加载
-                    Case "Unknown"
-                        State = McInstanceState.Error
-                    Case "Old"
-                        State = McInstanceState.Old
-                    Case Else
-                        '愚人节与快照版本
-                        If Version.IsFool Then
-                            State = McInstanceState.Fool
-                        ElseIf Version.IsSnapshot Then
-                            State = McInstanceState.Snapshot
-                        End If
-                        'OptiFine
-                        If Version.HasOptiFine Then
-                            State = McInstanceState.OptiFine
-                        End If
-                        'LiteLoader
-                        If Version.ModLoaders.HasFlagF(ModLoaders.LiteLoader) Then
-                            State = McInstanceState.LiteLoader
-                        End If
-                        'Fabric、Forge、NeoForge
-                        If Version.ModLoaders.HasFlagF(ModLoaders.Fabric) Then
-                            State = McInstanceState.Fabric
-                        ElseIf Version.ModLoaders.HasFlagF(ModLoaders.Forge) Then
-                            State = McInstanceState.Forge
-                        ElseIf Version.ModLoaders.HasFlagF(ModLoaders.NeoForge) Then
-                            State = McInstanceState.NeoForge
-                        End If
-                End Select
-#End Region
-ExitDataLoad:
-                '确定版本图标
+                '检查、分类、描述基准值与 ini 缓存回调（State/Info/ReleaseTime/VersionXxx）由核心完成
+                _core.Load(AddressOf PersistInstanceCache)
+                State = MapState(_core.State)
+                Info = _core.Info
+                _JsonObject = Nothing
+                '确定版本描述（旧 :696-697；CustomInfo 覆盖在本类处理，其余由核心计算）
+                RefreshInfo()
+                '确定版本图标（旧 :671-695）
                 Logo = ReadIni(PathVersion & "PCL\Setup.ini", "Logo", "")
                 If Logo = "" OrElse Not CType(ReadIni(PathVersion & "PCL\Setup.ini", "LogoCustom", False), Boolean) Then
                     Select Case State
@@ -693,32 +509,21 @@ ExitDataLoad:
                             Logo = PathImage & "Blocks/RedstoneBlock.png"
                     End Select
                 End If
-                '确定版本描述
-                RefreshInfo()
-                '确定版本收藏状态
+                '确定版本收藏状态与显示种类（旧 :699-701）
                 IsStar = ReadIni(PathVersion & "PCL\Setup.ini", "IsStar", False)
-                '确定版本显示种类
                 DisplayType = ReadIni(PathVersion & "PCL\Setup.ini", "DisplayType", McInstanceCardType.Auto)
-                '写入缓存
+                '写入缓存（旧 :703-707）：State 与 ReleaseTime/VersionXxx 项已经由 PersistInstanceCache 写入，
+                'Info 需按 CustomInfo 覆盖后的值补写（值未变时 WriteIni 自动跳过），Logo 项留在本类
                 If DirectoryUtils.Exists(PathVersion) Then
-                    WriteIni(PathVersion & "PCL\Setup.ini", "State", State)
                     WriteIni(PathVersion & "PCL\Setup.ini", "Info", Info)
                     WriteIni(PathVersion & "PCL\Setup.ini", "Logo", Logo)
-                End If
-                If State <> McInstanceState.Error AndAlso Version.Reliable Then
-                    WriteIni(PathVersion & "PCL\Setup.ini", "ReleaseTime", ReleaseTime.ToString("yyyy'-'MM'-'dd HH':'mm"))
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionFabric", If(Version.ModLoaders.HasFlagF(ModLoaders.Fabric), Version.ModLoaderVersions(ModLoaders.Fabric), Nothing))
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionOptiFine", If(Version.OptiFineAsMod, Nothing, Version.OptiFine))
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionLiteLoader", Version.ModLoaders.HasFlagF(ModLoaders.LiteLoader))
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionForge", If(Version.ModLoaders.HasFlagF(ModLoaders.Forge), Version.ModLoaderVersions(ModLoaders.Forge), Nothing))
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionNeoForge", If(Version.ModLoaders.HasFlagF(ModLoaders.NeoForge), Version.ModLoaderVersions(ModLoaders.NeoForge), Nothing))
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionVanillaName", Version.VanillaName)
-                    WriteIni(PathVersion & "PCL\Setup.ini", "VersionVanilla", Version.Vanilla.ToString)
                 End If
             Catch ex As Exception
                 Info = ex.GetDisplay(False)
                 Logo = PathImage & "Blocks/RedstoneBlock.png"
                 State = McInstanceState.Error
+                _core.State = MapState(McInstanceState.Error)
+                _core.Info = Info
                 Logger.Warn(ex, $"加载版本失败（{Name}）")
             Finally
                 IsLoaded = True
@@ -727,27 +532,54 @@ ExitDataLoad:
         End Function
         Public IsLoaded As Boolean = False
         ''' <summary>
+        ''' 核心 Load 的 ini 缓存回调：等价旧 :703-717 的 Setup.ini 写入（Logo 项由本类另行写入）。
+        ''' 注意：旧实现写 State 是 VB 枚举→String 隐式转换的产物——数值形式（如 1=Original）而非名称，
+        ''' 这里须保持数值，以兼容 :1064 的读取与 PCL2 等外部工具对 ini 的解析。
+        ''' </summary>
+        Private Sub PersistInstanceCache(Key As String, Value As String)
+            If Key = "State" Then
+                WriteIni(PathVersion & "PCL\Setup.ini", Key, CInt(DirectCast([Enum].Parse(GetType(McInstanceState), Value), McInstanceState)).ToString())
+            Else
+                WriteIni(PathVersion & "PCL\Setup.ini", Key, Value)
+            End If
+        End Sub
+        ''' <summary>
         ''' 根据当前组件信息刷新版本描述。
         ''' </summary>
         Public Sub RefreshInfo()
             Dim CustomInfo As String = ReadIni(PathVersion & "PCL\Setup.ini", "CustomInfo")
             If CustomInfo <> "" Then
                 Info = CustomInfo
-            Else
+            ElseIf _VersionOverridden Then
+                'Version 被外部覆盖（列表缓存/manifest 恢复）后核心无法感知，按旧 :732-745 逻辑计算
                 Info = VersionDisplayName()
                 If State = McInstanceState.Fool Then
-                    Info = GetMcFoolName(Version.VanillaName)
+                    Info = Instances.FoolNames.Get(Version.VanillaName)
                 ElseIf State <> McInstanceState.Error Then
                     If Settings.Get(Of Integer)("VersionServerLogin", Instance:=Me) = 3 Then Info += ", 统一通行证验证"
                     If Settings.Get(Of Integer)("VersionServerLogin", Instance:=Me) = 4 Then Info += ", Authlib 验证"
                 End If
+            Else
+                _core.State = MapState(State) '核心在 Error 态的描述会回读自身 Info，先同步 VB 侧存储
+                _core.Info = Info
+                _core.RefreshInfo(AddressOf VersionServerLogin)
+                Info = _core.Info
             End If
         End Sub
+        ''' <summary>供核心 RefreshInfo 回调的登录方式读取（经 VB façade，含实例旧设置懒式导入）。</summary>
+        Private Function VersionServerLogin() As Integer
+            Return Settings.Get(Of Integer)("VersionServerLogin", Instance:=Me)
+        End Function
         ''' <summary>
         ''' 获取对版本信息的简短描述。
         ''' 例如 “快照 16w01a”、“原版 1.12.2, Forge 1.2.3”、“愚人节版本 2.0”。
         ''' </summary>
         Public Function VersionDisplayName() As String
+            If _VersionOverridden Then Return VersionDisplayNameOverridden() '见 RefreshInfo：外部覆盖 Version 时核心无法感知
+            Return _core.VersionDisplayName()
+        End Function
+        ''' <summary>旧 :750-785 的描述计算，仅用于 Version 被外部覆盖的场景（W3 随列表编排一并迁移）。</summary>
+        Private Function VersionDisplayNameOverridden() As String
             'Mod Loader 信息
             Dim ModLoaderInfo As String = ""
             If Version.ModLoaders.HasFlagF(ModLoaders.Forge) Then ModLoaderInfo += ", Forge" & If(Version.ModLoaderVersions(ModLoaders.Forge) = "未知版本", "", " " & Version.ModLoaderVersions(ModLoaders.Forge))
@@ -819,38 +651,17 @@ ExitDataLoad:
             Dim OldName = Name
             Dim OldPath = PathVersion
             Dim NewPath = PathUtils.AddSlashSuffix(Path.Combine(PathUtils.RemoveLastPart(OldPath), NewName))
-            '重新读取版本 JSON 信息，避免 JsonObject 中已被合并的项被重新存储
-            Dim JsonObject As JObject
-            Dim OldJsonPath = GetJsonPath()
-            Try
-                JsonObject = LegacyFileUtils.ReadAsJson(OldJsonPath)
-            Catch ex As Exception
-                Logger.Warn(ex, "在重命名读取 JSON 时失败")
-                JsonObject = Me.JsonObject
-            End Try
-            '清理缓存
+            '清理缓存（旧 :831-833）
             Config.Save()
             ResetSettingsCache()
-            '重命名主文件夹
-            DirectoryUtils.Move(OldPath, NewPath)
-            '重命名 jar 文件与 natives 文件夹
-            '不能进行遍历重命名，否则在版本名很短的时候容易误伤其他文件（#6443）
-            If DirectoryUtils.Exists($"{NewPath}{OldName}-natives") Then DirectoryUtils.Move($"{NewPath}{OldName}-natives", $"{NewPath}{NewName}-natives")
-            If FileUtils.Exists($"{NewPath}{OldName}.jar") Then FileUtils.Move($"{NewPath}{OldName}.jar", $"{NewPath}{NewName}.jar")
-            '替换版本设置文件中的路径
+            '重命名主文件夹、jar 与 natives 文件夹，并重写版本 Json（旧 :822-830, :834-839, :846-853）
+            _core.Rename(NewName)
+            '替换版本设置文件中的路径（旧 :840-843，须在移动完成后执行）
             If FileUtils.Exists(NewPath & "PCL\Setup.ini") Then
                 FileUtils.Write(NewPath & "PCL\Setup.ini", FileUtils.ReadAsString(NewPath & "PCL\Setup.ini").Replace(OldPath, NewPath))
             End If
-            '更改已选中的版本
+            '更改已选中的版本（旧 :844-845）
             If ReadIni(McFolderSelected & "PCL.ini", "Version") = OldName Then WriteIni(McFolderSelected & "PCL.ini", "Version", NewName)
-            '更新版本 Json
-            Try
-                JsonObject("id") = NewName
-                FileUtils.Delete(NewPath & PathUtils.GetLastPart(OldJsonPath))
-                FileUtils.Write(NewPath & NewName & ".json", JsonObject.ToString)
-            Catch ex As Exception
-                Logger.Warn(ex, "重命名版本 json 失败")
-            End Try
             Return New McInstance(NewPath).Load()
         End Function
 
@@ -867,6 +678,15 @@ ExitDataLoad:
         Public Shared Operator <>(a As McInstance, b As McInstance) As Boolean
             Return Not (a = b)
         End Operator
+
+        ''' <summary>枚举映射：VB McInstanceState 与 C# InstanceState 的成员序一一对应（InstanceCore.cs:10-23）。</summary>
+        Private Shared Function MapState(State As Instances.InstanceState) As McInstanceState
+            Return CType(CInt(State), McInstanceState)
+        End Function
+        ''' <summary>枚举映射：VB McInstanceState 与 C# InstanceState 的成员序一一对应（InstanceCore.cs:10-23）。</summary>
+        Private Shared Function MapState(State As McInstanceState) As Instances.InstanceState
+            Return CType(CInt(State), Instances.InstanceState)
+        End Function
 
     End Class
 
@@ -903,30 +723,7 @@ ExitDataLoad:
     ''' 根据版本名获取对应的愚人节版本描述。非愚人节版本会返回空字符串。
     ''' </summary>
     Public Function GetMcFoolName(Name As String) As String
-        Name = Name.Lower
-        If Name.StartsWithF("2.0") Then
-            Return "2013 | 这个秘密计划了两年的更新将游戏推向了一个新高度！"
-        ElseIf Name = "15w14a" Then
-            Return "2015 | 作为一款全年龄向的游戏，我们需要和平，需要爱与拥抱。"
-        ElseIf Name = "1.rv-pre1" Then
-            Return "2016 | 是时候将现代科技带入 Minecraft 了！"
-        ElseIf Name = "3d shareware v1.34" Then
-            Return "2019 | 我们从地下室的废墟里找到了这个开发于 1994 年的杰作！"
-        ElseIf Name.StartsWithF("20w14inf") OrElse Name = "20w14∞" Then
-            Return "2020 | 我们加入了 20 亿个新的维度，让无限的想象变成了现实！"
-        ElseIf Name = "22w13oneblockatatime" Then
-            Return "2022 | 一次一个方块更新！迎接全新的挖掘、合成与骑乘玩法吧！"
-        ElseIf Name = "23w13a_or_b" Then
-            Return "2023 | 研究表明：玩家喜欢作出选择——越多越好！"
-        ElseIf Name = "24w14potato" Then
-            Return "2024 | 毒马铃薯一直都被大家忽视和低估，于是我们超级加强了它！"
-        ElseIf Name = "25w14craftmine" Then
-            Return "2025 | 你可以合成任何东西——包括合成你的世界！"
-        ElseIf Name = "26w14a" Then
-            Return "2026 | 为什么需要物品栏？让方块们跟着你走吧！"
-        Else
-            Return ""
-        End If
+        Return Instances.FoolNames.Get(Name) '愚人节版本名表已迁至 C#
     End Function
 
     ''' <summary>
