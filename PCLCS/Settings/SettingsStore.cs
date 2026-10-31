@@ -8,7 +8,7 @@ namespace PCLCS.Settings;
 /// </summary>
 public sealed class SettingsStore
 {
-    readonly string _filePath;
+    private readonly string _filePath;
 
     public SettingsStore(string filePath) => _filePath = filePath;
 

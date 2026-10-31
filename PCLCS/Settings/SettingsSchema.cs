@@ -12,10 +12,10 @@ public enum SettingsSource { Normal, Registry, Instance }
 /// </summary>
 public sealed class SettingsEntry
 {
-    public SettingsEntry(string key, object defaultValue, SettingsSource source, bool encrypted)
+    public SettingsEntry(string key, object? defaultValue, SettingsSource source, bool encrypted)
     {
         Key = key;
-        DefaultValue = defaultValue;
+        DefaultValue = defaultValue!;
         Source = source;
         Encrypted = encrypted;
         ValueType = defaultValue?.GetType() ?? typeof(string);
