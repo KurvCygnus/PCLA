@@ -8,9 +8,28 @@
 
 | 结论 | 实际情况 | 证据 |
 | --- | --- | --- |
-| "账号密码明文入库" | 已否证。`LoginNidePass`/`LoginAuthPass`/`CacheAuthPass` 均声明 `Encrypted:=True`，走 DES 加密 | `Plain Craft Launcher 2\Pages\PageSetup\Settings.vb:63,70,80,82`；加解密 `:255,347` |
+| "账号密码明文入库" | 已否证。全部 40 个敏感键（微软/Nide/Authlib 令牌与密码、登录表单、统计水位）自旧版起即声明加密，W1 迁移前后键集逐一比对一致，完整清单见 §0.1 | 现行目录 `PCLCS\Settings\SettingsCatalog.cs:29-100`（加密标记 40 处）；迁移前目录 `Settings.vb:9-80`（分支基点 `65c700d`，`Encrypted:=True` 40 处）；加解密 `PCLCS\Settings\SettingsCrypto.cs` |
 | "resx 嵌入 DLL 存在构建竞态，可能打包旧 DLL" | 已否证。删除 `PCLCS\bin` 后单独重建 vbproj 成功（3.5 s），`PCLCS\bin` 被重新生成，说明 ProjectReference 在 `GenerateResource` 之前完成 | 实测；嵌入点 `Plain Craft Launcher 2\My Project\Resources.resx:148-167`，加载点 `Application.xaml.vb:217-233` |
-| "设置项密文安全" | 不成立。DES + 固定 IV `95168702` + 由 `Identify` 推导的固定密钥，只能防"肉眼直读" | `Settings.vb:439-475` |
+| "设置项密文安全" | 不成立。DES + 固定 IV `95168702` + 由 `Identify` 推导的固定密钥，只能防"肉眼直读"；W1 后算法原样保留在 C#（与旧数据逐字节互通），机密性结论不变 | `PCLCS\Settings\SettingsCrypto.cs:11-41`；旧实现 `Settings.vb:439-475`（`65c700d`） |
+
+### 0.1 敏感键完整清单（W1 收尾盘点，2026-11-01）
+
+`PCLCS\Settings\SettingsCatalog.cs`（182 键）中加密键共 **40** 个，与迁移前 VB 目录（分支基点 `65c700d` 的 `Settings.vb:5-188`）逐键比对键名完全一致。逐键核对"含凭据/令牌 → 必须 Encrypted"无一遗漏，未发现预期外的明文凭据键。行号为 `SettingsCatalog.cs` 现行行号：
+
+| 组 | 键 | 内容 | 凭据/令牌 | 行 |
+| --- | --- | --- | --- | --- |
+| 统计与版本水位（6） | `AprilYear`、`SystemCount`、`SystemLaunchCount`、`SystemHighestSavedBetaVersionReg`、`SystemHighestBetaVersionReg`、`SystemHighestAlphaVersionReg` | 启动/活动统计与快照版本水位；不含凭据，旧版即加密，照旧保留 | 否 | 29, 44, 46-49 |
+| 微软登录缓存 V1（5） | `CacheMsOAuthRefresh`、`CacheMsAccess`、`CacheMsProfileJson`、`CacheMsUuid`、`CacheMsName` | OAuth 刷新/访问令牌、档案 JSON、UUID、玩家名 | 是 | 64-68 |
+| 微软登录缓存 V2（6） | `CacheMsV2OAuthRefresh`、`CacheMsV2Access`、`CacheMsV2ProfileJson`、`CacheMsV2Uuid`、`CacheMsV2Name`、`CacheMsV2Expires` | 同上（V2 迁移后）；过期时间戳随令牌一并加密 | 是 | 70-75 |
+| Nide 皮肤站（7） | `CacheNideAccess`、`CacheNideClient`、`CacheNideUuid`、`CacheNideName`、`CacheNideUsername`、`CacheNidePass`、`CacheNideServer` | 访问/客户端令牌、UUID、玩家名、用户名、密码、服务器地址 | 是 | 76-82 |
+| Authlib-Injector（9） | `CacheAuthAccess`、`CacheAuthClient`、`CacheAuthUuid`、`CacheAuthName`、`CacheAuthUsername`、`CacheAuthPass`、`CacheAuthServerServer`、`CacheAuthServerName`、`CacheAuthServerRegister` | 访问/客户端令牌、UUID、玩家名、用户名、密码、服务器三项信息 | 是 | 83-91 |
+| 登录页表单（7） | `LoginRemember`、`LoginLegacyName`、`LoginMsJson`、`LoginNideEmail`、`LoginNidePass`、`LoginAuthEmail`、`LoginAuthPass` | 记住密码开关、离线用户名、微软表单缓存 JSON（内含 OAuth token）、Nide/Authlib 邮箱与密码 | 是 | 94-100 |
+
+盘点附带结论：
+
+- 目录内全部含 `Pass`/`Token`/`Secret`/`OAuth` 语义的键均已加密，明文键（如 `CacheExportConfig` 等路径类键）均不含凭据。
+- 加密算法与旧版逐字节互通（DES + 固定 IV，口令 `"PCL" + Identify`），只能防肉眼直读，不构成机密性保证（见上表第三行）。
+- 旧版"导出设置"入口已随早前版本移除，当前不存在导出泄露面；未来恢复导出能力时，token/密码类键的排除或置空必须绑定 S4 spec 的 `ISettingsMigration.Export`，不得直接遍历目录输出。
 
 另外补一条实测踩坑：清空 `PCLCS\obj` 后直接 `msbuild` 会报 13 个 `CS0518: 预定义类型 System.Runtime.CompilerServices.IsExternalInit 未定义`，因为 PolySharp 源生成器依赖 restore 产物。构建顺序必须是先 `dotnet build PCLCS\PCLCS.csproj -c Release`（自带 restore），再构建 vbproj。
 
@@ -191,3 +210,13 @@
 - 后续清理时删除 `JsonNodeUtils` 的宽松层，改为 DTO/源生成后再收紧 schema。
 - **残留：`StringExtensions.GetString` 的 GB18030 回退在 AOT/不变全球化下不可用。** `MeloongCore\Shared\Extensions\StringExtensions.cs:350-367` 在 UTF-8 严格解码失败后调用 `Encoding.GetEncoding("GB18030")`；该编码依赖 `System.Text.Encoding.CodePages` 提供程序注册，NativeAOT 且 `InvariantGlobalization=true` 的进程中未注册时直接抛 `ArgumentException`。net48 桌面路径不受影响；AOT 路径若新增非 UTF-8 文本解析需求，需先显式注册 CodePages 提供程序或改为显式传入 `Encoding` 参数。
 - **验证盲区：AOT 冒烟的宿主与目标 TFM 不一致。** 本机与 CI 的 SDK 为 9.x/10.x，`PCLCS.AotSmoke` 以 net10.0 发布冒烟，而 `PCLCS` 的 AOT 目标是 net8.0；net10 宿主加载 net8.0 程序集的冒烟无法覆盖 net8.0 宿主的真实 AOT 编译差异（如 SDK 版本引入的 IL 剪裁告警变化）。SDK 8.x 环境下需重跑 `dotnet publish PCLCS.AotSmoke` 作为补充验证。
+
+## 10. W1 实例与设置 C# 化的过渡债（2026-11-01）
+
+以下条目是 W1（`docs\superpowers\plans\2026-10-29-w1-instances-settings.md`）移植时的已知行为差异，均只出现在病态输入（JSON null、非布尔标量）上，正常输入与旧版一致；**本轮仅记录，不修**。
+
+- **版本 JSON `assetIndex` 为 JSON null 时不再中断继承链。** 旧版对 null 取 `Index("id")` 抛 NRE，落入空 Catch 后整体放弃继承链（直接走 legacy 兜底）；新版（`PCLCS\Instances\AssetsIndex.cs:163-168` 的 `IndexObject`）把 null 视为缺失，继续沿 `inheritsFrom` 向父版本查找。忠实复现旧语义可用 `TryGetPropertyValue`，属可接受的微小取舍。
+- **`map_to_resources`/`virtual` 为数字 1 时旧真新抛。** 旧版 `Convert.ToBoolean(1)` 得 true；新版 `Flag`（`PCLCS\Instances\AssetsIndex.cs:178-188`）对非布尔标量走 `bool.Parse("1")`，抛 `FormatException` 进入 `ListGet` 的 Catch 后整体失败。
+- **资源索引 `objects` 为 JSON null 时旧空新抛。** 旧版 `JValue.Children` 为空集，按空列表无操作返回；新版（`PCLCS\Instances\AssetsIndex.cs:123-124`）与缺失同样抛出并重抛，`checkHash=true` 时令整个补文件任务失败。忠实移植本可用 `TryGetPropertyValue` 复现，为刻意保留的微小取舍。
+- **`IsOldJson` 对 `minecraftArguments` 为 JSON null 的判定相反。** 旧版 Newtonsoft 的 `JObject("minecraftArguments")` 返回 null JValue，`IsNot Nothing` 为真且与 `""` 比较不等 → True；新版 STJ 索引对 JSON null 返回 null（`PCLCS\Instances\InstanceCore.cs:143-150`）→ False。正常输入（缺失或字符串）两者一致。
+- **SkinProfile 的 JSON null 语义差异。** 旧版：`textures`/`skin` 为 JSON null 时抛 `ArgumentException`，`url` 为 JSON null 时得空串并写入缓存，`properties` 数组含 null 元素时抛出；新版（`PCLCS\Instances\SkinProfile.cs:53-72`）：null 与缺失同判——`textures`/`skin`/`url` 为 null 统一按"用户未设置自定义皮肤"抛友好异常且不写缓存，null 元素跳过。正常服务器响应两者一致；解析异常均落入同一 Catch（消息与日志逐字不变）。

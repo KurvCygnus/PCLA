@@ -7,7 +7,7 @@
 | 项目 | 语言 | 目标框架 | 作用 |
 | --- | --- | --- | --- |
 | `Plain Craft Launcher 2` | VB.NET + XAML | .NET Framework 4.8 | 启动器主体：UI、业务、Minecraft 域 |
-| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析 |
+| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（W1 起，见 §5.5 与 §6.7） |
 | `MeloongCore` | C#（子模块） | net48 / netstandard2.0 | 通用基础设施：日志、路径、配置、网络、文件工具 |
 | `MeloongCore.Wpf` | C# | net48 | WPF 相关基础件 |
 | `PCLCS.AotSmoke` | C# | net10.0 | NativeAOT 冒烟工程：发布 `PCLCS` + `MeloongCore.Shared` 的解析与迁移路径（见下文 §1.1） |
@@ -90,6 +90,8 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 
 `Settings` 是静态字典 `Entries`（`Settings.vb:5-198`），读写靠 `CTypeDynamic` 做运行期类型转换（`:285,356`）；`Encrypted:=True` 的项用 DES + 固定 IV `95168702`、密钥 `"PCL" & Identify` 加密（`:255,439-475`）。配置版本迁移没有 schema，全部塞在 `UpgradeSub`/`DowngradeSub` 的代码分支里（`FormMain.xaml.vb:477-556`）。
 
+> W1 起上段仅描述旧版形态：存储引擎已切换为 `PCLCS\Settings` 的 JSON 后端（见 §5.5），注册表与 Setup.ini 降级为一次性导入源，`Settings.vb` 只剩薄转发。
+
 ### 5.2 任务框架
 
 - `LoaderBase`（`Modules\Base\ModLoader.vb:7-259`）：`State` 每次变迁都经 `RunInUi` 派发，`WaitForExit` 以 10 ms 轮询（`:210-228`）。
@@ -115,13 +117,23 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 令牌缓存在 `CacheMsV2*` 系列设置项（`Settings.vb:52-57`，加密）；Nide/Authlib 的账号密码在 `LoginNidePass`/`LoginAuthPass`（`:80,82`，同样加密，但为 DES + 固定 IV）。
 - 客户端 ID 走环境变量 `PCL_MS_CLIENT_ID`（`ModSecret.vb:10`），仓库不携带任何密钥。
 
+### 5.5 设置后端（PCLCS\Settings，W1 起）
+
+W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部在 `PCLCS\Settings\`，语义与旧版逐条对齐，由 `tests\PCLCS.Tests\Settings` 锁定。
+
+- **目录**：`SettingsCatalog.cs` 收录 182 个设置项（键、默认值、来源、是否加密），自迁移前 `Settings.vb:5-188` 逐键机械迁移；未知键抛 `KeyNotFoundException`（消息与旧版一致）。来源 `SettingsSource` 分 `Normal`/`Registry`/`Instance` 三种，决定读写落点。
+- **存储 schema**（`SettingsStore.cs`）：全局 `<数据目录>\Settings.json` 与每实例 `<版本目录>\.pcla\Settings.json`，顶层固定 `schemaVersion`/`values`/`encrypted`/`imported`/`extra` 五节；`extra` 对未知键原样保真，未来版本的键回写时不丢失。损坏时按空文档处理并告警，`.bak` 滚动备份保留上一版；落盘先写 `.tmp` 再原子替换。加密键与实例设置有进程内缓存（按实例分桶）。
+- **加密边界**（`SettingsCrypto.cs`）：加密键落 `encrypted` 节，形如 `{"$enc":"v1","data":<base64>}`；算法与旧版逐字节兼容（DES + 固定 IV `95168702`，口令 `"PCL" + Identify`），`IdentifyProvider` 由 VB 启动时注入 `GetIdentify()`。该算法只能防肉眼直读，不构成机密性保证（`docs\TECHDEBT.md` §0）；加密键经 `GetSafe`/`SetSafe` 读写会被拒绝。
+- **导入**（`SettingsImport.cs`）：一次性懒式导入，只补缺失键，旧数据全程保留。全局源为注册表 `HKCU\Software\PCLADebug` 与 `<数据目录>\Setup.ini`；每实例源为 `<版本目录>\PCL\Setup.ini`。完成标记写在文档 `imported` 节，加密键先按旧算法解密再入新文档，解不开即跳过并告警。
+- **回调**：`SettingChanged(key, 新值, 实例键)` 在保存之后触发（旧版时序约束）；原 `OnChanged` 回调表集中在 `Settings.vb` 的 `ChangedHandlers` 统一注册。
+
 ## 6. Minecraft 域
 
 ### 6.1 模型
 
 - 版本元数据用 C# 类型 `McVersion`（`PCLCS\Minecraft\McVersion.cs:8`），由 JSON 文本反推：版本号（`:154-207`）、加载器（`:129-151`，靠字符串包含与正则）、快照/愚人节（`:132-133`）。
 - 加载器是标志位枚举 `ModLoaders { None, Forge=1, LiteLoader=2, Fabric=4, NeoForge=16 }`（`PCLCS\Constants.cs:42-49`）：OptiFine 用附加字段表示，Quilt 被识别为 Fabric（`McVersion.cs:140-142`）。
-- 实例模型是 VB 的 `McInstance`（`ModMinecraft.vb:218-867`），但状态枚举 `McInstanceState`（`:220-231`）把"版本类型"和"加载器"揉成一个维度，分类靠 `Select Case` 顺序（`:635-663`），因此 Forge+OptiFine 会显示为 OptiFine、Fabric 优先于 Forge。
+- 实例模型是 VB 的 `McInstance`（`ModMinecraft.vb:218-867`），但状态枚举 `McInstanceState`（`:220-231`）把"版本类型"和"加载器"揉成一个维度，分类靠 `Select Case` 顺序（`:635-663`），因此 Forge+OptiFine 会显示为 OptiFine、Fabric 优先于 Forge。W1 起核心数据面在 `PCLCS\Instances\InstanceCore`，见 §6.7。
 
 ### 6.2 安装
 
@@ -161,6 +173,15 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 五种格式：CurseForge `manifest.json`、Modrinth `modrinth.index.json`、HMCL `mcbbs.packmeta`、MultiMC `mmc-pack.json`、MCBBS；入口 `ModpackInstall`（`ModModpack.vb:31`），按压缩包内文件名嗅探（`:44-72`），overrides 复制到版本目录并写入 `VersionArgumentIndie`（`:126-143`）。
 - 崩溃分析 `CrashAnalyzer`（`ModCrash.vb:1`）：收集最近 3 分钟的 crash-report 与 latest.log（`:21-85`），按文件类型截取头尾窗口（`:214-264`），再用约 60 条 `String.Contains` 规则匹配原因（`:474-584`），最后做 Mixin/模组名归因（`:589-670`）。规则即产品知识，行为由 `tests\PCLA.BehaviorTests` 的黄金语料锁定。
 
+### 6.7 实例模型（PCLCS\Instances，W1 起）
+
+`McInstance` 拆成"核心 + 包装"两层，行为由 `tests\PCLCS.Tests\Instances` 与行为语料双面锁定：
+
+- **核心数据面** `InstanceCore`（`PCLCS\Instances\InstanceCore.cs`）：版本 JSON 解析（HMCL patches 合并、inherit 链合并、`MergeJson` 对齐 Newtonsoft 默认合并语义）、状态与描述判定、PathIndie（版本隔离）与实例级设置读取。数值枚举 `InstanceState` 与 VB `McInstanceState` 一一对应，卡片类型用 int 数值贯通（枚举留在 VB）。
+- **纯函数面**：`InstancePaths`（版本目录与 JSON 定位）、`InstanceScanner`（扫描 versions\ 与卡片分类排序，PCL.ini 写入与 Loader 编排留在 VB）、`Libraries`/`AssetsIndex`（库与资源索引解析；NetFile 下载映射、进度反馈留在 VB）、`SkinProfile`（皮肤地址与模型判定；ini 缓存、网络请求与"当前所选实例"经回调参数注入）、`FoolNames`（愚人节版本名表）。
+- **VB 包装**（`ModMinecraft.vb` 的 `McInstance`）：UI/ini/Logo 编排、`JsonConfigProvider` 与下载映射留在 VB，对核心做薄转发。
+- **JSON 快照规则**：`McInstance.JsonObject` 用 `LegacyJsonExtensions.ToJToken(_core.VersionJson)` 生成 Newtonsoft `JObject` 快照——W3 迁移完成前，外部对快照的修改不会写回，现有 VB 读取方均为只读。C# 内部跨 `JsonNode` 树移动一律 `DeepClone`，避免"已有父节点"异常。移植中的 JSON null 边界差异登记在 `docs\TECHDEBT.md` §10。
+
 ## 7. 测试
 
 ### 7.1 PCLCS 单元测试
@@ -173,8 +194,8 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 - 测试进程内初始化临时目录；不启动 WPF、不访问网络、不写真实用户目录。
 - `CrashAnalyzer.GetAnalyzeResult` 是唯一生产可见性接缝（`Friend` + `InternalsVisibleTo`）。
 - 语料是合成数据；行为变化必须显式更新断言，不能靠放宽断言通过。
-- 当前共 32 个测试：3 个宿主冒烟、10 个实例模型、8 个崩溃分析、11 个配置读写。
-- 该 VB WPF 工程是非 SDK 形式的旧式项目，`dotnet build` 完全无法构建；行为测试必须走 `.\tools\test-behavior.ps1`（MSBuild 构建 + `vstest.console.exe` 运行）。
+- 当前共 36 个测试：3 个宿主冒烟、10 个实例模型、8 个崩溃分析、11 个配置读写、4 个实例列表。
+- 不使用 `dotnet test` 直接构建：PCLA 是 VB + WPF，`dotnet build` 不跑 VB 的 XAML 生成目标，会报大量 `BC30506`。行为测试用 MSBuild 构建，再用 `vstest.console` 运行（`.\tools\test-behavior.ps1`）。
 
 ## 8. 关键路径速查
 

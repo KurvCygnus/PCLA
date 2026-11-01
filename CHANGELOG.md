@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- 设置不再写入注册表，改存为启动器数据目录下的 `Settings.json`；首次启动时自动导入原有注册表与 Setup.ini 中的设置。
+- 旧的注册表数据与旧配置文件在导入后原样保留，不会被删除或修改。
+
 ## 0.1.0
 
 - 启动器更名为 Plain Craft Launcher (PCL) Alternative（PCLA），使用独立的数据目录与注册表，可与原版 PCL 并存。
