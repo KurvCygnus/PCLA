@@ -8,12 +8,13 @@ namespace PCLCS.Tests.Net;
 /// <summary>多线程下载引擎（NetFile/NetThread）回环测试：分块、多源降级与校验失败路径。</summary>
 public class NetFileTests
 {
-    static string TempPath(string name) => Path.Combine(Path.GetTempPath(), "pclcs.netfile." + Guid.NewGuid().ToString("N"), name);
+    private static string TempPath(string name) => Path.Combine(Path.GetTempPath(), "pclcs.netfile." + Guid.NewGuid().ToString("N"), name);
 
     [Fact]
     public void Single_source_small_file_downloads_and_completes()
     {
-        using var server = new LoopbackServer { Responder = static _ => (200, "hello-world", null) };
+        using var server = new LoopbackServer();
+        server.Responder = static _ => (200, "hello-world", null);
         var path = TempPath("a.txt");
         //brief 原文为恒真委托 (t, size) => true；FileChecker 实为 MeloongCore 校验类（Hash/ActualSize/MinSize/IsJson 四判据），
         //无判据即等价于恒过（文件存在即可）
@@ -28,7 +29,9 @@ public class NetFileTests
     {
         var body = new string('x', 2_000_000); //>1MB 触发分块（IsNoSplit 阈值）
         //BodyChunkDelayMs 模拟慢速源，确保自驱调度追加 Range 分块线程与多线程合并路径真实发生
-        using var server = new LoopbackServer { RangeBody = Encoding.UTF8.GetBytes(body), BodyChunkDelayMs = 10 };
+        using var server = new LoopbackServer();
+        server.RangeBody = Encoding.UTF8.GetBytes(body);
+        server.BodyChunkDelayMs = 10;
         var path = TempPath("big.bin");
         var file = new NetFile([server.UrlPrefix + "big.bin"], path);
         file.Start();
@@ -40,8 +43,10 @@ public class NetFileTests
     [Fact]
     public void Failing_source_falls_back_to_single_thread_retry()
     {
-        using var bad = new LoopbackServer { Responder = static _ => (500, "boom", null) };
-        using var good = new LoopbackServer { RangeBody = Encoding.UTF8.GetBytes(new string('y', 200_000)) };
+        using var bad = new LoopbackServer();
+        bad.Responder = static _ => (500, "boom", null);
+        using var good = new LoopbackServer();
+        good.RangeBody = Encoding.UTF8.GetBytes(new string('y', 200_000));
         var path = TempPath("c.bin");
         var file = new NetFile([bad.UrlPrefix + "c", good.UrlPrefix + "c"], path);
         file.Start();
@@ -52,7 +57,8 @@ public class NetFileTests
     [Fact]
     public void Hash_checker_failure_marks_failed()
     {
-        using var server = new LoopbackServer { Responder = static _ => (200, "wrong-content", null) };
+        using var server = new LoopbackServer();
+        server.Responder = static _ => (200, "wrong-content", null);
         var path = TempPath("d.txt");
         //brief 原文为恒败委托 (t, size) => false；以恒不匹配的 SHA256 承载“校验必败”，走 Merge 校验失败→SourceFail 重试→Fail 路径
         var file = new NetFile([server.UrlPrefix + "d.txt"], path, new FileChecker { Hash = new string('0', 64) });
@@ -61,7 +67,7 @@ public class NetFileTests
         Assert.NotEmpty(file.Exs);
     }
 
-    static bool SpinWaitSuccess(NetFile f, int timeoutMs)
+    private static bool SpinWaitSuccess(NetFile f, int timeoutMs)
     {
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs)
@@ -72,7 +78,7 @@ public class NetFileTests
         return false;
     }
 
-    static bool SpinWaitFailed(NetFile f, int timeoutMs)
+    private static bool SpinWaitFailed(NetFile f, int timeoutMs)
     {
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs)

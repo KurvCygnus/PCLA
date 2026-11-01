@@ -63,6 +63,7 @@ public sealed class NetFile
     {
         get
         {
+            //! 逐字移植豁免（Rider 反转 if）：VB :149-165 的 If 缓存判空结构
             if (netTaskSpeedLimitHighCache == null)
             {
                 var setting = SettingsService.Get<int>("ToolDownloadSpeed");
@@ -107,7 +108,7 @@ public sealed class NetFile
     public List<NetSource> Sources { get; } = [];
 
     /// <summary>用于在第一个线程出错时切换下载源。</summary>
-    private int firstThreadSource;
+    private int _firstThreadSource;
 
     /// <summary>
     /// 所有已经被标记为失败的，但未完整尝试过的，不允许断点续传的下载源。
@@ -118,7 +119,7 @@ public sealed class NetFile
     /// 仅当合并失败或首次下载失败时，会将所有下载源重新标记为不允许断点续传的下载源，逐个重新尝试下载。
     /// 这一策略可以兼容多个下载源中的一部分返回错误的文件的情况，以及部分在多线程下载时会抽风的源。
     /// </summary>
-    private bool retried;
+    private bool _retried;
 
     /// <summary>
     /// 获取从某个源开始，第一个可用的源（ModNet.vb:416-436 逐字）。
@@ -126,6 +127,7 @@ public sealed class NetFile
     private NetSource? GetSource(int id = 0)
     {
         if (id >= Sources.Count || id < 0) id = 0;
+        //! 逐字移植豁免（Rider 锁序环）：VB :416-436 GetSource 的 SyncLock LockSource 内调 HasAvailableSource 同锁重入
         lock (LockSource)
         {
             if (HasAvailableSource(false))
@@ -140,6 +142,7 @@ public sealed class NetFile
                 }
                 return currentSource;
             }
+            //! 逐字移植豁免（Rider 转 return）：VB :428-434 的 If/Else 结构镜像
             if (SourcesOnce.Any()) return SourcesOnce.First(); //仅存在单线程可用源
             return null; //没有可用源
         }
@@ -186,7 +189,7 @@ public sealed class NetFile
     public bool IsNoSplit => IsUnknownSize || FileSize < 1024 * 1024; //小于 1MB 的文件不分割
 
     /// <summary>为不需要分割的小文件在内存中提供临时存储。</summary>
-    private MemoryStream? cache;
+    private MemoryStream? _cache;
 
     /// <summary>文件的已下载大小。（VB 为公共字段：Reset 清零与线程 Interlocked 记数并存，保留字段语义）</summary>
     public long DownloadDone;
@@ -198,27 +201,28 @@ public sealed class NetFile
     public bool SimulateBrowserHeaders { get; set; }
 
     /// <summary>上次记速时的时间。</summary>
-    private long speedLastTime = GetTimeMs();
+    private long _speedLastTime = GetTimeMs();
 
     /// <summary>上次记速时的已下载大小。</summary>
-    private long speedLastDone;
+    private long _speedLastDone;
 
     /// <summary>当前的下载速度，单位为 Byte / 秒。</summary>
     public long Speed
     {
         get
         {
-            if (GetTimeMs() - speedLastTime > 200)
+            //! 逐字移植豁免（Rider 反转 if）：VB :519-527 的记速结构
+            if (GetTimeMs() - _speedLastTime > 200)
             {
-                var deltaTime = GetTimeMs() - speedLastTime;
-                speed = Convert.ToInt64((DownloadDone - speedLastDone) / (deltaTime / 1000.0));
-                speedLastDone = DownloadDone;
-                speedLastTime += deltaTime;
+                var deltaTime = GetTimeMs() - _speedLastTime;
+                _speed = Convert.ToInt64((DownloadDone - _speedLastDone) / (deltaTime / 1000.0));
+                _speedLastDone = DownloadDone;
+                _speedLastTime += deltaTime;
             }
-            return speed;
+            return _speed;
         }
     }
-    private long speed;
+    private long _speed;
 
     /// <summary>该文件是否由本地文件直接复制完成。</summary>
     public bool IsCopy { get; set; }
@@ -250,18 +254,18 @@ public sealed class NetFile
     }
 
     /// <summary>各个线程建立连接成功的总次数。</summary>
-    private int connectCount;
+    private int _connectCount;
 
     /// <summary>各个线程建立连接成功的总时间。</summary>
-    private long connectTime;
+    private long _connectTime;
 
     /// <summary>各个线程建立连接成功的平均时间，单位为毫秒，-1 代表尚未有成功连接。</summary>
     private int ConnectAverage
     {
         get
         {
-            var currentConnectCount = connectCount; //防止竞态条件
-            return currentConnectCount == 0 ? -1 : Convert.ToInt32(connectTime / (double) currentConnectCount);
+            var currentConnectCount = _connectCount; //防止竞态条件
+            return currentConnectCount == 0 ? -1 : Convert.ToInt32(_connectTime / (double) currentConnectCount);
         }
     }
 
@@ -287,7 +291,10 @@ public sealed class NetFile
     /// <summary>
     /// 新建一个需要下载的文件（ModNet.vb:598-611 逐字；每源 URL 经 CdnSigner）。
     /// </summary>
+    /// <param name="urls">下载源 Url 列表。</param>
     /// <param name="localPath">包含文件名的本地地址。</param>
+    /// <param name="checker">文件的校验规则。</param>
+    /// <param name="simulateBrowserHeaders">是否模拟浏览器的 UserAgent 和 Referer。</param>
     public NetFile(IEnumerable<string> urls, string localPath, FileChecker? checker = null, bool simulateBrowserHeaders = false)
     {
         var sources = new List<NetSource>();
@@ -319,6 +326,7 @@ public sealed class NetFile
             Thread thread;
             NetThread threadInfo;
             //条件检测
+            //! 逐字移植豁免（Rider 锁序环）：VB :623 SyncLock LockSource 内调 HasAvailableSource 同锁重入
             lock (LockSource)
             {
                 if (NetTaskThreadCount >= NetTaskThreadLimit || !HasAvailableSource() ||
@@ -344,19 +352,21 @@ public sealed class NetFile
                     State = NetState.Reading;
                 }
             }
+            //! 逐字移植豁免（Rider 锁序环）：VB :642 SyncLock LockChain，链上 DownloadEnd 亦持 LockChain（同锁重入）
             lock (LockChain)
             {
                 //首个开始点
                 if (Threads == null)
                 {
                     startPosition = 0;
-                    startSource = GetSource(firstThreadSource);
-                    firstThreadSource = startSource!.Id + 1; //VB 同处直接解引用，无可用源时由外层 catch 兜底 Fail
+                    startSource = GetSource(_firstThreadSource);
+                    _firstThreadSource = startSource!.Id + 1; //VB 同处直接解引用，无可用源时由外层 catch 兜底 Fail
                     goto StartThread;
                 }
                 //寻找失败点
                 foreach (var canceledThread in Threads)
                 {
+                    //! 逐字移植豁免（Rider 反转 if）：VB :652 寻找失败点结构
                     if (canceledThread.State == NetState.Canceled && canceledThread.DownloadUndone > 0)
                     {
                         startPosition = canceledThread.DownloadStart + canceledThread.DownloadDone;
@@ -441,12 +451,13 @@ StartThread:
             NetRequest.HeadersSigner?.Invoke(httpRequest.Headers, th.Source.Url, SimulateBrowserHeaders); //ModNet.vb:724 SecretHeadersSign 经签名接线
             cancelToken = new CancellationTokenSource(timeout);
             if (!th.IsFirstThread) httpRequest.Headers.Range = new RangeHeaderValue(th.DownloadStart, null);
-            response = GetResultWithTimeout(threadClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancelToken.Token), cancelToken, timeout);
+            response = GetResultWithTimeout(ThreadClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancelToken.Token), cancelToken, timeout);
             if (!response.IsSuccessStatusCode) //状态码检查
             {
                 throw new HttpRequestCodeException($"错误码 {response.StatusCode} ({(int) response.StatusCode})，{th.Source.Url}", response.StatusCode, null);
             }
             if (State == NetState.Canceled) goto SourceBreak; //快速中断
+            //! 逐字移植豁免（Rider 捕获变量释放序）：VB :733 的重定向延迟日志，response 于 finally 释放
             if (response.RequestMessage!.RequestUri!.ToString() != th.Source.Url) Logger.Trace(() => $"{LocalName}：重定向至 {response.RequestMessage.RequestUri}");
             //文件大小校验（ModNet.vb:734-781；VB 的 GoTo NotSupportRange 以 notSupportRange 标志汇入同段：
             //contentLength<0 分支结束后 VB 即跳出整条链，故 Range 一致性检查仅在其未进入或显式汇入时执行）
@@ -529,8 +540,8 @@ StartThread:
             if (IsNoSplit)
             {
                 th.Temp = null;
-                cache = new MemoryStream();
-                resultStream = cache;
+                _cache = new MemoryStream();
+                resultStream = _cache;
             } else
             {
                 th.Temp = $"{PathTemp}Download\\{Uuid}_{th.Uuid}_{RandomInteger(0, 999999)}.tmp";
@@ -551,7 +562,7 @@ StartThread:
                 {
                     Thread.Sleep(16);
                 }
-                var realDataCount = IsUnknownSize ? httpDataCount : (int) Math.Min((long) httpDataCount, th.DownloadUndone);
+                var realDataCount = IsUnknownSize ? httpDataCount : (int) Math.Min(httpDataCount, th.DownloadUndone);
                 if (NetTaskSpeedLimitHigh > 0) Interlocked.Add(ref netTaskSpeedLimitLeft, -realDataCount);
                 var deltaTime = GetTimeMs() - th.LastReceiveTime;
                 if (deltaTime > 100000000) deltaTime = 1; //避免时间刻反转导致出现极大值
@@ -566,8 +577,8 @@ StartThread:
                         {
                             if (State < NetState.Downloading) State = NetState.Downloading;
                         }
-                        Interlocked.Increment(ref connectCount);
-                        Interlocked.Add(ref connectTime, GetTimeMs() - th.InitTime);
+                        Interlocked.Increment(ref _connectCount);
+                        Interlocked.Add(ref _connectTime, GetTimeMs() - th.InitTime);
                     }
                     th.Source.FailCount = 0;
                     foreach (var task in Tasks)
@@ -682,12 +693,12 @@ SourceBreak:
                 } else if (HasAvailableSource() && !isMergeFailure)
                 {
                     //当前源失败，但还有下载源：正常地继续执行
-                } else if (!retried)
+                } else if (!_retried)
                 {
                     //合并失败或首次下载失败，未重试：将所有下载源重新标记为不允许断点续传的下载源，逐个重新尝试下载
                     //若所有源均不支持 Range，也会走到这里重试
                     if (!isRangeNotSupported) Logger.Warn($"{LocalName}：文件下载失败，正在自动重试……");
-                    retried = true;
+                    _retried = true;
                     lock (LockSource)
                     {
                         SourcesOnce.Clear();
@@ -719,6 +730,7 @@ SourceBreak:
                     {
                         foreach (var source in Sources)
                         {
+                            //! 逐字移植豁免（Rider 反转 if）：VB :943 无源失败时的逐源记录结构
                             Logger.Info($"已禁用的下载源：{source.Url}");
                             if (source.Ex != null)
                             {
@@ -738,15 +750,16 @@ SourceBreak:
     private void Reset()
     {
         FileSize = -2;
-        cache?.Dispose();
-        cache = null;
+        _cache?.Dispose();
+        _cache = null;
+        //! 逐字移植豁免（Rider 锁序环）：VB :959 Reset 的 SyncLock LockChain，与 NetThread.DownloadEnd 同锁重入
         lock (LockChain)
         {
             Threads = null;
         }
         DownloadDoneDelta?.Invoke(-DownloadDone);
         DownloadDone = 0;
-        speedLastDone = 0;
+        _speedLastDone = 0;
     }
 
     //最终收束事件
@@ -784,7 +797,7 @@ SourceBreak:
                         {
                             //仅有一个线程，从内存中输出
                             Logger.Trace(() => $"{LocalName}：下载结束，从内存输出文件");
-                            FileUtils.Write(LocalPath, cache!);
+                            FileUtils.Write(LocalPath, _cache!);
                         } else if (Threads!.DownloadDone == DownloadDone && Threads.Temp != null)
                         {
                             //仅有一个文件，直接复制
@@ -861,7 +874,7 @@ SourceBreak:
             }
         } finally
         {
-            cache?.Dispose();
+            _cache?.Dispose();
         }
     }
 
@@ -953,6 +966,7 @@ SourceBreak:
         //输入检测（对照 LoaderDownload.Start :1223-1236）
         foreach (var source in Sources)
         {
+            //! 逐字移植豁免（Rider 反转 if）：宿主层 LoaderDownload.Start :1226 的校验结构镜像
             if (!source.Url.StartsWithF("https://", true) && !source.Url.StartsWithF("http://", true))
             {
                 source.Ex = new ArgumentException("输入的下载链接不正确：" + source.Url);
@@ -1039,7 +1053,7 @@ SourceBreak:
     #region 基础设施（随引擎迁入的宿主层等价实现）
 
     //ModNet.vb:130-132 ThreadClient 随引擎迁入：下载线程共用的 HttpClient
-    private static readonly HttpClient threadClient = new(new HttpClientHandler
+    private static readonly HttpClient ThreadClient = new(new HttpClientHandler
     {
         AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip
     });
@@ -1047,15 +1061,15 @@ SourceBreak:
     /// <summary>获取一个单调递增时间值（毫秒）（ModBase.vb:834 GetTimeMs 的等价实现）。</summary>
     internal static long GetTimeMs() => Stopwatch.GetTimestamp() / (Stopwatch.Frequency / 1000L);
 
-    private static readonly object randomLock = new();
-    private static readonly Random random = new();
+    private static readonly object RandomLock = new();
+    private static readonly Random Random = new();
 
     /// <summary>获取随机整数，两端均含（ModBase.vb RandomInteger 的等价实现；以锁保证 net48 下线程安全）。</summary>
     private static int RandomInteger(int min, int max)
     {
-        lock (randomLock)
+        lock (RandomLock)
         {
-            return random.Next(min, max + 1);
+            return Random.Next(min, max + 1);
         }
     }
 

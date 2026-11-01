@@ -1,4 +1,3 @@
-using System.Collections;
 
 namespace PCLCS.Net;
 
@@ -46,6 +45,7 @@ public sealed class NetThread : IEnumerable<NetThread>, IEquatable<NetThread>
     {
         get
         {
+            //! 逐字移植豁免（Rider 反转 if）：VB :295-300 的 DownloadEnd 结构
             lock (Task.LockChain)
             {
                 if (NextThread == null)
@@ -65,27 +65,28 @@ public sealed class NetThread : IEnumerable<NetThread>, IEquatable<NetThread>
     public long DownloadDone;
 
     /// <summary>上次记速时的时间。</summary>
-    private long speedLastTime = NetFile.GetTimeMs();
+    private long _speedLastTime = NetFile.GetTimeMs();
 
     /// <summary>上次记速时的已下载大小。</summary>
-    private long speedLastDone;
+    private long _speedLastDone;
 
     /// <summary>当前的下载速度，单位为 Byte / 秒。</summary>
     public long Speed
     {
         get
         {
-            if (NetFile.GetTimeMs() - speedLastTime > 200)
+            //! 逐字移植豁免（Rider 反转 if）：VB :333-341 的记速结构
+            if (NetFile.GetTimeMs() - _speedLastTime > 200)
             {
-                var deltaTime = NetFile.GetTimeMs() - speedLastTime;
-                speed = Convert.ToInt64((DownloadDone - speedLastDone) / (deltaTime / 1000.0));
-                speedLastDone = DownloadDone;
-                speedLastTime += deltaTime;
+                var deltaTime = NetFile.GetTimeMs() - _speedLastTime;
+                _speed = Convert.ToInt64((DownloadDone - _speedLastDone) / (deltaTime / 1000.0));
+                _speedLastDone = DownloadDone;
+                _speedLastTime += deltaTime;
             }
-            return speed;
+            return _speed;
         }
     }
-    private long speed;
+    private long _speed;
 
     /// <summary>线程初始化时的时间。</summary>
     public long InitTime = NetFile.GetTimeMs();
@@ -108,6 +109,7 @@ public sealed class NetThread : IEnumerable<NetThread>, IEquatable<NetThread>
     public override bool Equals(object? obj) => Equals(obj as NetThread);
 
     //! VB 未重写 GetHashCode；C# 重写 Equals 须配套以避免 CS0659
+    //! 逐字移植豁免（Rider 非只读字段）：VB 未重写 GetHashCode；C# 重写 Equals 须配套（CS0659），Uuid 实为构造期定值
     public override int GetHashCode() => Uuid;
 
     public static bool operator ==(NetThread? left, NetThread? right) => left is null ? right is null : left.Equals(right); //VB 原为 EqualityComparer.Default.Equals，null 语义一致
