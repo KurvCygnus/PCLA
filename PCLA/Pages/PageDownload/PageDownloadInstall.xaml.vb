@@ -1,3 +1,4 @@
+Imports PCLCS.Download 'DlClientListResult 等条目模型已迁入 C#
 Public Class PageDownloadInstall
 
     Public Sub ControlInit()
@@ -444,7 +445,7 @@ Public Class PageDownloadInstall
 #Region "加载器"
     Public MinecraftVersions As JArray
     Private Sub LoadMinecraft_OnFinish()
-        MinecraftVersions = CType(DlClientListLoader.Output.Value("versions").DeepClone(), JArray)
+        MinecraftVersions = CType(DlClientListLoader.Output.Value.ToJToken()("versions").DeepClone(), JArray) '结果值已随模型收敛为 STJ JsonObject，经 ToJToken 回到宿主层 Newtonsoft 语义
         ShowMinecraftVersionList()
         TrySelectWaitingVersion() '自动选择版本
     End Sub
@@ -872,7 +873,7 @@ Public Class PageDownloadInstall
         '检查 Loader
         If GetLoaderError(LoadFabric) IsNot Nothing Then Return GetLoaderError(LoadFabric)
         '检查版本
-        For Each Version As JObject In DlFabricListLoader.Output.Value("game")
+        For Each Version As JObject In DlFabricListLoader.Output.Value.ToJToken()("game")
             If Version("version").ToString = VanillaName.Replace("∞", "infinite").Replace("Combat Test 7c", "1.16_combat-3") Then
                 If SelectedForge IsNot Nothing Then Return "与 Forge 不兼容"
                 If SelectedNeoForge IsNot Nothing Then Return "与 NeoForge 不兼容"
@@ -894,7 +895,7 @@ Public Class PageDownloadInstall
         Try
             If DlFabricListLoader.State <> LoadState.Finished Then Return
             '获取版本列表
-            Dim Versions As JArray = DlFabricListLoader.Output.Value("loader")
+            Dim Versions As JArray = DlFabricListLoader.Output.Value.ToJToken()("loader")
             If Not Versions.Any() Then Return
             '可视化
             PanFabric.Children.Clear()

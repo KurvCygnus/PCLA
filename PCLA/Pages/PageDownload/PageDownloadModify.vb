@@ -1,4 +1,5 @@
 Imports System.Text.Json
+Imports PCLCS.Download 'DlOptiFineListEntry / DlForgeVersionEntry 等条目模型已迁入 C#
 
 ''' <summary>
 ''' 版本修改页：完整还原已安装组件后，复用安装页的选择交互。
@@ -119,7 +120,7 @@ Public Class PageDownloadModify
         If Task.IsCanceled Then Return
         Task.Progress = 0.7
         'Minecraft
-        MinecraftVersions = CType(DlClientListLoader.Output.Value("versions").DeepClone(), JArray)
+        MinecraftVersions = CType(DlClientListLoader.Output.Value.ToJToken()("versions").DeepClone(), JArray) '结果值已随模型收敛为 STJ JsonObject，经 ToJToken 回到宿主层 Newtonsoft 语义
         VanillaData = MinecraftVersions.OfType(Of JObject).FirstOrDefault(
             Function(v) v("id").ToString.Replace("∞", "infinite") = MinecraftVersion.Replace("∞", "infinite"))
         If VanillaData Is Nothing Then Throw New Exception($"Minecraft 列表中没有已安装的 {MinecraftVersion}")
@@ -155,10 +156,10 @@ Public Class PageDownloadModify
         End If
         'Fabric
         If Components.ModLoaderVersions.ContainsKey(ModLoaders.Fabric) Then
-            Dim FabricEntry = DlFabricListLoader.Output.Value("loader").OfType(Of JObject).FirstOrDefault(
+            Dim FabricEntry = DlFabricListLoader.Output.Value.ToJToken()("loader").OfType(Of JObject).FirstOrDefault(
                 Function(v) v("version").ToString = Components.ModLoaderVersions(ModLoaders.Fabric),
                 Function(v) v("version").ToString.Replace("+build", "") = Components.ModLoaderVersions(ModLoaders.Fabric))
-            If FabricEntry Is Nothing OrElse Not DlFabricListLoader.Output.Value("game").OfType(Of JObject).
+            If FabricEntry Is Nothing OrElse Not DlFabricListLoader.Output.Value.ToJToken()("game").OfType(Of JObject).
                     Any(Function(v) v("version").ToString = MinecraftVersion.Replace("∞", "infinite").Replace("Combat Test 7c", "1.16_combat-3")) Then
                 Throw New Exception($"Fabric 列表中没有已安装的 {Components.ModLoaderVersions(ModLoaders.Fabric)}")
             End If
@@ -419,7 +420,7 @@ Public Class PageDownloadModify
                     '匹配目标 MC 版本下兼容的组件
                     If LoadingComponent Is LoadFabric Then
                         If SelectedFabric Is Nothing AndAlso LoadFabricGetError() Is Nothing Then
-                            Dim Versions = DlFabricListLoader.Output.Value("loader").OfType(Of JObject)
+                            Dim Versions = DlFabricListLoader.Output.Value.ToJToken()("loader").OfType(Of JObject)
                             SelectedFabric = If(Versions.FirstOrDefault(Function(v) v("version").ToString = Version), Versions.FirstOrDefault())?("version").ToString()
                         End If
                     ElseIf LoadingComponent Is LoadOptiFine Then
@@ -513,8 +514,8 @@ Public Class PageDownloadModify
             If Loader.Kind = ModLoaders.Fabric AndAlso OldVersion IsNot Nothing Then
                 Dim TargetVersion = VanillaName.Replace("∞", "infinite").Replace("Combat Test 7c", "1.16_combat-3")
                 CanRestore = CardFabric.Visibility = Visibility.Visible AndAlso CardFabric.MainSwap.Visibility = Visibility.Visible AndAlso
-                    DlFabricListLoader.Output.Value("loader").OfType(Of JObject).Any(Function(v) v("version").ToString = OldVersion) AndAlso
-                    DlFabricListLoader.Output.Value("game").OfType(Of JObject).Any(Function(v) v("version").ToString = TargetVersion)
+                    DlFabricListLoader.Output.Value.ToJToken()("loader").OfType(Of JObject).Any(Function(v) v("version").ToString = OldVersion) AndAlso
+                    DlFabricListLoader.Output.Value.ToJToken()("game").OfType(Of JObject).Any(Function(v) v("version").ToString = TargetVersion)
             End If
             ShowComparison(Loader.ComparePanel, Loader.CurrentPanel, OldVersion, NewVersion, Loader.Label.Text,
                            Loader.RestoreButton, CanRestore, Loader.ClearButton)

@@ -1,4 +1,5 @@
 Imports System.Text.Json
+Imports PCLCS.Download
 Imports PCLCS.Net
 
 Public Module ModDownloadLib
@@ -1440,6 +1441,7 @@ Retry:
     ''' <summary>
     ''' 尝试刷新 Forge 推荐版本缓存。
     ''' </summary>
+    ''' <remarks>决策核已迁入 C#（PCLCS.Download.ModRequests.ForgeRecommendedRefreshCore）；线程派生、刷新标记与 Catch 留宿主层（计划裁定 3）。</remarks>
     Public Sub McDownloadForgeRecommendedRefresh()
         If IsForgeRecommendedRefreshed Then Return
         IsForgeRecommendedRefreshed = True
@@ -1447,22 +1449,8 @@ Retry:
         Sub()
             Try
                 Logger.Info("刷新 Forge 推荐版本缓存开始")
-                Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/forge/promos", RequireJson:=True)
-                If Result.Length < 1000 Then Throw New Exception("获取的结果过短（" & Result & "）")
-                Dim ResultJson As JContainer = Result.DeserializeJson()
-                '获取所有推荐版本列表
-                Dim RecommendedList As New List(Of String)
-                For Each Version As JObject In ResultJson
-                    If Version("name") Is Nothing OrElse Version("build") Is Nothing Then Continue For
-                    Dim Name As String = Version("name")
-                    If Not Name.EndsWithF("-recommended") Then Continue For
-                    '内容为："1.15.2":"31.2.0"
-                    RecommendedList.Add("""" & Name.Replace("-recommended", """:""" & Version("build")("version").ToString & """"))
-                Next
-                If RecommendedList.Count < 5 Then Throw New Exception("获取的推荐版本数过少（" & Result & "）")
-                '保存
-                Dim CacheJson As String = "{" & RecommendedList.Join(",") & "}"
-                FileUtils.Write(PathTemp & "Cache\ForgeRecommendedList.json", CacheJson)
+                ModRequests.ForgeRecommendedCacheFolder = Function() PathTemp & "Cache\"
+                ModRequests.ForgeRecommendedRefreshCore()
                 Logger.Info("刷新 Forge 推荐版本缓存成功")
             Catch ex As Exception
                 Logger.Warn(ex, "刷新 Forge 推荐版本缓存失败")
@@ -1474,21 +1462,10 @@ Retry:
     ''' <summary>
     ''' 尝试获取某个 MC 版本对应的 Forge 推荐版本。如果不可用会返回 Nothing。
     ''' </summary>
+    ''' <remarks>决策核已迁入 C#（PCLCS.Download.ModRequests.ForgeRecommendedGet）；本方法为宿主层转发。</remarks>
     Public Function McDownloadForgeRecommendedGet(McVersionName As String) As String
-        Try
-            If McVersionName Is Nothing Then Return Nothing
-            Dim List As String = FileUtils.TryReadAsString(PathTemp & "Cache\ForgeRecommendedList.json")
-            If String.IsNullOrEmpty(List) Then
-                Logger.Info("没有 Forge 推荐版本缓存文件")
-                Return Nothing
-            End If
-            Dim Json As JObject = List.DeserializeJson()
-            If Json Is Nothing OrElse (Not If(McVersionName, "").Contains(".")) OrElse Not Json.ContainsKey(McVersionName) Then Return Nothing
-            Return If(Json(McVersionName), "").ToString
-        Catch ex As Exception
-            Logger.Error(ex, $"获取 Forge 推荐版本失败（{If(McVersionName, "null")}）")
-            Return Nothing
-        End Try
+        ModRequests.ForgeRecommendedCacheFolder = Function() PathTemp & "Cache\"
+        Return ModRequests.ForgeRecommendedGet(McVersionName)
     End Function
 
 #End Region

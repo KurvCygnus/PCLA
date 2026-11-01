@@ -1,7 +1,13 @@
 Imports System.Text.Json.Nodes
+Imports PCLCS.Download
 Imports PCLCS.Net
 
 Public Module ModDownload
+
+    Sub New()
+        'C# 数据面（ModRequests）对宿主层全局状态的接线：网络请求的 UI 线程守卫回调（与 ModNet.Sub New 同模式）
+        ModRequests.RunInUiProvider = AddressOf RunInUi
+    End Sub
 
 #Region "DlClient* | Minecraft 客户端"
 
@@ -163,36 +169,18 @@ Public Module ModDownload
     ''' 所有正式版的 Minecraft Drop 序数。
     ''' 若从未完成过获取，返回 Nothing；否则必定存在元素，且从高到低排列。
     ''' </summary>
+    ''' <remarks>解析面已迁入 C#（PCLCS.Download.Drops.AllDrops）；本属性为宿主层转发，保持既有调用方的名称与赋值用法。</remarks>
     Public Property AllDrops As List(Of Integer)
         Get
-            If _AllDrops Is Nothing Then
-                _AllDrops = Settings.Get(Of String)("CacheDrops").ToString.
-                    Split(",", True).Select(Function(d) CInt(Val(d))).ToList()
-            End If
-            Return If(_AllDrops.Any, _AllDrops, Nothing) '不要将 _AllDrops 再设为 Nothing，以防止反复获取设置尝试初始化
+            Return Drops.AllDrops
         End Get
-        Set(value As List(Of Integer))
-            _AllDrops = value
-            Settings.Set("CacheDrops", value.Join(","c))
+        Set(value As List(Of Integer)) '参数类型声明按 VB 风格保留（冗余形参声明为可读性豁免）
+            Drops.AllDrops = value
         End Set
     End Property
-    Private _AllDrops As List(Of Integer) = Nothing
 
     '主加载器
-    Public Structure DlClientListResult
-        ''' <summary>
-        ''' 数据来源名称，如“Mojang”，“BMCLAPI”。
-        ''' </summary>
-        Public SourceName As String
-        ''' <summary>
-        ''' 是否为官方的实时数据。
-        ''' </summary>
-        Public IsOfficial As Boolean
-        ''' <summary>
-        ''' 获取到的 Json 数据。
-        ''' </summary>
-        Public Value As JObject
-    End Structure
+    'DlClientListResult 已迁入 C#（PCLCS.Download.DownloadModels.cs），经文件头 Imports PCLCS.Download 逐名转发
     ''' <summary>
     ''' Minecraft 客户端 版本列表，主加载器。
     ''' 若要求镜像源必须包含某个版本，则将该版本 ID 作为输入（#5195）。
@@ -201,9 +189,9 @@ Public Module ModDownload
     Private Sub DlClientListMain(Loader As LoaderTask(Of String, DlClientListResult))
         Dim Plan = PCLCS.Minecraft.Download.SourcePolicy.GetPlan(Settings.Get(Of Integer)("ToolDownloadVersion"))
         DlSourceLoader(Loader, DlSourceLoaderList(Plan, DlClientListMojangLoader, DlClientListBmclapiLoader), Loader.IsForceRestarting)
-        '提取所有 Drop 序数
+        '提取所有 Drop 序数（结果值已随模型收敛为 STJ JsonObject，无需 ToJsonNode 中转）
         AllDrops = PCLCS.Minecraft.Download.ClientListParser.ComputeDrops(
-            Loader.Output.Value.ToJsonNode().AsObject()).ToList
+            Loader.Output.Value.AsObject()).ToList
     End Sub
 
     '各个下载源的分加载器
@@ -222,8 +210,8 @@ Public Module ModDownload
                 DlPreferMojang = DeltaTime < 4000
                 Logger.Info($"Mojang 官方源加载耗时：{DeltaTime}ms，{If(DlPreferMojang, "可优先使用官方源", "不优先使用官方源")}")
             End If
-            '返回
-            Loader.Output = New DlClientListResult With {.IsOfficial = True, .SourceName = "Mojang 官方源", .Value = Json.ToJToken()}
+            '返回（结果值已随模型收敛为 STJ JsonObject，直接赋值）
+            Loader.Output = New DlClientListResult With {.IsOfficial = True, .SourceName = "Mojang 官方源", .Value = Json}
             'MC 更新提示
             Static IsHinted As Boolean = False
             Dim Version As String
@@ -271,8 +259,8 @@ Public Module ModDownload
                     PCLCS.Minecraft.Download.DownloadFailureKind.TargetVersionMissing,
                     $"BMCLAPI 源未包含目标版本 {Loader.Input}", "BMCLAPI")
             End If
-            '返回
-            Loader.Output = New DlClientListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Json.ToJToken()}
+            '返回（结果值已随模型收敛为 STJ JsonObject，直接赋值）
+            Loader.Output = New DlClientListResult With {.IsOfficial = False, .SourceName = "BMCLAPI", .Value = Json}
         Catch ex As Exception
             Throw New Exception("Minecraft BMCLAPI 版本列表解析失败（" & ResultText & "）", ex)
         End Try
@@ -289,9 +277,9 @@ Public Module ModDownload
             '获取 Minecraft 版本列表
             Select Case DlClientListLoader.State
                 Case LoadState.Finished
-                    '从当前的结果获取目标版本…
-                    For Each Version As JObject In DlClientListLoader.Output.Value("versions")
-                        If Version("id") = Id Then Return Version("url").ToString
+                    '从当前的结果获取目标版本…（结果值已随模型收敛为 STJ JsonObject，遍历走 AsArray；CStr 对齐 JToken→String 的取值语义）
+                    For Each Version As JsonObject In DlClientListLoader.Output.Value("versions").AsArray()
+                        If CStr(Version("id")) = Id Then Return Version("url").ToString
                     Next
                     '…如果没有，则重新尝试获取（在版本刚更新时可能出现这种情况，#5195）
                     DlClientListLoader.WaitForExit(Id, IsForceRestart:=True)
@@ -301,8 +289,8 @@ Public Module ModDownload
                     DlClientListLoader.WaitForExit(Id, IsForceRestart:=True)
             End Select
             '重新查找版本
-            For Each Version As JObject In DlClientListLoader.Output.Value("versions")
-                If Version("id") = Id Then Return Version("url").ToString
+            For Each Version As JsonObject In DlClientListLoader.Output.Value("versions").AsArray()
+                If CStr(Version("id")) = Id Then Return Version("url").ToString
             Next
             Logger.Warn($"未发现版本 {Id} 的 json 下载地址，版本列表返回为：{vbCrLf}{DlClientListLoader.Output.Value}")
             Return Nothing
@@ -316,60 +304,7 @@ Public Module ModDownload
 
 #Region "DlOptiFineList | OptiFine 版本列表"
 
-    Public Structure DlOptiFineListResult
-        ''' <summary>
-        ''' 数据来源名称，如“Official”，“BMCLAPI”。
-        ''' </summary>
-        Public SourceName As String
-        ''' <summary>
-        ''' 是否为官方的实时数据。
-        ''' </summary>
-        Public IsOfficial As Boolean
-        ''' <summary>
-        ''' 获取到的数据。
-        ''' </summary>
-        Public Value As List(Of DlOptiFineListEntry)
-    End Structure
-
-    Public Class DlOptiFineListEntry
-        ''' <summary>
-        ''' 显示名称，已去除 HD_U 字样，如“1.12.2 C8”。
-        ''' </summary>
-        Public DisplayName As String
-        ''' <summary>
-        ''' 原始文件名称，如“preview_OptiFine_1.11_HD_U_E1_pre.jar”。
-        ''' </summary>
-        Public FileName As String
-        ''' <summary>
-        ''' 对应的版本名称，如“1.13.2-OptiFine_HD_U_E6”。
-        ''' </summary>
-        Public InstanceName As String
-        ''' <summary>
-        ''' 是否为测试版。
-        ''' </summary>
-        Public IsPreview As Boolean
-        ''' <summary>
-        ''' 对应的 Minecraft 版本，如“1.12.2”。
-        ''' </summary>
-        Public Property Inherit As String
-            Get
-                Return _inherit
-            End Get
-            Set(value As String)
-                If value.EndsWithF(".0") Then value = Left(value, value.Length - 2)
-                _inherit = value
-            End Set
-        End Property
-        Private _inherit As String
-        ''' <summary>
-        ''' 发布时间，格式为“yyyy/mm/dd”。OptiFine 源无此数据。
-        ''' </summary>
-        Public ReleaseTime As String
-        ''' <summary>
-        ''' 需要的最低 Forge 版本。空字符串为无限制，Nothing 为不兼容，“28.1.56” 表示版本号，“1161” 表示版本号的最后一位。
-        ''' </summary>
-        Public RequiredForgeVersion As String
-    End Class
+    'DlOptiFineListResult / DlOptiFineListEntry 已迁入 C#（PCLCS.Download.DownloadModels.cs），经文件头 Imports PCLCS.Download 逐名转发
 
     ''' <summary>
     ''' OptiFine 版本列表，主加载器。
@@ -477,99 +412,7 @@ Public Module ModDownload
 
 #Region "DlForgeVersion | Forge 版本列表"
 
-    Public MustInherit Class DlForgelikeEntry
-        Implements IComparable(Of DlForgelikeEntry)
-
-        Public IsNeoForge As Boolean
-        ''' <summary>
-        ''' 加载器名称。Forge 或 NeoForge。
-        ''' </summary>
-        Public MustOverride ReadOnly Property LoaderName As String
-        ''' <summary>
-        ''' 文件扩展名。不以小数点开头。
-        ''' </summary>
-        Public MustOverride ReadOnly Property FileExtension As String
-        ''' <summary>
-        ''' 标准化后的版本号，仅可用于比较与排序，且 NeoForge 项不包含 alpha/beta 编号！
-        ''' 格式：Major.Minor.Build.Revision
-        ''' Forge：如 “50.1.9.0”（最后一位固定为 0）、“14.22.1.2478”（Legacy）。
-        ''' NeoForge：如 “20.4.30.0”（最后一位固定为 0）、“19.47.1.99”（Legacy：第一位固定为 19）。
-        ''' </summary>
-        Public Version As Version
-        ''' <summary>
-        ''' 可读的非格式化版本名。
-        ''' Forge：如 “50.1.9”、“14.22.1.2478”（Legacy）。
-        ''' NeoForge：如 “20.4.30-beta”、“47.1.99”（Legacy）。
-        ''' </summary>
-        Public VersionName As String
-        ''' <summary>
-        ''' 对应的 Minecraft 版本，如 1.12.2、26.1-snapshot-1。
-        ''' </summary>
-        Public Inherit As String
-
-        Public Function CompareTo(other As DlForgelikeEntry) As Integer Implements IComparable(Of DlForgelikeEntry).CompareTo
-            If Version <> other.Version Then
-                Return Version.CompareTo(other.Version)
-            Else
-                Return McUtils.CompareVersion(VersionName, other.VersionName)
-            End If
-        End Function
-    End Class
-
-    Public Class DlForgeVersionEntry
-        Inherits DlForgelikeEntry
-
-        ''' <summary>
-        ''' 发布时间，格式为“yyyy/MM/dd HH:mm”。
-        ''' </summary>
-        Public ReleaseTime As String
-        ''' <summary>
-        ''' 文件的 MD5 或 SHA1（BMCLAPI 的老版本是 MD5，新版本是 SHA1；官方源总是 MD5）。
-        ''' </summary>
-        Public Hash As String = Nothing
-        ''' <summary>
-        ''' 是否为推荐版本。
-        ''' </summary>
-        Public IsRecommended As Boolean
-        ''' <summary>
-        ''' 安装类型。有 installer、client、universal 三种。
-        ''' </summary>
-        Public Category As String
-        ''' <summary>
-        ''' 用于下载的文件版本名。可能在 Version 的基础上添加了分支。
-        ''' </summary>
-        Public FileVersion As String
-
-        ''' <summary>
-        ''' 加载器名称。Forge 或 NeoForge。
-        ''' </summary>
-        Public Overrides ReadOnly Property LoaderName As String
-            Get
-                Return "Forge"
-            End Get
-        End Property
-        ''' <summary>
-        ''' 文件扩展名。不以小数点开头。
-        ''' </summary>
-        Public Overrides ReadOnly Property FileExtension As String
-            Get
-                Return If(Category = "installer", "jar", "zip")
-            End Get
-        End Property
-
-        Public Sub New(Version As String, Branch As String, Inherit As String)
-            '司马版本的特殊处理
-            If Version = "11.15.1.2318" OrElse Version = "11.15.1.1902" OrElse Version = "11.15.1.1890" Then Branch = "1.8.9"
-            If Branch Is Nothing AndAlso Inherit = "1.7.10" AndAlso Version.Split(".")(3) >= 1300 Then Branch = "1.7.10"
-            '为 DlForgelikeEntry 提供所有信息
-            IsNeoForge = False
-            VersionName = Version
-            Me.Version = New Version(Version)
-            Me.Inherit = Inherit
-            FileVersion = Version & If(Branch Is Nothing, "", "-" & Branch)
-        End Sub
-
-    End Class
+    'DlForgelikeEntry / DlForgeVersionEntry 已迁入 C#（PCLCS.Download.DownloadModels.cs，含 :561-563 构造特殊分支），经文件头 Imports PCLCS.Download 逐名转发
 
     ''' <summary>
     ''' Forge 版本列表，主加载器。
@@ -622,85 +465,7 @@ Public Module ModDownload
 
 #Region "DlNeoForgeList | NeoForge 版本列表"
 
-    Public Structure DlNeoForgeListResult
-        ''' <summary>
-        ''' 数据来源名称，如“Official”，“BMCLAPI”。
-        ''' </summary>
-        Public SourceName As String
-        ''' <summary>
-        ''' 是否为官方的实时数据。
-        ''' </summary>
-        Public IsOfficial As Boolean
-        ''' <summary>
-        ''' 所有版本的列表。已经按从新到老排序。
-        ''' </summary>
-        Public Value As List(Of DlNeoForgeListEntry)
-    End Structure
-
-    Public Class DlNeoForgeListEntry
-        Inherits DlForgelikeEntry
-
-        ''' <summary>
-        ''' 是否是 Beta 版。
-        ''' </summary>
-        Public IsBeta As Boolean
-        ''' <summary>
-        ''' API 使用的原始版本字符串，如 “20.4.30-beta”、“1.20.1-47.1.99”（Legacy）。
-        ''' </summary>
-        Public ApiName As String
-        ''' <summary>
-        ''' 文件在官网的基础地址，不包含后缀。
-        ''' </summary>
-        Public ReadOnly Property UrlBase As String
-            Get
-                Dim PackageName As String = If(Inherit = "1.20.1", "forge", "neoforge")
-                Return $"https://maven.neoforged.net/releases/net/neoforged/{PackageName}/{ApiName}/{PackageName}-{ApiName}"
-            End Get
-        End Property
-
-        ''' <summary>
-        ''' 加载器名称。Forge 或 NeoForge。
-        ''' </summary>
-        Public Overrides ReadOnly Property LoaderName As String
-            Get
-                Return "NeoForge"
-            End Get
-        End Property
-        ''' <summary>
-        ''' 文件扩展名。不以小数点开头。
-        ''' </summary>
-        Public Overrides ReadOnly Property FileExtension As String
-            Get
-                Return "jar"
-            End Get
-        End Property
-
-        Public Sub New(ApiName As String)
-            IsNeoForge = True
-            Me.ApiName = ApiName
-            IsBeta = ApiName.ContainsIgnoreCase("beta") OrElse ApiName.ContainsIgnoreCase("alpha")
-            If ApiName.Contains("1.20.1") Then '1.20.1-47.1.99
-                VersionName = ApiName.Replace("1.20.1-", "")
-                Version = New Version("19." & VersionName)
-                Inherit = "1.20.1"
-            ElseIf ApiName.StartsWithF("0.") Then '0.25w14craftmine.3-beta
-                VersionName = ApiName
-                Dim Segments = ApiName.BeforeFirst("-").Split("."c)
-                Version = New Version(0, 0, Segments.Last)
-                Inherit = Segments(1)
-            Else '20.4.30-beta；26.1.0.0-alpha.1+snapshot-1
-                VersionName = ApiName
-                Version = New Version(ApiName.BeforeFirst("-"))
-                If Version.Major >= 24 Then
-                    Inherit = $"{Version.Major}.{Version.Minor}.{Version.Build}"
-                Else
-                    Inherit = $"1.{Version.Major}.{Version.Minor}"
-                End If
-                If Inherit.EndsWithF(".0") Then Inherit = Left(Inherit, Inherit.Length - 2)
-                If VersionName.Contains("+") Then Inherit &= "-" & VersionName.AfterFirst("+")
-            End If
-        End Sub
-    End Class
+    'DlNeoForgeListResult / DlNeoForgeListEntry 已迁入 C#（PCLCS.Download.DownloadModels.cs），经文件头 Imports PCLCS.Download 逐名转发
 
     ''' <summary>
     ''' NeoForge 版本列表，主加载器。
@@ -742,55 +507,7 @@ Public Module ModDownload
 
 #Region "DlLiteLoaderList | LiteLoader 版本列表"
 
-    Public Structure DlLiteLoaderListResult
-        ''' <summary>
-        ''' 数据来源名称，如“Official”，“BMCLAPI”。
-        ''' </summary>
-        Public SourceName As String
-        ''' <summary>
-        ''' 是否为官方的实时数据。
-        ''' </summary>
-        Public IsOfficial As Boolean
-        ''' <summary>
-        ''' 获取到的数据。
-        ''' </summary>
-        Public Value As List(Of DlLiteLoaderListEntry)
-        ''' <summary>
-        ''' 官方源的失败原因。若没有则为 Nothing。
-        ''' </summary>
-        Public OfficialError As Exception
-    End Structure
-
-    Public Class DlLiteLoaderListEntry
-        ''' <summary>
-        ''' 实际的文件名，如“liteloader-installer-1.12-00-SNAPSHOT.jar”。
-        ''' </summary>
-        Public FileName As String
-        ''' <summary>
-        ''' 是否为测试版。
-        ''' </summary>
-        Public IsPreview As Boolean
-        ''' <summary>
-        ''' 对应的 Minecraft 版本，如“1.12.2”。
-        ''' </summary>
-        Public Inherit As String
-        ''' <summary>
-        ''' 是否为 1.7 及更早的远古版。
-        ''' </summary>
-        Public IsLegacy As Boolean
-        ''' <summary>
-        ''' 发布时间，格式为“yyyy/mm/dd HH:mm”。
-        ''' </summary>
-        Public ReleaseTime As String
-        ''' <summary>
-        ''' 文件的 MD5。
-        ''' </summary>
-        Public MD5 As String
-        ''' <summary>
-        ''' 对应的 Json 项。
-        ''' </summary>
-        Public JsonToken As System.Text.Json.Nodes.JsonNode
-    End Class
+    'DlLiteLoaderListResult / DlLiteLoaderListEntry 已迁入 C#（PCLCS.Download.DownloadModels.cs），经文件头 Imports PCLCS.Download 逐名转发
 
     ''' <summary>
     ''' LiteLoader 版本列表，主加载器。
@@ -845,20 +562,7 @@ Public Module ModDownload
 
 #Region "DlFabricList | Fabric 列表"
 
-    Public Structure DlFabricListResult
-        ''' <summary>
-        ''' 数据来源名称，如“Official”，“BMCLAPI”。
-        ''' </summary>
-        Public SourceName As String
-        ''' <summary>
-        ''' 是否为官方的实时数据。
-        ''' </summary>
-        Public IsOfficial As Boolean
-        ''' <summary>
-        ''' 获取到的数据。
-        ''' </summary>
-        Public Value As JObject
-    End Structure
+    'DlFabricListResult 已迁入 C#（PCLCS.Download.DownloadModels.cs），经文件头 Imports PCLCS.Download 逐名转发
 
     ''' <summary>
     ''' Fabric 列表，主加载器。
@@ -875,8 +579,9 @@ Public Module ModDownload
     Public DlFabricListOfficialLoader As New LoaderTask(Of Integer, DlFabricListResult)("DlFabricList Official", AddressOf DlFabricListOfficialMain)
     Private Sub DlFabricListOfficialMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
         Dim Result As String = NetRequestByClientRetry("https://meta.fabricmc.net/v2/versions", RequireJson:=True)
+        '结果值已随模型收敛为 STJ JsonObject，直接赋值
         Loader.Output = New DlFabricListResult With {.IsOfficial = True, .SourceName = "Fabric 官方源",
-            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result).ToJToken()}
+            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result)}
     End Sub
 
     ''' <summary>
@@ -885,8 +590,9 @@ Public Module ModDownload
     Public DlFabricListBmclapiLoader As New LoaderTask(Of Integer, DlFabricListResult)("DlFabricList Bmclapi", AddressOf DlFabricListBmclapiMain)
     Private Sub DlFabricListBmclapiMain(Loader As LoaderTask(Of Integer, DlFabricListResult))
         Dim Result As String = NetRequestByClientRetry("https://bmclapi2.bangbang93.com/fabric-meta/v2/versions", RequireJson:=True)
+        '结果值已随模型收敛为 STJ JsonObject，直接赋值
         Loader.Output = New DlFabricListResult With {.IsOfficial = False, .SourceName = "BMCLAPI",
-            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result).ToJToken()}
+            .Value = PCLCS.Minecraft.Download.FabricListParser.ParseOrThrow(Result)}
     End Sub
 
     ''' <summary>
@@ -909,39 +615,10 @@ Public Module ModDownload
     ''' 对可能涉及 Mod 镜像源的请求进行处理，返回 JToken。
     ''' 调用 NetRequest，会进行重试。
     ''' </summary>
+    ''' <remarks>策略核已迁入 C#（PCLCS.Download.ModRequests.DlModRequest：MCIM 源排列与 ToolDownloadMod 三档策略）；本方法为宿主层转发。</remarks>
     Public Function DlModRequest(Url As String, Optional Method As HttpMethod = Nothing,
                                  Optional Content As String = Nothing, Optional ContentType As String = Nothing) As JToken
-        Dim Urls As New List(Of (Url As String, Timeout As Integer))
-        Dim McimUrl As String = DlSourceModGet(Url)
-        If McimUrl <> Url Then
-            Select Case Settings.Get(Of Integer)("ToolDownloadMod")
-                Case 0
-                    Urls.Add((McimUrl, 10))
-                    Urls.Add((McimUrl, 10))
-                    Urls.Add((Url, 30))
-                Case 1
-                    Urls.Add((Url, If(Url.Contains("modrinth"), 20, 10))) '至少 20s，要不然 Modrinth 返回不过来
-                    Urls.Add((McimUrl, 10))
-                    Urls.Add((Url, 30))
-                    Urls.Add((McimUrl, 30))
-                Case Else
-                    Urls.Add((Url, If(Url.Contains("modrinth"), 20, 10)))
-                    Urls.Add((Url, 30))
-                    Urls.Add((McimUrl, 30))
-            End Select
-        Else
-            Urls.Add((Url, If(Url.Contains("modrinth"), 20, 10)))
-            Urls.Add((Url, 30))
-        End If
-        Dim Errors As New List(Of Exception)
-        For Each Source In Urls
-            Try
-                Return NetRequestByClient(Source.Url, Method, Content, ContentType, Timeout:=Source.Timeout * 1000, Encoding:=Encoding.UTF8, RequireJson:=True).DeserializeJson()
-            Catch ex As Exception
-                Errors.Add(ex)
-            End Try
-        Next
-        Throw New AggregateException(Errors)
+        Return ModRequests.DlModRequest(Url, Method, Content, ContentType).ToJToken()
     End Function
 
 #End Region
