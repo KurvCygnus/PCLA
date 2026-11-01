@@ -76,8 +76,9 @@ public static class MergeJson
     /// Newtonsoft JObject.Merge（默认 MergeArrayHandling.Concat / MergeNullValueHandling.Ignore）的 STJ 等价实现，
     /// 与 InstanceCore 继承合并（InstanceCore.cs:623-640）同向：对象递归、数组拼接（基底在前）、标量覆盖、来源 JSON null 忽略。
     /// 键匹配为序数大小写敏感（STJ JsonObject 语义；Newtonsoft Merge 默认忽略大小写，Minecraft 版本 JSON 键全小写无实际差异）。
+    /// internal 供 InstallerPlans 的 Forge 安装链使用（ModDownloadLib.vb:1160 的裸 Json.Merge(Json2)，无参数重组语义）。
     /// </summary>
-    private static void MergeOverlay(JsonObject target, JsonObject incoming)
+    internal static void MergeOverlay(JsonObject target, JsonObject incoming)
     {
         foreach (var property in incoming.ToArray())
         {

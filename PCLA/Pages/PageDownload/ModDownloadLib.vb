@@ -1,6 +1,7 @@
 Imports System.Text.Json
 Imports System.Text.Json.Nodes
 Imports PCLCS.Download
+Imports PCLCS.Instances
 Imports PCLCS.Install
 Imports PCLCS.Json
 Imports PCLCS.Net
@@ -1037,42 +1038,15 @@ Retry:
         End SyncLock
     End Sub
     Private Sub ForgelikeInjectorLine(Content As String, Task As LoaderTask(Of Boolean, Boolean))
-        Select Case Content
-            Case "Extracting json"
-                Task.Progress = 0.27
-            Case "Downloading libraries"
-                Task.Progress = 0.28
-            Case "  File exists: Checksum validated."
-                Task.Progress += 0.003
-            Case "Building Processors"
-                Task.Progress = 0.38
-            Case "Task: DOWNLOAD_MOJMAPS" 'B
-                Task.Progress = 0.4
-            Case "Task: MERGE_MAPPING" 'B
-                Task.Progress = 0.5
-            Case "Splitting: "
-                Task.Progress = 0.55
-            Case "Parameter Annotations" 'B
-                Task.Progress = 0.6
-            Case "Processing Complete" 'B
-                Task.Progress = 0.67
-            Case "log: null" 'new
-                Task.Progress = 0.67
-            Case "Sorting" 'new
-                Task.Progress = 0.8
-            Case "Remapping final jar" 'A
-                Task.Progress = 0.85
-            Case "Remapping jar... 50%" 'A
-                Task.Progress = 0.9
-            Case "Remapping jar... 100%" 'A
-                Task.Progress = 0.95
-            Case "Injecting profile"
-                Task.Progress = 0.98
-            Case Else
-                Logger.Trace(Content)
-                Return
-        End Select
-        Logger.Info(Content)
+        '行 → 进度映射已迁入 C#（PCLCS.Install.InstallerPlans.InjectorLineProgress，:1039-1076 映射表逐字）
+        Dim NewProgress As Double? = InstallerPlans.InjectorLineProgress(Content, Task.Progress)
+        If NewProgress.HasValue Then
+            Task.Progress = NewProgress.Value
+            Logger.Info(Content)
+        Else
+            '旧 Case Else：Logger.Trace(Content) 后 Return
+            Logger.Trace(Content)
+        End If
     End Sub
 
     ''' <summary>
@@ -1094,7 +1068,8 @@ Retry:
             LoaderVersion = LoaderVersion.AfterLast("-")
         End If
         Dim LoaderName As String = If(IsNeoForge, "NeoForge", "Forge")
-        Dim InstallerAddress As String = RequestTaskTempFolder(True) & "forge_installer.jar"
+        '缓存文件名的决策已迁入 C#（PCLCS.Install.InstallerPlans.ForgelikeInstallerPath，ModDownloadLib.vb:1097）
+        Dim InstallerAddress As String = RequestTaskTempFolder(True) & InstallerPlans.ForgelikeInstallerPath
         Dim VersionFolder As String = $"{McFolder}versions\{NewInstanceName}\"
         Dim Loaders As New List(Of LoaderBase)
 
@@ -1119,26 +1094,10 @@ Retry:
         '下载 Forgelike 主文件
         Loaders.Add(New LoaderTask(Of String, List(Of NetFile))($"准备下载 {LoaderName}",
         Sub(Task As LoaderTask(Of String, List(Of NetFile)))
-            '添加主文件下载
-            Dim Files As New List(Of NetFile)
-            If Info.IsNeoForge Then
-                'NeoForge
-                Dim Neo As DlNeoForgeListEntry = Info
-                Dim Url As String = Neo.UrlBase & "-installer.jar"
-                Files.Add(New NetFile({
-                    Url.Replace("maven.neoforged.net/releases", "bmclapi2.bangbang93.com/maven"), Url
-                }, InstallerAddress, New FileChecker With {.MinSize = 64 * 1024}))
-            Else
-                'Forge
-                Dim Forge As DlForgeVersionEntry = Info
-                Dim FileName As String =
-                    $"{Forge.Inherit.Replace("-", "_")}-{Forge.FileVersion}/forge-{Forge.Inherit.Replace("-", "_")}-{Forge.FileVersion}-{Forge.Category}.{Forge.FileExtension}"
-                Files.Add(New NetFile({
-                    $"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/{FileName}",
-                    $"https://files.minecraftforge.net/maven/net/minecraftforge/forge/{FileName}"
-                }, InstallerAddress, New FileChecker With {.MinSize = 64 * 1024, .Hash = Forge.Hash}))
-            End If
-            Task.Output = Files
+            '添加主文件下载（安装器地址决策已迁入 C#：PCLCS.Install.InstallerPlans.ForgelikeInstallerAddress，:1122-1141）
+            'preferBmclapi:=True 保真：旧实现恒以 BMCLAPI 为首选源
+            Dim Address = InstallerPlans.ForgelikeInstallerAddress(Info, True)
+            Task.Output = New List(Of NetFile) From {New NetFile(Address.Sources, InstallerAddress, Address.Checker)}
         End Sub) With {.ProgressWeight = 0.5, .Show = False})
         Loaders.Add(New LoaderDownload($"下载 {LoaderName} 主文件", New List(Of NetFile)) With {.ProgressWeight = 9})
 
@@ -1146,65 +1105,37 @@ Retry:
         Dim CurrentMcFolder = McFolderSelected
         If IsNeoForge OrElse LoaderVersion.BeforeFirst(".") >= 20 Then
             Logger.Info($"检测为{If(IsNeoForge, " Neo", "新版 ")}Forge：{LoaderVersion}")
-            Dim Libs As List(Of McLibEntry) = Nothing
+            Dim ForgePlan As ForgelikePlan = Nothing
             Loaders.Add(New LoaderTask(Of String, List(Of NetFile))($"分析 {LoaderName} 支持库文件",
             Sub(Task As LoaderTask(Of String, List(Of NetFile)))
                 Task.Output = New List(Of NetFile)
-                Dim Installer As ZipArchive = Nothing
                 Try
-                    '解压并获取、合并两个 Json 的信息
-                    Installer = FileUtils.OpenZip(InstallerAddress)
-                    Task.Progress = 0.2
-                    Dim Json As JObject = Installer.GetEntry("install_profile.json").Open().ReadString().DeserializeJson()
-                    Dim Json2 As JObject = Installer.GetEntry("version.json").Open().ReadString().DeserializeJson()
-                    Json.Merge(Json2)
-                    '获取 Lib 下载信息
-                    Libs = McLibListGetWithJson(Json, True, CurrentMcFolder)
-                    '添加 Mappings 下载信息
-                    If Json("data") IsNot Nothing AndAlso Json("data")("MOJMAPS") IsNot Nothing Then
-                        '下载原版 Json 文件
-                        Task.Progress = 0.4
-                        Dim RawJson As JObject = NetRequestByLoader(DlSourceLauncherOrMetaGet(DlClientListGet(Inherit)), IsJson:=True).DeserializeJson()
-                        '[net.minecraft:client:1.17.1-20210706.113038:mappings@txt] 或 @tsrg]
-                        Dim OriginalName As String = Json("data")("MOJMAPS")("client").ToString.Trim("[]".ToCharArray()).BeforeFirst("@")
-                        Dim Address = Path.ChangeExtension(McLibGet(OriginalName, CustomMcFolder:=CurrentMcFolder), "." & Json("data")("MOJMAPS")("client").ToString.Trim("[]".ToCharArray()).Split("@")(1))
-                        Dim ClientMappings As JToken = RawJson("downloads")("client_mappings")
-                        Libs.Add(New McLibEntry With {
-                                 .IsNatives = False, .LocalPath = Address, .OriginalName = OriginalName,
-                                 .Url = ClientMappings("url"), .Size = ClientMappings("size"), .SHA1 = ClientMappings("sha1")})
-                        Logger.Info($"需要下载 Mappings：{ClientMappings("url")} (SHA1: {ClientMappings("sha1")})")
-                    End If
-                    Task.Progress = 0.8
-                    '去除其中的原始 Forgelike 项
-                    For i = 0 To Libs.Count - 1
-                        If Libs(i).LocalPath.EndsWithF($"{LoaderName.Lower}-{Inherit}-{LoaderVersion}.jar") OrElse
-                           Libs(i).LocalPath.EndsWithF($"{LoaderName.Lower}-{Inherit}-{LoaderVersion}-client.jar") Then
-                            Logger.Warn($"已从待下载 {LoaderName} 支持库中移除：{Libs(i).LocalPath}")
-                            Libs.RemoveAt(i)
-                            Exit For
-                        End If
-                    Next
-                    Task.Output = McLibNetFilesFromTokens(Libs, CurrentMcFolder)
+                    '解包合并、库清单、MOJMAPS 追加、Forgelike 项移除与 NetFile 组装的决策已迁入 C#
+                    '（PCLCS.Install.InstallerPlans.BuildModernPlan，:1150-1193；原版 Json 的网络请求经回调保留在此）
+                    ForgePlan = InstallerPlans.BuildModernPlan(
+                        InstallerAddress, CurrentMcFolder, Inherit, LoaderName, LoaderVersion, DlSourcePreferMojang,
+                        Function() NetRequestByLoader(DlSourceLauncherOrMetaGet(DlClientListGet(Inherit)), IsJson:=True).DeserializeJson().ToJsonNode().AsObject(),
+                        Sub(Progress As Double) Task.Progress = Progress)
+                    Task.Output = ForgePlan.Files
                 Catch ex As Exception
                     Throw New Exception($"获取{If(IsNeoForge, " Neo", "新版 ")}Forge 支持库列表失败", ex)
-                Finally
-                    If Installer IsNot Nothing Then Installer.Dispose()
                 End Try
             End Sub) With {.ProgressWeight = 1})
             Loaders.Add(New LoaderDownload($"下载 {LoaderName} 支持库文件", New List(Of NetFile)) With {.ProgressWeight = 12})
             Loaders.Add(New LoaderTask(Of List(Of NetFile), Boolean)($"获取 {LoaderName} 支持库文件",
             Sub(Task As LoaderTask(Of List(Of NetFile), Boolean))
 #Region "Forgelike 文件"
-                For Each LibFile As McLibEntry In Libs
-                    Dim RealPath As String = Path.Combine(McFolder, LibFile.LocalPath.Substring(CurrentMcFolder.Length))
-                    If Not FileUtils.Exists(RealPath) Then FileUtils.Copy(LibFile.LocalPath, RealPath)
-                    Logger.Trace($"复制的 {LoaderName} 支持库文件：{LibFile.LocalPath}")
+                '库清单由 C# 决策核产出（ForgePlan.Libraries）；:1197-1203 的复制执行留宿主层
+                For Each LibFile As LibEntry In ForgePlan.Libraries
+                    Dim RealPath As String = Path.Combine(McFolder, LibFile.Path.Substring(CurrentMcFolder.Length))
+                    If Not FileUtils.Exists(RealPath) Then FileUtils.Copy(LibFile.Path, RealPath)
+                    Logger.Trace($"复制的 {LoaderName} 支持库文件：{LibFile.Path}")
                 Next
 #End Region
 #Region "原版文件"
-                '等待原版文件下载完成
+                '等待原版文件下载完成（匹配名决策已迁入 C#：ForgePlan.WaitVanillaLoaderNames，:1206-1208）
                 Dim TargetLoaders As List(Of LoaderBase) =
-                    ClientDownloadLoader.GetLoaderList.Where(Function(l) l.Name = McDownloadClientLibName OrElse l.Name = McDownloadClientJsonName).
+                    ClientDownloadLoader.GetLoaderList.Where(Function(l) ForgePlan.WaitVanillaLoaderNames.Contains(l.Name)).
                     Where(Function(l) l.State <> LoadState.Finished).ToList()
                 If TargetLoaders.Any Then Logger.Info($"{LoaderName} 安装正在等待原版文件下载完成")
                 Do While TargetLoaders.Any AndAlso Not Task.IsCanceled
@@ -1292,47 +1223,16 @@ Retry:
             Logger.Info($"检测为非新版 Forge：{LoaderVersion}")
             Loaders.Add(New LoaderTask(Of List(Of NetFile), Boolean)($"安装 {LoaderName}（方式 B）",
             Sub(Task As LoaderTask(Of List(Of NetFile), Boolean))
-                Dim Installer As ZipArchive = Nothing
                 Try
-                    '解压并获取信息
-                    Installer = FileUtils.OpenZip(InstallerAddress)
-                    Task.Progress = 0.2
-                    Dim Json As JObject = Installer.GetEntry("install_profile.json").Open().ReadString().DeserializeJson()
-                    Task.Progress = 0.4
-                    '新建版本文件夹
-                    DirectoryUtils.Create(VersionFolder)
-                    Task.Progress = 0.5
-                    If Json("install") Is Nothing Then
-                        '中版：Legacy 方式 1
-                        Logger.Info($"开始进行 Forge 安装，Legacy 方式 1：{InstallerAddress}")
-                        '建立 Json 文件
-                        Dim JsonVersion As JObject = Installer.GetEntry(Json("json").ToString.TrimStart("/")).Open().ReadString().DeserializeJson()
-                        JsonVersion("id") = NewInstanceName
-                        FileUtils.Write(VersionFolder & NewInstanceName & ".json", JsonVersion.ToString)
-                        Task.Progress = 0.6
-                        '解压支持库文件
-                        Installer.Dispose()
-                        FileUtils.ExtractToDirectory(InstallerAddress, InstallerAddress & "_unrar\")
-                        If DirectoryUtils.Exists(InstallerAddress & "_unrar\maven\") Then DirectoryUtils.Copy(InstallerAddress & "_unrar\maven\", McFolder & "libraries\")
-                        DirectoryUtils.Delete(InstallerAddress & "_unrar\")
-                    Else
-                        '旧版：Legacy 方式 2
-                        Logger.Info($"开始进行 Forge 安装，Legacy 方式 2：{InstallerAddress}")
-                        '解压 Jar 文件
-                        Dim JarAddress As String = McLibGet(Json("install")("path"), CustomMcFolder:=McFolder)
-                        FileUtils.Write(JarAddress, Installer.GetEntry(Json("install")("filePath")).Open)
-                        Task.Progress = 0.9
-                        '建立 Json 文件
-                        Json("versionInfo")("id") = NewInstanceName
-                        If Json("versionInfo")("inheritsFrom") Is Nothing Then CType(Json("versionInfo"), JObject).Add("inheritsFrom", Inherit)
-                        FileUtils.Write(VersionFolder & NewInstanceName & ".json", Json("versionInfo").ToString)
-                    End If
+                    'Legacy 方式 1/2 决策（版本 Json 写入、maven 解压复制与 Jar 落盘）已迁入 C#
+                    '（PCLCS.Install.InstallerPlans.BuildLegacyPlan，:1293-1342；安装器与 _unrar 的兜底清理留此）
+                    InstallerPlans.BuildLegacyPlan(InstallerAddress, VersionFolder, NewInstanceName, Inherit, McFolder,
+                        Sub(Progress As Double) Task.Progress = Progress)
                 Catch ex As Exception
                     Throw New Exception("非新版方式安装 Forge 失败", ex)
                 Finally
                     Try
                         '清理文件
-                        If Installer IsNot Nothing Then Installer.Dispose()
                         FileUtils.Delete(InstallerAddress)
                         DirectoryUtils.Delete(InstallerAddress & "_unrar\")
                     Catch ex As Exception
