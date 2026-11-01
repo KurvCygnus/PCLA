@@ -56,7 +56,7 @@ public static class MergeJson
     public static string? ReassembleArguments(string allArguments)
     {
         var splitArguments = new List<string>();
-        foreach (var argument in allArguments.Split(" ", removeEmptyEntries: true).Select(value => value.Trim()))
+        foreach (var argument in allArguments.Split(" ", removeEmptyEntries: true).Select(static value => value.Trim()))
         {
             if (!argument.StartsWithF("-") && splitArguments.Count > 0)
             {

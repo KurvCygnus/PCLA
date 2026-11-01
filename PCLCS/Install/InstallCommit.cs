@@ -27,17 +27,11 @@ public static class InstallCommit
         var filesToMove = new List<(string Source, string Target)>();
         //ManagedFiles
         //新版里有：添加或覆盖新版文件
-        foreach (var newFile in newFiles)
-        {
-            filesToMove.Add((Path.Combine(buildFolder, newFile.RelativePath), Path.Combine(targetFolder, newFile.RelativePath)));
-        }
+        filesToMove.AddRange(newFiles.Select(newFile => (Path.Combine(buildFolder, newFile.RelativePath), Path.Combine(targetFolder, newFile.RelativePath))));
         //新版里没有，老版里有：删除本地文件到回收站
-        var newFilePaths = new HashSet<string>(newFiles.Select(file => file.RelativePath));
-        foreach (var oldFile in oldFiles)
-        {
-            if (newFilePaths.Contains(oldFile.RelativePath)) continue;
-            filesToDelete.Add(PathUtils.ForCompare(Path.Combine(targetFolder, oldFile.RelativePath)));
-        }
+        var newFilePaths = new HashSet<string>(newFiles.Select(static file => file.RelativePath));
+        filesToDelete.AddRange(oldFiles.Where(oldFile => !newFilePaths.Contains(oldFile.RelativePath))
+            .Select(oldFile => PathUtils.ForCompare(Path.Combine(targetFolder, oldFile.RelativePath))));
         //老版本 MC 的 assets 文件
         if (DirectoryUtils.Exists(buildFolder + @"resources\")) DirectoryUtils.Copy(buildFolder + @"resources\", targetFolder + @"resources\");
         //json 与 jar
@@ -61,9 +55,11 @@ public static class InstallCommit
             DirectoryUtils.Create(PathUtils.RemoveLastPart(file.Target));
             FileUtils.Copy(file.Source, file.Target);
         }
-        var managedFiles = newFiles.Select(file => new McInstallManifest.ManagedFile(file.RelativePath, file.Sha1,
-            FileUtils.GetInfo(Path.Combine(targetFolder, file.RelativePath)).LastWriteTimeUtc, file.Component)).ToList();
-        Configs.McInstallManifest.Set(new McInstallManifest(newManifest.SchemaVersion, newManifest.Components, newManifest.LastModifiedUtc, managedFiles), instanceConfig);
+        var managedFiles = newFiles.Select(file => file with
+        {
+            LastWriteTimeUtc = FileUtils.GetInfo(Path.Combine(targetFolder, file.RelativePath)).LastWriteTimeUtc
+        }).ToList();
+        Configs.McInstallManifest.Set(newManifest with { ManagedFiles = managedFiles }, instanceConfig);
         instanceConfig.Save();
     }
 }

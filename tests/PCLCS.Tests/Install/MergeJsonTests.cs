@@ -101,8 +101,8 @@ public class MergeJsonTests
         var overlay = Parse("""{"arguments":{"game":["--y"],"jvm":["-Dx=1"]}}""");
         var merged = MergeJson.Merge(baseJson, overlay);
         var arguments = merged["arguments"]!.AsObject();
-        Assert.Equal(["--x", "--y"], arguments["game"]!.AsArray().Select(token => token!.GetValue<string>()));
-        Assert.Equal(["-Dx=1"], arguments["jvm"]!.AsArray().Select(token => token!.GetValue<string>()));
+        Assert.Equal(["--x", "--y"], arguments["game"]!.AsArray().Select(static token => token!.GetValue<string>()));
+        Assert.Equal(["-Dx=1"], arguments["jvm"]!.AsArray().Select(static token => token!.GetValue<string>()));
     }
 
     [Fact]

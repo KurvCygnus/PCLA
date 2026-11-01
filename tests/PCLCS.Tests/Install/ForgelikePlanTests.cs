@@ -1,10 +1,7 @@
 using MeloongCore.Extensions;
 using PCLCS.Download;
-using PCLCS.Instances;
 using PCLCS.Install;
-using PCLCS.Net;
 using System.IO.Compression;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace PCLCS.Tests.Install;
@@ -36,7 +33,7 @@ public class ForgelikePlanTests
         ["Remapping final jar", 0.85],
         ["Remapping jar... 50%", 0.9],
         ["Remapping jar... 100%", 0.95],
-        ["Injecting profile", 0.98],
+        ["Injecting profile", 0.98]
     ];
 
     [Theory]
@@ -71,7 +68,7 @@ public class ForgelikePlanTests
         Assert.Equal(
         [
             "https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/1.19.3-41.2.8/forge-1.19.3-41.2.8-installer.jar",
-            "https://files.minecraftforge.net/maven/net/minecraftforge/forge/1.19.3-41.2.8/forge-1.19.3-41.2.8-installer.jar",
+            "https://files.minecraftforge.net/maven/net/minecraftforge/forge/1.19.3-41.2.8/forge-1.19.3-41.2.8-installer.jar"
         ], sources);
         Assert.Equal(64 * 1024, checker.MinSize);
         Assert.Equal("d34db33f", checker.Hash);
@@ -97,7 +94,7 @@ public class ForgelikePlanTests
         Assert.Equal(
         [
             "https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge/20.4.30-beta/neoforge-20.4.30-beta-installer.jar",
-            "https://maven.neoforged.net/releases/net/neoforged/neoforge/20.4.30-beta/neoforge-20.4.30-beta-installer.jar",
+            "https://maven.neoforged.net/releases/net/neoforged/neoforge/20.4.30-beta/neoforge-20.4.30-beta-installer.jar"
         ], sources);
         Assert.Equal(64 * 1024, checker.MinSize);
         Assert.Null(checker.Hash);
@@ -174,21 +171,21 @@ public class ForgelikePlanTests
         Assert.Equal("--b 2", plan.MergedVersionJson["minecraftArguments"]!.GetValue<string>());
         Assert.Equal("forge-1.19.3", plan.MergedVersionJson["id"]!.GetValue<string>());
         //去除其中的原始 Forgelike 项（:1179-1186）
-        Assert.DoesNotContain(plan.Files, f => f.LocalPath!.EndsWithF("forge-1.19.3-41.2.8.jar"));
+        Assert.DoesNotContain(plan.Files, static f => f.LocalPath.EndsWithF("forge-1.19.3-41.2.8.jar"));
         //MOJMAPS 追加项（:1169-1174）：GetLocalPath 后改后缀为 @txt
-        var mappings = plan.Files.Single(f => f.LocalPath!.EndsWithF("client-1.17.1-20210706.113038-mappings.txt"));
+        var mappings = plan.Files.Single(static f => f.LocalPath.EndsWithF("client-1.17.1-20210706.113038-mappings.txt"));
         Assert.Equal("93942af0", mappings.Check!.Hash);
         Assert.Equal(910000, mappings.Check.ActualSize);
-        Assert.Contains("https://piston-data.mojang.com/v1/objects/93942af0/client.txt", mappings.Sources.Select(s => s.Url));
+        Assert.Contains("https://piston-data.mojang.com/v1/objects/93942af0/client.txt", mappings.Sources.Select(static s => s.Url));
         //#5455 特判：无 URL 的 forge universal 项补 maven.minecraftforge.net 并镜像优先（:1293-1310）
-        var universal = plan.Files.Single(f => f.LocalPath!.EndsWithF("forge-1.19.3-41.2.8-universal.jar"));
+        var universal = plan.Files.Single(static f => f.LocalPath.EndsWithF("forge-1.19.3-41.2.8-universal.jar"));
         Assert.Equal(
         [
             "https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/1.19.3-41.2.8/forge-1.19.3-41.2.8-universal.jar",
-            "https://maven.minecraftforge.net/net/minecraftforge/forge/1.19.3-41.2.8/forge-1.19.3-41.2.8-universal.jar",
-        ], universal.Sources.Take(2).Select(s => s.Url).ToArray());
+            "https://maven.minecraftforge.net/net/minecraftforge/forge/1.19.3-41.2.8/forge-1.19.3-41.2.8-universal.jar"
+        ], universal.Sources.Take(2).Select(static s => s.Url).ToArray());
         //库清单（未去重，与旧 Libs 变量一致）含 MOJMAPS 追加项
-        Assert.Contains(plan.Libraries, l => l.Path!.EndsWithF("-mappings.txt"));
+        Assert.Contains(plan.Libraries, static l => l.Path.EndsWithF("-mappings.txt"));
         Assert.Equal(4, plan.Libraries.Count);
     }
 
@@ -196,15 +193,15 @@ public class ForgelikePlanTests
     public void Modern_plan_without_mojmaps_never_fetches_vanilla_json()
     {
         var root = TempRoot("modern-nomaps");
-        var profile = """{"id": "1.19.3", "libraries": [{"name": "org.ow2.asm:asm:9.3", "downloads": {"artifact": {"path": "org/ow2/asm/asm/9.3/asm-9.3.jar", "url": "https://libraries.minecraft.net/org/ow2/asm/asm/9.3/asm-9.3.jar", "size": 120000, "sha1": "bbbb"}}}]}""";
+        const string profile = """{"id": "1.19.3", "libraries": [{"name": "org.ow2.asm:asm:9.3", "downloads": {"artifact": {"path": "org/ow2/asm/asm/9.3/asm-9.3.jar", "url": "https://libraries.minecraft.net/org/ow2/asm/asm/9.3/asm-9.3.jar", "size": 120000, "sha1": "bbbb"}}}]}""";
         var installerPath = WriteInstallerZip(root, ("install_profile.json", profile), ("version.json", """{"id": "forge-1.19.3"}"""));
 
         var plan = InstallerPlans.BuildModernPlan(
             installerPath, root, "1.19.3", "Forge", "41.2.8", preferMojang: false,
-            () => throw new InvalidOperationException("不应取原版 Json"));
+            static () => throw new InvalidOperationException("不应取原版 Json"));
 
         Assert.Single(plan.Files);
-        Assert.DoesNotContain(plan.Libraries, l => l.Path!.EndsWithF(".txt"));
+        Assert.DoesNotContain(plan.Libraries, static l => l.Path.EndsWithF(".txt"));
     }
 
     #endregion

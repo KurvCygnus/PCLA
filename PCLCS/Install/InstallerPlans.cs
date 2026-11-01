@@ -52,7 +52,7 @@ public static class InstallerPlans
             sources =
             [
                 $"https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/{fileName}",
-                $"https://files.minecraftforge.net/maven/net/minecraftforge/forge/{fileName}",
+                $"https://files.minecraftforge.net/maven/net/minecraftforge/forge/{fileName}"
             ];
         }
         if (!preferBmclapi) sources.Reverse();   //旧 :1128-1139 恒为 BMCLAPI 在前；False 时官方在前
@@ -109,9 +109,9 @@ public static class InstallerPlans
                 //? Size/Checksum 的 JSON null 与缺失经 Token 语义收敛为不校验（与旧 JToken→Long/String 转换的可观察结果一致）
                 Size = Libraries.Token(clientMappings, "size"),
                 Checksum = Libraries.Token(clientMappings, "sha1"),
-                Url = string.IsNullOrWhiteSpace(clientMappings!["url"]?.ToString()) ? null : clientMappings["url"]!.ToString(),   //旧 Url setter（ModMinecraft.vb:1529-1531）；client_mappings 缺失时此处 NRE
+                Url = string.IsNullOrWhiteSpace(clientMappings!["url"]?.ToString()) ? null : clientMappings["url"]!.ToString()   //旧 Url setter（ModMinecraft.vb:1529-1531）；client_mappings 缺失时此处 NRE
             });
-            Logger.Info($"需要下载 Mappings：{clientMappings!["url"]} (SHA1: {clientMappings["sha1"]})");   //旧 :1175
+            Logger.Info($"需要下载 Mappings：{clientMappings["url"]} (SHA1: {clientMappings["sha1"]})");   //旧 :1175
         }
         progress?.Invoke(0.8);   //旧 :1177
         //去除其中的原始 Forgelike 项（:1179-1186）
@@ -132,7 +132,7 @@ public static class InstallerPlans
             Files = NetFilesFromLibEntries(libs, mcFolder, preferMojang),
             MergedVersionJson = profileJson,
             WaitVanillaLoaderNames = [.. VanillaWaitLoaderNames],
-            Libraries = libs,
+            Libraries = libs
         };
     }
 
@@ -181,7 +181,7 @@ public static class InstallerPlans
                 //解压 Jar 文件（:1322-1323）
                 var install = (JsonObject?) profileJson["install"];
                 var jarAddress = Libraries.GetLocalPath(install!["path"]!.ToString(), customMcFolder: mcFolder);   //旧 :1322：path 缺失时 NRE
-                using (var entryStream = installer.GetEntry(install!["filePath"]!.ToString())!.Open())   //旧 :1323：filePath 缺失时 NRE
+                using (var entryStream = installer.GetEntry(install["filePath"]!.ToString())!.Open())   //旧 :1323：filePath 缺失时 NRE
                 {
                     FileUtils.Write(jarAddress, entryStream);
                 }
@@ -197,6 +197,7 @@ public static class InstallerPlans
                 FileUtils.Write(versionFolder + newInstanceId + ".json", planJson.ToJsonString(MergeJson.WriteOptions));
             }
         }   //旧 :1314 方式 1 在解压前 Dispose（:1335 方式 2 在 Finally Dispose）
+        //! 逐字移植豁免（Rider 反转 if）：反转将复制末端 return（旧 VB 单一返回点 :1341），破坏 1:1 锚点结构
         if (isWay1)
         {
             //解压支持库文件（:1315-1317）
