@@ -125,7 +125,7 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - **存储 schema**（`SettingsStore.cs`）：全局 `<数据目录>\Settings.json` 与每实例 `<版本目录>\.pcla\Settings.json`，顶层固定 `schemaVersion`/`values`/`encrypted`/`imported`/`extra` 五节；`extra` 对未知键原样保真，未来版本的键回写时不丢失。损坏时按空文档处理并告警，`.bak` 滚动备份保留上一版；落盘先写 `.tmp` 再原子替换。加密键与实例设置有进程内缓存（按实例分桶）。
 - **加密边界**（`SettingsCrypto.cs`）：加密键落 `encrypted` 节，形如 `{"$enc":"v1","data":<base64>}`；算法与旧版逐字节兼容（DES + 固定 IV `95168702`，口令 `"PCL" + Identify`），`IdentifyProvider` 由 VB 启动时注入 `GetIdentify()`。该算法只能防肉眼直读，不构成机密性保证（`docs\TECHDEBT.md` §0）；加密键经 `GetSafe`/`SetSafe` 读写会被拒绝。
 - **导入**（`SettingsImport.cs`）：一次性懒式导入，只补缺失键，旧数据全程保留。全局源为注册表 `HKCU\Software\PCLADebug` 与 `<数据目录>\Setup.ini`；每实例源为 `<版本目录>\PCL\Setup.ini`。完成标记写在文档 `imported` 节，加密键先按旧算法解密再入新文档，解不开即跳过并告警。
-- **回调**：`SettingChanged(key, 新值, 实例键)` 在保存之后触发（旧版时序约束）；原 `OnChanged` 回调表集中在 `Settings.vb` 的 `ChangedHandlers` 统一注册。
+- **回调**：`SettingChanged(key, 新值, 实例键)` 在保存之后触发（旧版时序约束）；原 `OnChanged` 回调表集中在 `Settings.vb` 的 `ChangedHandlers` 统一注册。**实例键约定**：第三参是归一化实例键（已去除尾部路径分隔符），全局设置为空串 `""`；消费方不得拿它与 `McInstance.PathVersion`（尾部带分隔符）直接比较，需先做同样的归一。
 
 ## 6. Minecraft 域
 

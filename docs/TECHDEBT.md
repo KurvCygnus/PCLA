@@ -220,3 +220,9 @@
 - **资源索引 `objects` 为 JSON null 时旧空新抛。** 旧版 `JValue.Children` 为空集，按空列表无操作返回；新版（`PCLCS\Instances\AssetsIndex.cs:123-124`）与缺失同样抛出并重抛，`checkHash=true` 时令整个补文件任务失败。忠实移植本可用 `TryGetPropertyValue` 复现，为刻意保留的微小取舍。
 - **`IsOldJson` 对 `minecraftArguments` 为 JSON null 的判定相反。** 旧版 Newtonsoft 的 `JObject("minecraftArguments")` 返回 null JValue，`IsNot Nothing` 为真且与 `""` 比较不等 → True；新版 STJ 索引对 JSON null 返回 null（`PCLCS\Instances\InstanceCore.cs:143-150`）→ False。正常输入（缺失或字符串）两者一致。
 - **SkinProfile 的 JSON null 语义差异。** 旧版：`textures`/`skin` 为 JSON null 时抛 `ArgumentException`，`url` 为 JSON null 时得空串并写入缓存，`properties` 数组含 null 元素时抛出；新版（`PCLCS\Instances\SkinProfile.cs:53-72`）：null 与缺失同判——`textures`/`skin`/`url` 为 null 统一按"用户未设置自定义皮肤"抛友好异常且不写缓存，null 元素跳过。正常服务器响应两者一致；解析异常均落入同一 Catch（消息与日志逐字不变）。
+- **WithCache 读 `DisplayType` 用的是 MC 根目录的 `PCL\Setup.ini` 而非版本自己的。** `PCLA\Modules\Minecraft\ModMinecraft.vb:878` 写的是 `ReadIni(Folder & "PCL\Setup.ini", "DisplayType", ...)`（`Folder` 为 `.minecraft` 根），其余字段（`CustomInfo`/`Logo`/`State` 等）都读版本自己的 `PathVersion & "PCL\Setup.ini"`。与上游基线逐字节一致（S3 已锁定该保真），是上游既有怪癖而非 W1 回归；W3 收敛实例模型时不要把它当 bug 重新"修掉"。
+- **版本列表"分类+排序"合并进同一个 Try，排序异常不再上抛。** 旧版分类与排序分两段，排序期异常会冒泡到加载器外层 Catch；现在两者合并为 `InstanceScanner.ClassifyAndSort` 一次调用（`PCLA\Modules\Minecraft\ModMinecraft.vb:968-979`），排序期异常与分类期异常同样落"清空结果、记录日志、照常写卡片缓存并返回"。计划要求的收敛方式，仅异常输入下行为有差。
+
+## 11. UI 冒烟发现的既有缺陷（2026-11-01，非 W1 引入）
+
+- **`ModJava.JavaInit` 启动弹"初始化 Java 列表失败"，真实异常被 zh-CN 卫星程序集缺失掩码。** `MeloongCore.JsonConfigProvider.Read[T]`（`MeloongCore\Shared\General\Config.cs:110-113`，System.Text.Json）反序列化 Java 列表时因构造器参数绑定失败抛异常；STJ 构造异常消息需要加载卫星程序集 `System.Text.Json.resources`（net48 + zh-CN 文化下 `ResourceManager` 回退链必经），该 DLL 不在发布物中，`FileNotFoundException` 抢先抛出并顶掉真实 STJ 异常，最终用户只见误导性的"初始化 Java 列表失败"启动错误弹窗（`PCLA\Modules\Minecraft\ModJava.vb:44`）。也就是说：卫星 DLL 缺失会把任何 STJ 消息构造失败都伪装成这个弹窗。证据：`PCLA\bin\PCLA\Log3.txt` 有相同错误（2026-10-29，早于 W1 分支；W1 未触碰 `ModJava` 与 `MeloongCore`）。修复方向：修正 STJ 构造器绑定或换用不依赖该资源的路径；本轮仅记录，不修。

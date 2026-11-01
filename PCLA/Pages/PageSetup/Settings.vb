@@ -232,7 +232,11 @@ Public Class Settings
         If Entry.Source = Sources.Instance Then
             '保持旧实现（原 :421-423）的异常契约：精确 Exception 类型与消息
             If Instance Is Nothing Then Throw New Exception($"判断版本设置 {Key} 时未提供目标版本")
-            SettingsImport.EnsureInstanceImported(Instance.PathVersion)
+            Try
+                SettingsImport.EnsureInstanceImported(Instance.PathVersion) '导入失败不阻断读取
+            Catch ex As Exception
+                Logger.Warn(ex, $"导入实例旧设置失败（{Instance.PathVersion}）")
+            End Try
             Return SettingsService.HasSaved(Key, Instance.PathVersion)
         End If
         Return SettingsService.HasSaved(Key, Nothing)

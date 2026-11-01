@@ -46,15 +46,16 @@ public static class SettingsService
         var bucket = BucketKey(entry, instanceKey);
         var cache = Caches.GetOrAdd(bucket, static _ => new ConcurrentDictionary<string, object?>());
         if (cache.TryGetValue(entry.Key, out var cached) && cached is not null) return cached;
-        if (ForcedSettings.TryGetValue(entry.Key, out var forced))
-        {
-            //* VB :313 只写缓存；这里额外落盘，使 HasSaved（文档含键即真）对 Forced 键同样成立
-            cache[entry.Key] = forced;
-            WriteStoredValue(entry, forced, bucket);
-            return forced;
-        }
         try
         {
+            if (ForcedSettings.TryGetValue(entry.Key, out var forced))
+            {
+                //* VB :313 只写缓存；这里额外落盘，使 HasSaved（文档含键即真）对 Forced 键同样成立；
+                //* 落盘失败与普通读取一样走下方 catch 回落默认（VB Get 整体兜底语义），不再外抛
+                cache[entry.Key] = forced;
+                WriteStoredValue(entry, forced, bucket);
+                return forced;
+            }
             if (entry.Source == SettingsSource.Instance && bucket.Length == 0)
                 throw new InvalidOperationException($"读取版本设置 {key} 时未提供目标版本");
             object? got;
