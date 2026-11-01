@@ -1,4 +1,5 @@
 Imports System.Text.Json.Nodes
+Imports PCLCS.Net
 
 '说明：McInstance 的 JSON 管线已切换到 PCLCS.Instances.InstanceCore；McInstance.JsonObject 暴露的是
 '由 LegacyJsonExtensions.ToJToken(_core.VersionJson) 生成的 Newtonsoft JObject 快照——W3 迁移完成前，

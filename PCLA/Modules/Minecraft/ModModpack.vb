@@ -1,5 +1,6 @@
 Imports System.Collections.ObjectModel
 Imports System.Text.RegularExpressions
+Imports PCLCS.Net
 
 Public Module ModModpack
 

@@ -1,3 +1,4 @@
+Imports PCLCS.Net
 Public Module ModJava
 
     ''' <summary>

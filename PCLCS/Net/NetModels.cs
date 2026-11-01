@@ -67,7 +67,7 @@ public sealed class NetResult
 }
 
 /// <summary>
-/// 下载进度标示（ModNet.vb:198-231 逐字：名称、取值与顺序；VB 同名枚举继续供留守的下载引擎使用）。
+/// 下载进度标示（ModNet.vb:198-231 逐字：名称、取值与顺序；VB 同名枚举已随下载引擎迁入后删除）。
 /// </summary>
 public enum NetState
 {
@@ -90,7 +90,7 @@ public enum NetState
 }
 
 /// <summary>
-/// 下载源（ModNet.vb:181-194 字段逐字；VB 同名类继续供留守的下载引擎使用）。
+/// 下载源（ModNet.vb:181-194 字段逐字；VB 同名类已随下载引擎迁入后删除）。
 /// </summary>
 public sealed class NetSource
 {
@@ -99,8 +99,8 @@ public sealed class NetSource
     public int FailCount;
     public Exception? Ex;
     /// <summary>若该下载源正在进行强制单线程下载，标记这个唯一的线程。</summary>
-    //? Task 2: 收紧为 NetThread（C# NetThread 于下一任务落地，暂不引用 VB 类型）
-    public object? SingleThread;
+    //? Task 2 已按计划收紧为 NetThread（原计划备注：Task 2: 收紧为 NetThread）
+    public NetThread? SingleThread;
     public bool IsFailed;
 
     public override string ToString() => Url;

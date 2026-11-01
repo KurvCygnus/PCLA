@@ -2,6 +2,7 @@
 '使用 Ani 作为方法或属性的开头，使用 Aa 作为单个动画对象的开头（便于自动补全）
 
 Imports System.Windows.Media.Effects
+Imports PCLCS.Net
 
 Public Module ModAnimation
 

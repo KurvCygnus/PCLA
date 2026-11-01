@@ -3,6 +3,7 @@ Imports System.Globalization
 Imports System.Net.Sockets
 Imports System.Reflection
 Imports PCL
+Imports PCLCS.Net
 
 Public Class PageLinkMain
     Private Const INVITE_CODE_VERSION As Integer = 2

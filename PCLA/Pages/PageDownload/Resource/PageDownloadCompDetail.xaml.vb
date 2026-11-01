@@ -1,4 +1,5 @@
 Imports System.Collections.ObjectModel
+Imports PCLCS.Net
 
 Public Class PageDownloadResourceDetail
     Private ResourceItem As MyResourceItem = Nothing

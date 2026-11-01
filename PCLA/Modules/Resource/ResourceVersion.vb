@@ -1,3 +1,4 @@
+Imports PCLCS.Net
 ''' <summary>
 ''' 社区资源的单个可下载版本。
 ''' </summary>
