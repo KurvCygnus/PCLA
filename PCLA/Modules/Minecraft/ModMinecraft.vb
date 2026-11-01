@@ -1049,53 +1049,31 @@ OnLoaded:
 
     ''' <summary>
     ''' 获取 Uuid 对应的皮肤文件地址，失败将抛出异常。
+    ''' 判定链已迁至 PCLCS.Instances.SkinProfile.GetAddress（旧 :1409-1455）；
+    ''' ini 缓存、网络请求与所选实例状态留在 VB，经回调参数注入。
     ''' </summary>
     Public Function McSkinGetAddress(UUID As String, Type As String) As String
-        If UUID = "" Then Throw New Exception("UUID 为空。")
-        If UUID.StartsWithF("00000") AndAlso Type <> "Auth" Then Throw New Exception("离线 UUID 无正版皮肤文件：" & UUID)
-        '尝试读取缓存
-        Dim CacheSkinAddress As String = ReadIni(PathTemp & "Cache\Skin\Index" & Type & ".ini", UUID)
-        If Not CacheSkinAddress = "" Then Return CacheSkinAddress
-        '获取皮肤地址
-        Dim Url As String
-        Select Case Type
-            Case "Mojang", "Ms"
-                Url = "https://sessionserver.mojang.com/session/minecraft/profile/"
-            Case "Nide"
-                Url = "https://auth.mc-user.com:233/" & If(McInstanceSelected Is Nothing, Settings.Get(Of String)("CacheNideServer"), Settings.Get(Of String)("VersionServerNide", Instance:=McInstanceSelected)) & "/sessionserver/session/minecraft/profile/"
-            Case "Auth"
-                Url = If(McInstanceSelected Is Nothing, Settings.Get(Of String)("CacheAuthServerServer"), Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected)) & "/sessionserver/session/minecraft/profile/"
-            Case Else
-                Throw New ArgumentException("皮肤地址种类无效：" & If(Type, "null"))
-        End Select
-        Dim SkinString = NetRequestByClientRetry(Url & UUID, RequireJson:=True)
-        If SkinString = "" Then Throw New Exception("皮肤返回值为空，可能是未设置自定义皮肤的用户")
-        '处理皮肤地址
-        Dim SkinValue As String
-        Try
-            For Each SkinProperty In SkinString.DeserializeJson()("properties")
-                If SkinProperty("name") = "textures" Then
-                    SkinValue = SkinProperty("value")
-                    Exit Try
-                End If
-            Next
-            Throw New Exception("未从皮肤返回值中找到符合条件的 Property")
-        Catch ex As Exception
-            Logger.Warn(ex, $"无法完成解析的皮肤返回值，可能是未设置自定义皮肤的用户：{SkinString}")
-            Throw New Exception("皮肤返回值中不包含皮肤数据项，可能是未设置自定义皮肤的用户", ex)
-        End Try
-        SkinString = Encoding.UTF8.GetString(Convert.FromBase64String(SkinValue))
-        Dim SkinJson As JObject = SkinString.Lower.DeserializeJson()
-        If SkinJson("textures") Is Nothing OrElse SkinJson("textures")("skin") Is Nothing OrElse SkinJson("textures")("skin")("url") Is Nothing Then
-            Throw New Exception("用户未设置自定义皮肤")
-        Else
-            Dim SkinUrl As String = SkinJson("textures")("skin")("url").ToString
-            SkinValue = If(SkinUrl.Contains("minecraft.net/"), SkinUrl.Replace("http://", "https://"), SkinUrl)
-        End If
-        '保存缓存
-        WriteIni(PathTemp & "Cache\Skin\Index" & Type & ".ini", UUID, SkinValue)
-        Logger.Info($"UUID {UUID} 对应的皮肤文件为 {SkinValue}")
-        Return SkinValue
+        Return Instances.SkinProfile.GetAddress(UUID, Type, AddressOf SkinCacheRead, AddressOf SkinCacheWrite, AddressOf SkinFetchProfile, AddressOf SkinSelectedInstanceKey)
+    End Function
+
+    ''' <summary>皮肤地址 ini 缓存读取（旧 McSkinGetAddress :1413）。</summary>
+    Private Function SkinCacheRead(Uuid As String, Type As String) As String
+        Return ReadIni(PathTemp & "Cache\Skin\Index" & Type & ".ini", Uuid)
+    End Function
+
+    ''' <summary>皮肤地址 ini 缓存写入（旧 McSkinGetAddress :1452）。</summary>
+    Private Sub SkinCacheWrite(Uuid As String, Type As String, SkinValue As String)
+        WriteIni(PathTemp & "Cache\Skin\Index" & Type & ".ini", Uuid, SkinValue)
+    End Sub
+
+    ''' <summary>皮肤返回值网络请求（旧 McSkinGetAddress :1427）。</summary>
+    Private Function SkinFetchProfile(Url As String) As String
+        Return NetRequestByClientRetry(Url, RequireJson:=True)
+    End Function
+
+    ''' <summary>当前所选实例的版本路径，未选择时为 Nothing（旧 McSkinGetAddress :1421/:1423 的 McInstanceSelected）。</summary>
+    Private Function SkinSelectedInstanceKey() As String
+        Return If(McInstanceSelected Is Nothing, Nothing, McInstanceSelected.PathVersion)
     End Function
 
     Private ReadOnly McSkinDownloadLock As New Object
@@ -1117,27 +1095,10 @@ OnLoaded:
 
     ''' <summary>
     ''' 获取 Uuid 对应的皮肤，返回“Steve”或“Alex”。
+    ''' 判定已迁至 PCLCS.Instances.SkinProfile.GetModel（旧 :1477-1485）。
     ''' </summary>
     Public Function McSkinSex(Uuid As String) As String
-        If Not Uuid.Length = 32 Then Return "Steve"
-        Dim a = Integer.Parse(Uuid(7), Globalization.NumberStyles.AllowHexSpecifier)
-        Dim b = Integer.Parse(Uuid(15), Globalization.NumberStyles.AllowHexSpecifier)
-        Dim c = Integer.Parse(Uuid(23), Globalization.NumberStyles.AllowHexSpecifier)
-        Dim d = Integer.Parse(Uuid(31), Globalization.NumberStyles.AllowHexSpecifier)
-        Return If((a Xor b Xor c Xor d) Mod 2, "Alex", "Steve")
-        'Math.floorMod(uuid.hashCode(), 18)
-
-        'Public Function hashCode(ByVal str As String) As Integer
-        'Dim hash As Integer = 0
-        'Dim n As Integer = str.Length
-        'If n = 0 Then
-        '    Return hash
-        'End If
-        'For i As Integer = 0 To n - 1
-        '    hash = hash + Asc(str(i)) * (1 << (n - i - 1))
-        'Next
-        'Return hash
-        'End Function
+        Return Instances.SkinProfile.GetModel(Uuid)
     End Function
 
 #End Region
