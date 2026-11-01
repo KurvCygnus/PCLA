@@ -1,6 +1,25 @@
-Imports System.Net.Sockets
+Imports PCLCS.Net
+Imports System.Net.Http.Headers
 
 Public Module ModNet
+
+    Sub New()
+        '将 VB 侧的签名实现接线到 C# 网络核心；签名逻辑留在 ModSecret（与 W1 SettingsService.IdentifyProvider 同模式）
+        NetRequest.CdnSigner = AddressOf SecretCdnSign
+        NetRequest.HeadersSigner = AddressOf HeadersSignAdapter
+    End Sub
+
+    ''' <summary>
+    ''' SecretHeadersSign 的 HttpRequestHeaders 适配：借用临时请求承载签名结果，再回拷到 C# 核心的请求头。
+    ''' </summary>
+    Private Sub HeadersSignAdapter(Headers As HttpRequestHeaders, Url As String, SimulateBrowserHeaders As Boolean)
+        Using Req As New HttpRequestMessage()
+            SecretHeadersSign(Url, Req, SimulateBrowserHeaders)
+            For Each Header In Req.Headers
+                Headers.TryAddWithoutValidation(Header.Key, Header.Value)
+            Next
+        End Using
+    End Sub
 
 #Region "网络请求"
 
@@ -11,30 +30,10 @@ Public Module ModNet
             Optional Content As Object = Nothing, Optional ContentType As String = Nothing, Optional Accept As String = "*/*",
             Optional Timeout As Integer = 25000, Optional Headers As String(,) = Nothing, Optional RequireJson As Boolean = False,
             Optional Encoding As Encoding = Nothing, Optional SimulateBrowserHeaders As Boolean = False, Optional MakeLog As Boolean = True) As String
-        If Method Is Nothing Then Method = HttpMethod.Get
-        If MakeLog Then Logger.Info($"发起网络请求（{Method.Method}，{Url}），最大超时 {Timeout}")
-        Try
-            Dim HeaderDictionary = If(Headers, {}).ToDictionary
-            If ContentType IsNot Nothing Then HeaderDictionary("Content-Type") = ContentType
-            If Accept IsNot Nothing Then HeaderDictionary("Accept") = Accept
-            Dim Result = SendRequest(Url, Method, Content, HeaderDictionary, Timeout:=Timeout, Encoding:=Encoding, SimulateBrowserHeaders:=SimulateBrowserHeaders).GetString(Encoding)
-            '检查结果是否为完整 JSON（在 #6683 中可能返回空，在被 GFW 截断时可能不完整）
-            '在此处检查并报错，可以让 NetRequestByClientRetry 等方法进行重试
-            If RequireJson Then
-                Result = Result.Trim((vbCrLf & " ").ToCharArray) 'Authlib-Injector 的结果会在末尾附带一个空行
-                If Not (Result.StartsWithF("{") AndAlso Result.EndsWithF("}")) AndAlso
-                   Not (Result.StartsWithF("[") AndAlso Result.EndsWithF("]")) Then
-                    Throw New FormatException("返回结果并非 JSON 格式：" &
-                    If(Result.Length > 2000, Result.Substring(0, 1000) & "..." & Result.Substring(Result.Length - 1000), Result))
-                End If
-            End If
-            Return Result
-        Catch ex As FormatException
-            Throw
-        Catch ex As Exception
-            If MakeLog Then Logger.Warn(ex, $"网络请求失败（{Method.Method}，{Url}）")
-            Throw
-        End Try
+        Return NetRequest.NetRequestByClient(Url, New NetRequestOptions With {
+            .Method = Method, .Content = Content, .ContentType = ContentType, .Accept = Accept, .TimeoutMs = Timeout,
+            .Headers = If(Headers, {}).ToDictionary(), .RequireJson = RequireJson, .Encoding = Encoding,
+            .SimulateBrowserHeaders = SimulateBrowserHeaders, .MakeLog = MakeLog, .RunInUi = AddressOf RunInUi})
     End Function
     ''' <summary>
     ''' 发送网络请求并获取返回内容。
@@ -45,46 +44,10 @@ Public Module ModNet
             Optional Content As Object = Nothing, Optional ContentType As String = Nothing, Optional Accept As String = "*/*",
             Optional Headers As String(,) = Nothing, Optional RequireJson As Boolean = False,
             Optional Encoding As Encoding = Nothing, Optional SimulateBrowserHeaders As Boolean = False) As String
-        Dim RetryCount As Integer = 0
-        Dim RetryException As Exception = Nothing
-        Dim StartTime As Long = GetTimeMs()
-        Try
-Retry:
-            Select Case RetryCount
-                Case 0 '正常尝试
-                    Return NetRequestByClient(Url, Method, Content, ContentType, Accept, 10000, Headers, RequireJson, Encoding, SimulateBrowserHeaders)
-                Case 1 '慢速重试
-                    Thread.Sleep(500)
-                    Return NetRequestByClient(Url, Method, Content, ContentType, Accept, 30000, Headers, RequireJson, Encoding, SimulateBrowserHeaders)
-                Case Else '快速重试
-                    If GetTimeMs() - StartTime > 5500 Then
-                        '若前两次加载耗费 5 秒以上，才进行重试
-                        Thread.Sleep(500)
-                        Return NetRequestByClient(Url, Method, Content, ContentType, Accept, 4000, Headers, RequireJson, Encoding, SimulateBrowserHeaders)
-                    Else
-                        Throw RetryException
-                    End If
-            End Select
-        Catch ex As Exception
-            ex.ThrowIfCanceled()
-            If TypeOf ex Is HttpRequestCodeException Then
-                If CType(ex, HttpRequestCodeException).StatusCode = HttpStatusCode.Forbidden Then Throw
-                If CType(ex, HttpRequestCodeException).StatusCode = HttpStatusCode.NotFound Then Throw
-                If CType(ex, HttpRequestCodeException).StatusCode = 429 Then Thread.Sleep(10000) 'Too Many Requests
-            End If
-            '重试
-            Select Case RetryCount
-                Case 0
-                    RetryException = ex
-                    RetryCount += 1
-                    GoTo Retry
-                Case 1
-                    RetryCount += 1
-                    GoTo Retry
-                Case Else
-                    Throw
-            End Select
-        End Try
+        Return NetRequest.NetRequestByClientRetry(Url, New NetRequestOptions With {
+            .Method = Method, .Content = Content, .ContentType = ContentType, .Accept = Accept,
+            .Headers = If(Headers, {}).ToDictionary(), .RequireJson = RequireJson, .Encoding = Encoding,
+            .SimulateBrowserHeaders = SimulateBrowserHeaders, .RunInUi = AddressOf RunInUi})
     End Function
     ''' <summary>
     ''' 生成数个线程，同时发送网络请求并获取返回内容。
@@ -94,47 +57,10 @@ Retry:
             Optional Content As Object = Nothing, Optional ContentType As String = Nothing, Optional Accept As String = "*/*",
             Optional Headers As String(,) = Nothing, Optional RequireJson As Boolean = False, Optional Timeout As Integer = 25000,
             Optional Encoding As Encoding = Nothing, Optional SimulateBrowserHeaders As Boolean = False) As String
-        Dim Threads As New List(Of Thread)
-        Dim RequestResult = Nothing
-        Dim RequestEx As Exception = Nothing
-        Dim FailCount As Integer = 0
-        For i = 1 To ThreadCount
-            Dim th As New Thread(
-            Sub()
-                Try
-                    RequestResult = NetRequestByClient(Url, Method, Content, ContentType, Accept, Timeout, Headers, RequireJson, Encoding, SimulateBrowserHeaders)
-                Catch ex As Exception
-                    FailCount += 1
-                    RequestEx = ex
-                End Try
-            End Sub)
-            th.Start()
-            Threads.Add(th)
-            Thread.Sleep(i * 250)
-            If RequestResult IsNot Nothing Then GoTo RequestFinished
-        Next
-        Do While True
-            If RequestResult IsNot Nothing Then
-RequestFinished:
-                Try
-                    For Each th In Threads
-                        If th.IsAlive Then th.Interrupt()
-                    Next
-                Catch
-                End Try
-                Return RequestResult
-            ElseIf FailCount = ThreadCount Then
-                Try
-                    For Each th In Threads
-                        If th.IsAlive Then th.Interrupt()
-                    Next
-                Catch
-                End Try
-                Throw RequestEx
-            End If
-            Thread.Sleep(20)
-        Loop
-        Return Nothing
+        Return NetRequest.NetRequestByClientMultiple(Url, ThreadCount, New NetRequestOptions With {
+            .Method = Method, .Content = Content, .ContentType = ContentType, .Accept = Accept, .TimeoutMs = Timeout,
+            .Headers = If(Headers, {}).ToDictionary(), .RequireJson = RequireJson, .Encoding = Encoding,
+            .SimulateBrowserHeaders = SimulateBrowserHeaders, .RunInUi = AddressOf RunInUi})
     End Function
 
     ''' <summary>
@@ -170,20 +96,8 @@ RequestFinished:
     ''' 不建议用于下载大文件。
     ''' </summary>
     Public Sub NetDownloadByClient(Url As String, LocalPath As String, Optional SimulateBrowserHeaders As Boolean = False)
-        Logger.Info($"通过网络请求直接下载小文件：{Url} → {LocalPath}")
-        Dim RetryCount As Integer = 0
-Retry:
-        Try
-            FileUtils.Write(LocalPath, SendRequest(Url, HttpMethod.Get, SimulateBrowserHeaders:=SimulateBrowserHeaders))
-        Catch ex As Exception
-            FileUtils.Delete(LocalPath)
-            ex.ThrowIfCanceled()
-            If RetryCount < 2 Then
-                RetryCount += 1
-                GoTo Retry
-            End If
-            Throw New HttpRequestException($"通过网络请求直接下载小文件失败（{LocalPath}）", ex)
-        End Try
+        NetRequest.NetDownloadByClient(Url, LocalPath, New NetRequestOptions With {
+            .SimulateBrowserHeaders = SimulateBrowserHeaders, .RunInUi = AddressOf RunInUi})
     End Sub
 
     ''' <summary>
@@ -207,95 +121,6 @@ Retry:
             NewTask.Cancel()
         End Try
     End Sub
-
-#End Region
-
-#Region "基础请求引擎"
-
-    '基础请求函数
-    Private Function SendRequest(Url As String, Method As HttpMethod,
-            Optional Content As Object = Nothing, Optional Headers As Dictionary(Of String, String) = Nothing,
-            Optional SimulateBrowserHeaders As Boolean = False, Optional Timeout As Integer = 25000, Optional Encoding As Encoding = Nothing) As Byte()
-        If RunInUi() AndAlso Not Url.Contains("//127.") Then Throw New Exception("在 UI 线程执行了网络请求")
-        Dim Request As HttpRequestMessage = Nothing, CancelToken As CancellationTokenSource = Nothing, Response As HttpResponseMessage = Nothing
-        Try
-            '构建 RequestClient
-            Directory.CreateDirectory(PathTemp & "Cache\Http\")
-            SyncLock RequestClientLock
-                If RequestClient Is Nothing Then '延迟初始化，以避免在程序启动前加载 CacheCow 导致 DLL 加载失败
-                    RequestClient = CacheCow.Client.ClientExtensions.CreateClient(New CacheCow.Client.FileCacheStore.FileStore(PathTemp & "Cache/Http/"), New HttpClientHandler With {
-                        .AutomaticDecompression = DecompressionMethods.Deflate Or DecompressionMethods.GZip,
-                        .UseCookies = False '不设为 False 就不能从 Header 手动传入 Cookies
-                    })
-                End If
-            End SyncLock
-            '构建请求
-            Url = SecretCdnSign(Url)
-            Request = New HttpRequestMessage(Method, Url)
-            If Content IsNot Nothing AndAlso Request.Method <> HttpMethod.Get AndAlso Request.Method <> HttpMethod.Head Then '写入 Content
-                If TypeOf Content Is HttpContent Then
-                    Request.Content = DirectCast(Content, HttpContent).Clone()
-                ElseIf TypeOf Content Is Byte() Then
-                    Request.Content = New ByteArrayContent(DirectCast(Content, Byte()))
-                ElseIf Content IsNot Nothing Then
-                    Request.Content = New ByteArrayContent(If(Encoding, Encoding.UTF8).GetBytes(Content.ToString()))
-                End If
-            End If
-            For Each Header In If(Headers, New Dictionary(Of String, String)) '写入 Headers
-                If Header.Key.Lower = "content-type" Then
-                    Request.Content?.Headers.TryAddWithoutValidation(Header.Key, Header.Value)
-                Else
-                    Request.Headers.TryAddWithoutValidation(Header.Key, Header.Value)
-                End If
-            Next
-            SecretHeadersSign(Url, Request, SimulateBrowserHeaders)
-            '发送请求
-            'CacheCow 读取缓存时若文件被占用，会调用不存在的 System.Net.Http.Formatting.resources，抛出异常（#8150）
-            Retrier.Attempt(delay:=Function() TimeSpan.FromMilliseconds(200), isRetryAllowed:=Function(ex) TypeOf ex Is FileNotFoundException OrElse TypeOf ex Is IOException, action:=
-            Sub(Attempt)
-                CancelToken?.Dispose() : CancelToken = New CancellationTokenSource(Timeout)
-                Dim ClonedRequest As HttpRequestMessage = Request.Clone() 'HttpRequestMessage 只能发送一次，重试时需要克隆一个新的
-                Try
-                    Response = RequestClient.SendAsync(ClonedRequest, HttpCompletionOption.ResponseHeadersRead, CancelToken.Token).GetResultWithTimeout(CancelToken, Timeout)
-                Finally
-                    ClonedRequest.Dispose()
-                End Try
-            End Sub)
-            '读取响应
-            Dim ResponseBytes As Byte()
-            CancelToken.Dispose() : CancelToken = New CancellationTokenSource(Timeout)
-            Using ResponseStream = Response.Content.ReadAsStreamAsync().GetResultWithTimeout(CancelToken, Timeout)
-                Using Stream As New MemoryStream
-                    ResponseStream.CopyToAsync(Stream, 81920, CancelToken.Token).GetResultWithTimeout(CancelToken, Timeout)
-                    ResponseBytes = Stream.ToArray()
-                End Using
-            End Using
-            If Not Response.IsSuccessStatusCode Then
-                Dim ResponseMessage = ResponseBytes.GetString(Encoding)
-                Throw New HttpRequestCodeException(
-                    $"错误码 {Response.StatusCode} ({CInt(Response.StatusCode)})，{Method}，{Url}" &
-                    If(String.IsNullOrEmpty(ResponseMessage), "", vbCrLf & ResponseMessage), Response.StatusCode, ResponseMessage)
-            End If
-            Return ResponseBytes
-        Catch ex As HttpRequestException
-            Throw
-        Catch ex As TimeoutException
-            Throw New WebException($"连接服务器超时，请稍后再试，或使用 VPN 改善网络环境（{Method}, {Url}）", WebExceptionStatus.Timeout)
-        Catch ex As Exception
-            If TypeOf ex IsNot TaskCanceledException Then ex.ThrowIfCanceled() 'GetResultWithTimeout 会抛出 TaskCanceledException
-            If ex.IsBadNetwork Then
-                Throw New WebException($"网络请求失败，请稍后再试，或使用 VPN 改善网络环境（{Method}, {Url}）", WebExceptionStatus.Timeout)
-            Else
-                Throw New Exception($"网络请求出现意外异常（{Method}, {Url}）", ex)
-            End If
-        Finally
-            Request?.Dispose()
-            CancelToken?.Dispose()
-            Response?.Dispose()
-        End Try
-    End Function
-    Private RequestClient As HttpClient = Nothing
-    Private RequestClientLock As New Object
 
 #End Region
 
@@ -403,23 +228,6 @@ Retry:
         ''' 已失败或中断。
         ''' </summary>
         Canceled = 6
-    End Enum
-    ''' <summary>
-    ''' 预下载检查行为。
-    ''' </summary>
-    Public Enum NetPreDownloadBehaviour
-        ''' <summary>
-        ''' 当文件已存在时，显示提示以提醒用户是否继续下载。
-        ''' </summary>
-        HintWhileExists
-        ''' <summary>
-        ''' 当文件已存在或正在下载时，直接退出下载函数执行，不对用户进行提示。
-        ''' </summary>
-        ExitWhileExistsOrDownloading
-        ''' <summary>
-        ''' 不进行已存在检查。
-        ''' </summary>
-        IgnoreCheck
     End Enum
 
     ''' <summary>
@@ -1853,35 +1661,21 @@ FinishExCatch:
     ''' 随机获取单个可用的端口。
     ''' </summary>
     Public Function FindFreePort() As Integer
-        Dim Listener As New TcpListener(IPAddress.Loopback, 0)
-        Listener.Start()
-        Dim port As Integer = CType(Listener.LocalEndpoint, IPEndPoint).Port
-        Listener.Stop()
-        Return port
+        Return NetRequest.FindFreePort()
     End Function
 
     ''' <summary>
     ''' 获取当前已被占用的端口列表。
     ''' </summary>
     Public Function GetUsedPorts() As List(Of Integer)
-        Dim IPProperties = NetworkInformation.IPGlobalProperties.GetIPGlobalProperties()
-        Dim UsedPorts As New List(Of Integer)
-        UsedPorts.AddRange(IPProperties.GetActiveTcpListeners().Select(Function(ep) ep.Port))
-        UsedPorts.AddRange(IPProperties.GetActiveUdpListeners().Select(Function(ep) ep.Port))
-        UsedPorts.AddRange(IPProperties.GetActiveTcpConnections().Select(Function(conn) conn.LocalEndPoint.Port))
-        Return UsedPorts.Distinct().ToList()
+        Return NetRequest.GetUsedPorts()
     End Function
 
     ''' <summary>
     ''' 寻找数个连续编号的可用端口。
     ''' </summary>
     Public Function FindFreePorts(ConsecutiveCount As Integer, ParamArray ExtraBlackLists As Integer()) As List(Of Integer)
-        Dim UsedPorts = GetUsedPorts().Concat(ExtraBlackLists)
-        For port = 12000 + RandomInteger(0, 1000) To 65000 - ConsecutiveCount
-            Dim Range = Enumerable.Range(port, ConsecutiveCount)
-            If Not Range.Any(Function(p) UsedPorts.Contains(p)) Then Return Range.ToList
-        Next
-        Throw New Exception("未能找到可用的端口！")
+        Return NetRequest.FindFreePorts(ConsecutiveCount, ExtraBlackLists)
     End Function
 
 #End Region
@@ -1890,40 +1684,15 @@ FinishExCatch:
     ''' 测试 Ping。失败则返回 -1。
     ''' </summary>
     Public Function Ping(Ip As String, Optional Timeout As Integer = 10000, Optional MakeLog As Boolean = True) As Integer
-        Dim PingResult As NetworkInformation.PingReply
-        Try
-            PingResult = (New NetworkInformation.Ping).Send(Ip)
-        Catch ex As Exception
-            If MakeLog Then Logger.Info($"Ping {Ip} 失败：{ex.Message}")
-            Return -1
-        End Try
-        If PingResult.Status = NetworkInformation.IPStatus.Success Then
-            If MakeLog Then Logger.Info($"Ping {Ip} 结束：{PingResult.RoundtripTime}ms")
-            Return PingResult.RoundtripTime
-        Else
-            If MakeLog Then Logger.Info($"Ping {Ip} 失败")
-            Return -1
-        End If
+        'C# 核心固定记日志；VB 的 MakeLog 参数当前无调用方传入 False，故不透传
+        Return NetRequest.Ping(Ip, Timeout)
     End Function
 
     ''' <summary>
     ''' 设置是否应当在正版登录时校验 SSL 证书。
     ''' </summary>
     Public Sub ShouldValidateSslCertificateOnLogin(Enabled As Boolean)
-        ServicePointManager.ServerCertificateValidationCallback =
-        Function(Sender, Certificate, Chain, Failure)
-            Dim Request As HttpWebRequest = TryCast(Sender, HttpWebRequest)
-            If Failure = Net.Security.SslPolicyErrors.None Then Return True '已通过验证
-            '基于 #3018 和 #5879，只在访问正版登录 API 时跳过证书验证
-            Logger.Warn($"未通过 SSL 证书验证（{Failure}），提供的证书为 {Certificate?.Subject}，URL：{Request?.Address}")
-            If Request Is Nothing Then
-                Return Not Enabled
-            ElseIf Request.Address.Host.Contains("xboxlive") OrElse Request.Address.Host.Contains("minecraftservices") Then
-                Return Not Enabled '根据设置决定是否忽略错误
-            Else
-                Return False
-            End If
-        End Function
+        NetRequest.ShouldValidateSslCertificateOnLogin(Enabled)
     End Sub
 
 End Module
