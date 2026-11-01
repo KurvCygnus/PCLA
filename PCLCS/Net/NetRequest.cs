@@ -12,7 +12,7 @@ using ThrottleDebounce;
 namespace PCLCS.Net;
 
 /// <summary>
-/// 网络请求核心（自 PCLA\Modules\Base\ModNet.vb 迁入的请求面）。
+/// 网络请求核心（自宿主层 Modules\Base\ModNet.vb 迁入的请求面）。
 /// 签名提供者（CdnSigner / HeadersSigner）由 VB 启动时接线到 ModSecret.SecretCdnSign / SecretHeadersSign，签名逻辑本身留在 VB。
 /// </summary>
 public static class NetRequest
@@ -180,7 +180,7 @@ public static class NetRequest
     public static string NetRequestByClient(string url, string? accept = null, bool requireJson = false, Func<bool>? runInUi = null)
         => NetRequestByClient(url, new NetRequestOptions { Accept = accept, RequireJson = requireJson, RunInUi = runInUi });
 
-    /// <summary>发送一次网络请求并获取返回内容（完整选项入口，供 PCLA 转发）。</summary>
+    /// <summary>发送一次网络请求并获取返回内容（完整选项入口，供 VB 侧转发）。</summary>
     public static string NetRequestByClient(string url, NetRequestOptions options)
     {
         var method = options.Method ?? HttpMethod.Get;
@@ -215,7 +215,7 @@ public static class NetRequest
     public static string NetRequestByClientRetry(string url, string? accept = null, bool requireJson = false, Func<bool>? runInUi = null)
         => NetRequestByClientRetry(url, new NetRequestOptions { Accept = accept, RequireJson = requireJson, RunInUi = runInUi });
 
-    /// <summary>发送网络请求并获取返回内容（完整选项入口，供 PCLA 转发）。</summary>
+    /// <summary>发送网络请求并获取返回内容（完整选项入口，供 VB 侧转发）。</summary>
     public static string NetRequestByClientRetry(string url, NetRequestOptions options)
     {
         var retryCount = 0;
@@ -308,7 +308,7 @@ public static class NetRequest
     }
 
     /// <summary>
-    /// 单 URL 多线程竞速（ModNet.vb:93-138 逐字语义：先成功者胜出并中断其余线程），供 PCLA 转发保持既有行为。
+    /// 单 URL 多线程竞速（ModNet.vb:93-138 逐字语义：先成功者胜出并中断其余线程），供 VB 侧转发保持既有行为。
     /// </summary>
     public static string NetRequestByClientMultiple(string url, int threadCount, NetRequestOptions options)
     {
@@ -367,9 +367,9 @@ public static class NetRequest
 
     /// <summary>通过网络请求直接下载小文件，若文件已存在将被覆盖（ModNet.vb:172-187，3 次重试）。</summary>
     public static bool NetDownloadByClient(string url, string localPath, Func<bool>? runInUi = null)
-        => NetDownloadByClient(url, localPath, new NetRequestOptions { RunInUi = runInUi });
+        => NetDownloadByClient(url, localPath, new NetRequestOptions { RunInUi = runInUi, TimeoutMs = 25000 }); //VB 旧 SendRequest 默认 Timeout=25000，显式对齐以免落入选项默认 15000
 
-    /// <summary>通过网络请求直接下载小文件（完整选项入口，供 PCLA 转发）；成功返回 true，失败抛出异常。</summary>
+    /// <summary>通过网络请求直接下载小文件（完整选项入口，供 VB 侧转发）；成功返回 true，失败抛出异常。</summary>
     public static bool NetDownloadByClient(string url, string localPath, NetRequestOptions options)
     {
         Logger.Info($"通过网络请求直接下载小文件：{url} → {localPath}");
@@ -436,7 +436,7 @@ public static class NetRequest
     /// <summary>寻找数个连续编号的可用端口（ModNet.vb:1878-1885）。</summary>
     public static List<int> FindFreePorts(int count) => FindFreePorts(count, []);
 
-    /// <summary>寻找数个连续编号的可用端口，额外拉黑指定端口（供 PCLA 转发 ParamArray 签名）。</summary>
+    /// <summary>寻找数个连续编号的可用端口，额外拉黑指定端口（供 VB 侧转发 ParamArray 签名）。</summary>
     public static List<int> FindFreePorts(int count, params int[] extraBlacklists)
     {
         var usedPorts = GetUsedPorts().Concat(extraBlacklists).ToHashSet();
@@ -451,7 +451,7 @@ public static class NetRequest
     /// <summary>设置是否应当在正版登录时校验 SSL 证书（ModNet.vb:1912-1927）；按 ToolDownloadCert 设置生效。</summary>
     public static void ShouldValidateSslCertificateOnLogin() => ShouldValidateSslCertificateOnLogin(SettingsService.Get<bool>("ToolDownloadCert"));
 
-    /// <summary>设置是否应当在正版登录时校验 SSL 证书（供 PCLA 转发设置回调的逐字签名；进程级副作用与 VB 一致）。</summary>
+    /// <summary>设置是否应当在正版登录时校验 SSL 证书（供 VB 侧转发设置回调的逐字签名；进程级副作用与 VB 一致）。</summary>
     public static void ShouldValidateSslCertificateOnLogin(bool enabled)
     {
         ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, _, failure) =>

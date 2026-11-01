@@ -97,6 +97,7 @@ Public Module ModNet
     ''' </summary>
     Public Sub NetDownloadByClient(Url As String, LocalPath As String, Optional SimulateBrowserHeaders As Boolean = False)
         NetRequest.NetDownloadByClient(Url, LocalPath, New NetRequestOptions With {
+            .TimeoutMs = 25000, '旧 SendRequest 默认 Timeout=25000，显式对齐以免落入选项默认 15000
             .SimulateBrowserHeaders = SimulateBrowserHeaders, .RunInUi = AddressOf RunInUi})
     End Sub
 

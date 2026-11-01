@@ -2,7 +2,7 @@ namespace PCLCS.Net;
 
 /// <summary>
 /// 网络请求的可选项（ModNet.vb SendRequest 参数组收敛为选项对象）。
-/// 前五个成员为后续任务（R3+）依赖的锁定签名；其余成员服务于 PCLA 既有调用面的逐字转发。
+/// 前五个成员为后续任务（R3+）依赖的锁定签名；其余成员服务于 VB 侧既有调用面的逐字转发。
 /// </summary>
 public sealed class NetRequestOptions
 {
@@ -67,39 +67,40 @@ public sealed class NetResult
 }
 
 /// <summary>
-/// 下载进度标示（C# 下载引擎的种子模型；VB 侧 ModNet.vb:373-406 的同名枚举继续供下载引擎使用）。
+/// 下载进度标示（ModNet.vb:198-231 逐字：名称、取值与顺序；VB 同名枚举继续供留守的下载引擎使用）。
 /// </summary>
 public enum NetState
 {
+    /// <summary>尚未进行已存在检查。</summary>
+    WaitingToCheck = -1,
     /// <summary>尚未开始。</summary>
-    WaitForConnect = 0,
+    WaitingToDownload = 0,
+    /// <summary>正在连接，尚未获取文件大小。</summary>
+    Connecting = 1,
+    /// <summary>已连接，正在尝试接收首个下载数据包。</summary>
+    Reading = 2,
     /// <summary>正在下载。</summary>
-    Downloading,
-    /// <summary>连接成功。</summary>
-    LinkSuccess,
-    /// <summary>连接失败。</summary>
-    LinkFailure,
-    /// <summary>等待重试。</summary>
-    WaitRetry,
-    /// <summary>下载源已失败。</summary>
-    SourceFailed,
+    Downloading = 3,
+    /// <summary>正在合并文件。</summary>
+    Merging = 4,
     /// <summary>已完成。</summary>
-    Complete,
-    /// <summary>已取消。</summary>
-    Cancelled
+    Finished = 5,
+    /// <summary>已失败或中断。</summary>
+    Canceled = 6
 }
 
 /// <summary>
-/// 下载源（C# 下载引擎的种子模型；VB 侧 ModNet.vb:356-369 的同名类继续供下载引擎使用）。
+/// 下载源（ModNet.vb:181-194 字段逐字；VB 同名类继续供留守的下载引擎使用）。
 /// </summary>
 public sealed class NetSource
 {
-    public string Id = "";
+    public int Id;
     public string Url = "";
     public int FailCount;
     public Exception? Ex;
-    /// <summary>该下载源是否正在进行强制单线程下载。</summary>
-    public bool SingleThread;
+    /// <summary>若该下载源正在进行强制单线程下载，标记这个唯一的线程。</summary>
+    //? Task 2: 收紧为 NetThread（C# NetThread 于下一任务落地，暂不引用 VB 类型）
+    public object? SingleThread;
     public bool IsFailed;
 
     public override string ToString() => Url;
