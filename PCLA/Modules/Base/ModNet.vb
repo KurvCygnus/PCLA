@@ -1,4 +1,7 @@
 Imports PCLCS.Net
+'类型别名：本模块的 NetManager 属性（转发 C# 单例）在表达式上下文会遮蔽同名 C# 类型，
+'故对 C# 类型的静态访问与类型标注统一走别名，避免限定符冗余与属性自引用
+Imports DownloadManager = PCLCS.Net.NetManager
 Imports System.Net.Http.Headers
 
 Public Module ModNet
@@ -7,12 +10,13 @@ Public Module ModNet
         '将 VB 侧的签名实现接线到 C# 网络核心；签名逻辑留在 ModSecret（与 W1 SettingsService.IdentifyProvider 同模式）
         NetRequest.CdnSigner = AddressOf SecretCdnSign
         NetRequest.HeadersSigner = AddressOf HeadersSignAdapter
-        '下载引擎（NetFile）对宿主层全局状态的接线：NetManager 计数器、全局 Uuid、缓存目录与退出标志
-        NetFile.DownloadDoneDelta = Sub(Delta) Interlocked.Add(NetManager.DownloadDone, Delta)
-        NetFile.FileRemainDelta = Sub(Delta) Interlocked.Add(NetManager.FileRemain, Delta)
+        '下载引擎（NetFile）对宿主层全局状态的接线：全局 Uuid、缓存目录与退出标志（管理器计数器已随 NetManager 迁入 C#，引擎直连入账）
         NetFile.UuidProvider = AddressOf GetUuid
         NetFile.PathTempProvider = Function() PathTemp
         NetFile.IsProgramEndingProvider = Function() IsProgramEnding
+        '下载管理器（NetManager）的宿主层接线：缓存清理目录与守护线程异常上报（AlertThenCrash 路径）
+        DownloadManager.TempFolderProvider = Function() PathTemp
+        DownloadManager.CrashAlert = Sub(ex) Logger.Error(ex, Nothing, LogBehavior.AlertThenCrash)
     End Sub
 
     ''' <summary>
@@ -133,15 +137,15 @@ Public Module ModNet
 
 #Region "多线程下载引擎"
 
-    '下载引擎全局状态（原 ModNet.vb:130-177）已随 NetThread/NetFile 迁入 C#（NetFile.NetTaskThreadLimit 等）；
-    '以下转发成员保持既有 VB 调用点（NetManagerClass、PageSpeedLeft 等）不变
+    '下载引擎全局状态（原 ModNet.vb:311-351）已迁入 C# NetSpeed，下载管理器（原 NetManagerClass，:1635-1837）已迁入 C# NetManager；
+    '以下转发成员保持既有 VB 调用点（PageSpeedLeft、PageLaunchLeft、ModAnimation 等）不变
 
     ''' <summary>
     ''' 最大线程数。
     ''' </summary>
     Public ReadOnly Property NetTaskThreadLimit As Integer
         Get
-            Return NetFile.NetTaskThreadLimit
+            Return NetSpeed.ThreadLimit
         End Get
     End Property
     ''' <summary>
@@ -149,10 +153,10 @@ Public Module ModNet
     ''' </summary>
     Public Property NetTaskSpeedLimitLow As Long
         Get
-            Return NetFile.NetTaskSpeedLimitLow
+            Return NetSpeed.SpeedLimitLow
         End Get
         Set(value As Long)
-            NetFile.NetTaskSpeedLimitLow = value
+            NetSpeed.SpeedLimitLow = value
         End Set
     End Property
     ''' <summary>
@@ -160,20 +164,29 @@ Public Module ModNet
     ''' </summary>
     Public ReadOnly Property NetTaskSpeedLimitHigh As Long
         Get
-            Return NetFile.NetTaskSpeedLimitHigh
+            Return NetSpeed.SpeedLimitHigh
         End Get
     End Property
-    Public Sub UpdateNetTaskSpeedLimitHigh(Value As Integer)
-        NetFile.UpdateNetTaskSpeedLimitHigh(Value)
-    End Sub
+    ''' <summary>
+    ''' 基于限速，当前可以下载的剩余量。
+    ''' </summary>
+    Public ReadOnly Property NetTaskSpeedLimitLeft As Long
+        Get
+            Return NetSpeed.SpeedLimitLeft
+        End Get
+    End Property
     ''' <summary>
     ''' 正在运行中的线程数。
     ''' </summary>
     Public ReadOnly Property NetTaskThreadCount As Integer
         Get
-            Return NetFile.NetTaskThreadCount
+            Return NetSpeed.ThreadCount
         End Get
     End Property
+
+    Public Sub UpdateNetTaskSpeedLimitHigh(Value As Integer)
+        NetSpeed.UpdateNetTaskSpeedLimitHigh(Value)
+    End Sub
 
     ''' <summary>
     ''' 下载一系列文件的加载器。
@@ -242,7 +255,7 @@ FinishExCatch:
         ''' <summary>
         ''' 刷新公开属性。由 NetManager 每 0.1 秒调用一次。
         ''' </summary>
-        Public Sub RefreshStat()
+        Public Sub RefreshStat() Implements INetTaskHost.RefreshStat
             '计算进度
             Dim NewProgress As Double = 0
             Dim TotalProgress As Double = 0
@@ -440,6 +453,15 @@ FinishExCatch:
                 Return Uuid
             End Get
         End Property
+        ''' <summary>宿主任务文件队列的接口代理（Files 为字段，不能直接承载 Implements；管理器 Start 读取并按去重结果整队列替换）。</summary>
+        Public Property FilesBridge As ConcurrentQueue(Of NetFile) Implements INetTaskHost.Files
+            Get
+                Return Files
+            End Get
+            Set(value As ConcurrentQueue(Of NetFile))
+                Files = value
+            End Set
+        End Property
         Public Sub OnFileFinish(File As NetFile) Implements INetTaskHost.OnFileFinish
             '要求全部文件完成
             SyncLock FileRemainLock
@@ -505,213 +527,14 @@ FinishExCatch:
 
     End Class
 
-    Public NetManager As New NetManagerClass
     ''' <summary>
-    ''' 下载文件管理。
+    ''' 下载文件管理（原 NetManagerClass 公共字段，ModNet.vb:1635-1837 已迁入 C# 单例；公共名逐字保留，消费方零改动）。
     ''' </summary>
-    Public Class NetManagerClass
-
-#Region "属性"
-
-        ''' <summary>
-        ''' 需要下载的文件。为“本地地址 - 文件对象”键值对。
-        ''' </summary>
-        Public AllFiles As New ConcurrentDictionary(Of String, NetFile)
-
-        ''' <summary>
-        ''' 当前的所有下载任务。
-        ''' </summary>
-        Public Tasks As New ConcurrentBag(Of LoaderDownload)
-
-        ''' <summary>
-        ''' 已下载完成的大小。
-        ''' </summary>
-        Public DownloadDone As Long = 0
-
-        ''' <summary>
-        ''' 尚未完成下载的文件数。
-        ''' </summary>
-        Public FileRemain As Integer = 0
-
-        '这些属性由 RefreshStat 刷新
-        ''' <summary>
-        ''' 当前的全局下载速度，单位为 Byte / 秒。
-        ''' </summary>
-        Public Speed As Long = 0
-
-        Public ReadOnly Uuid As Integer = GetUuid()
-
-#End Region
-
-        ''' <summary>
-        ''' 进度与下载速度由下载管理线程每隔约 0.1 秒刷新一次。
-        ''' </summary>
-        Private Sub RefreshStat()
-            Try
-                Dim DeltaTime As Long = GetTimeMs() - RefreshStatLast
-                If DeltaTime = 0 Then Return
-                RefreshStatLast += DeltaTime
-#Region "刷新整体速度"
-                '计算瞬时速度
-                Static SpeedLast As New List(Of Long) '记录至多最近 30 次下载速度的记录，较新的在前面
-                Static SpeedLastDone As Long = 0 '上次记速时的已下载大小
-                Dim ActualSpeed As Double = Math.Max(0, (DownloadDone - SpeedLastDone) / (DeltaTime / 1000))
-                SpeedLast.Insert(0, ActualSpeed)
-                If SpeedLast.Count >= 31 Then SpeedLast.RemoveAt(30)
-                SpeedLastDone = DownloadDone
-                '计算用于显示的速度
-                Dim SpeedSum As Long = 0, SpeedDiv As Long = 0, Weight = SpeedLast.Count
-                For Each SpeedRecord In SpeedLast
-                    SpeedSum += SpeedRecord * Weight
-                    SpeedDiv += Weight
-                    Weight -= 1
-                Next
-                Speed = If(SpeedDiv > 0, SpeedSum / SpeedDiv, 0)
-                '计算新的速度下限
-                Dim Limit As Long = 0
-                If SpeedLast.Count >= 10 Then Limit = SpeedLast.Take(10).Average * 0.85 '取近 1 秒的平均速度的 85%
-                If Limit > NetTaskSpeedLimitLow Then
-                    NetTaskSpeedLimitLow = Limit
-                    Logger.Info($"速度下限已提升到 {StringUtils.FormatByteSize(Limit)}")
-                End If
-#End Region
-#Region "刷新下载任务属性"
-                For Each Task In Tasks
-                    Task.RefreshStat()
-                Next
-#End Region
-            Catch ex As Exception
-                Logger.Warn(ex, "刷新下载公开属性失败")
-            End Try
-        End Sub
-        Private RefreshStatLast As Long
-
-        ''' <summary>
-        ''' 启动监控线程，用于新增下载线程。
-        ''' </summary>
-        Private Sub StartManager()
-            Static IsStarted As Boolean = False
-            If IsStarted Then Return
-            IsStarted = True
-            Dim ThreadStarter =
-            Sub(Id As Integer) '0 或 1
-                Try
-                    While True
-                        Thread.Sleep(20)
-                        '获取文件列表
-                        Dim WaitingFiles As New List(Of NetFile)
-                        Dim OngoingFiles As New List(Of NetFile)
-                        If Id = 0 AndAlso FileRemain = 0 Then AllFiles.Clear() '若已完成，则清空
-                        For Each File As NetFile In AllFiles.Values
-                            If File.Uuid Mod 2 = Id Then Continue For
-                            If File.State = NetState.WaitingToDownload Then
-                                WaitingFiles.Add(File)
-                            ElseIf File.State < NetState.Merging AndAlso File.State >= NetState.WaitingToDownload Then
-                                OngoingFiles.Add(File)
-                            End If
-                        Next
-                        '为等待中的文件开始线程
-                        For Each File As NetFile In WaitingFiles
-                            If NetTaskThreadCount >= NetTaskThreadLimit Then Continue While '最大线程数检查
-                            Dim NewThread = File.TryBeginThread()
-                            If NewThread IsNot Nothing AndAlso NewThread.Source.Url.Contains("bmclapi") Then Thread.Sleep(100) '减少 BMCLAPI 请求频率
-                        Next
-                        '为进行中的文件追加线程
-                        If Speed >= NetTaskSpeedLimitLow Then Continue While '下载速度足够，无需新增
-                        For Each File As NetFile In OngoingFiles
-                            If NetTaskThreadCount >= NetTaskThreadLimit Then Continue While '最大线程数检查
-                            '线程种类计数
-                            Dim PreparingCount = 0, DownloadingCount = 0
-                            If File.Threads IsNot Nothing Then
-                                For Each Thread As NetThread In File.Threads.ToList
-                                    If Thread.State < NetState.Downloading Then
-                                        PreparingCount += 1
-                                    ElseIf Thread.State = NetState.Downloading Then
-                                        DownloadingCount += 1
-                                    End If
-                                Next
-                            End If
-                            '新增线程
-                            If PreparingCount > DownloadingCount Then Continue For '准备中的线程已多于下载中的线程，不再新增
-                            Dim NewThread = File.TryBeginThread()
-                            If NewThread IsNot Nothing AndAlso NewThread.Source.Url.Contains("bmclapi") Then Thread.Sleep(100) '减少 BMCLAPI 请求频率
-                        Next
-                    End While
-                Catch ex As Exception
-                    Logger.Error(ex, $"下载管理启动线程 {Id} 出错", LogBehavior.AlertThenCrash)
-                End Try
-            End Sub
-            RunInNewThread(Sub() ThreadStarter(0), "NetManager ThreadStarter 0")
-            RunInNewThread(Sub() ThreadStarter(1), "NetManager ThreadStarter 1")
-            RunInNewThread(
-            Sub()
-                Try
-                    Dim NextTick As Long = GetTimeMs()
-                    While True
-                        '增加限速余量
-                        NetFile.RefillSpeedLimit() '原 Interlocked.Add(NetTaskSpeedLimitLeft, CLng(NetTaskSpeedLimitHigh / 10))，状态已随引擎迁 C#
-                        '刷新公开属性
-                        RefreshStat()
-                        '等待 100 ms
-                        NextTick += 100
-                        Dim SleepTime = NextTick - GetTimeMs()
-                        If SleepTime > 0 Then
-                            Thread.Sleep(SleepTime)
-                        Else
-                            NextTick = GetTimeMs() '超时，直接追帧，不等待
-                        End If
-                    End While
-                Catch ex As Exception
-                    Logger.Error(ex, "下载管理刷新线程出错", LogBehavior.AlertThenCrash)
-                End Try
-            End Sub, "NetManager StatRefresher")
-        End Sub
-
-        Private DownloadCacheLock As New Object
-        Private IsDownloadCacheCleared As Boolean = False
-        ''' <summary>
-        ''' 开始一个下载任务。
-        ''' </summary>
-        Public Function Start(Task As LoaderDownload) As List(Of NetFile)
-            StartManager()
-            '清理缓存
-            SyncLock DownloadCacheLock '防止同时开启多个下载任务时重复清理
-                If Not IsDownloadCacheCleared Then
-                    Try
-                        Logger.Info("开始清理下载缓存")
-                        DirectoryUtils.Delete(PathTemp & "Download")
-                        Logger.Info("下载缓存已清理")
-                    Catch ex As Exception
-                        Logger.Warn(ex, "清理下载缓存失败")
-                    End Try
-                    IsDownloadCacheCleared = True
-                End If
-            End SyncLock
-            '添加每个文件
-            Dim NewFiles As New List(Of NetFile)
-            Dim NewFilesList As New List(Of NetFile)
-            For Each File In Task.Files
-                Dim OngoingFile As NetFile = Nothing
-                If AllFiles.TryGetValue(File.LocalPath, OngoingFile) AndAlso OngoingFile.State < NetState.Finished Then
-                    '该文件正在被另一个任务下载
-                    Logger.Trace(Function() $"{File.LocalName}：无需开始，该文件已在下载中，目标 {File.LocalPath}")
-                    File = OngoingFile '将列表中的文件替换成下载中的文件，即两个任务指向同一个文件；抛弃现在的 File 对象
-                Else
-                    '常规情况（该文件可能已在其他任务中下载完成，但这并不影响）
-                    Logger.Trace(Function() $"{File.LocalName}：开始，目标 {File.LocalPath}")
-                    AllFiles(File.LocalPath) = File
-                    NewFiles.Add(File)
-                    Interlocked.Increment(FileRemain)
-                End If
-                NewFilesList.Add(File)
-                File.Tasks.Add(Task)
-            Next
-            Task.Files = New ConcurrentQueue(Of NetFile)(NewFilesList)
-            Tasks.Add(Task)
-            Return NewFiles
-        End Function
-
-    End Class
+    Public ReadOnly Property NetManager As DownloadManager
+        Get
+            Return DownloadManager.Instance
+        End Get
+    End Property
 
     ''' <summary>
     ''' 是否有正在进行中、需要在任务管理页面显示的下载任务？

@@ -7,7 +7,7 @@ namespace PCLCS.Net;
 /// <summary>
 /// 宿主任务回调面：C# 引擎逐任务通知完成/失败并同步失败计数。
 /// 宿主 LoaderDownload（ModNet.vb）留守在 VB 侧，宿主层程序集不进入本工程引用，故经此接口桥接；
-/// VB 侧以 Implements 子句接入（LoaderDownload.Uuid 为字段，另设代理属性承载）。
+/// VB 侧以 Implements 子句接入（LoaderDownload.Uuid/Files 为字段，另设代理属性承载）。
 /// </summary>
 public interface INetTaskHost
 {
@@ -19,22 +19,20 @@ public interface INetTaskHost
     void OnFileFail(NetFile file);
     /// <summary>单个文件完成回调（ModNet.vb:1375）。</summary>
     void OnFileFinish(NetFile file);
+    /// <summary>任务当前的文件队列（LoaderDownload.Files；管理器 Start 读取并按去重结果整队列替换）。</summary>
+    ConcurrentQueue<NetFile> Files { get; set; }
+    /// <summary>刷新任务公开属性（LoaderDownload.RefreshStat；由管理器 StatRefresher 每 0.1 秒调用）。</summary>
+    void RefreshStat();
 }
 
 /// <summary>
 /// 下载单个文件（ModNet.vb:388-1110 逐行移植）。
-/// Start 为过渡语义的自驱入口：承担 NetManager ThreadStarter 的逐文件调度（:1529-1571），
-/// 待 Task 3 NetManager.Register 落地后改为注册制。
+/// Start 为无宿主的直用/测试入口：输入校验后注册进 NetManager，由管理器守护线程承担 ThreadStarter 的
+/// 逐文件调度（:1529-1571，注册制）；宿主任务路径经 NetManager.Start(INetTaskHost) 承载。
 /// </summary>
 public sealed class NetFile
 {
     //？ 引擎对宿主层全局状态的副作用经以下接线完成（ModNet.Sub New 赋值，与 NetRequest.CdnSigner 同模式）；null 时为测试直用语义
-
-    /// <summary>Interlocked.Add(NetManager.DownloadDone, Δ) 接线（NetManagerClass 留守 VB）。</summary>
-    public static Action<long>? DownloadDoneDelta;
-
-    /// <summary>Interlocked.Increment / Decrement(NetManager.FileRemain) 接线（NetManagerClass 留守 VB）。</summary>
-    public static Action<int>? FileRemainDelta;
 
     /// <summary>ModBase.GetUuid 接线；null 时回退本地计数器（测试直用）。</summary>
     public static Func<int>? UuidProvider;
@@ -44,60 +42,6 @@ public sealed class NetFile
 
     /// <summary>ModBase.IsProgramEnding 接线；null 时视为未结束（测试直用）。</summary>
     public static Func<bool>? IsProgramEndingProvider;
-
-    #region 全局调度状态（ModNet.vb:137-177 随引擎迁入；VB 侧经 ModNet 转发成员访问）
-
-    /// <summary>正在运行中的线程数。</summary>
-    public static int NetTaskThreadCount;
-
-    /// <summary>最大线程数。</summary>
-    public static int NetTaskThreadLimit => SettingsService.Get<int>("ToolDownloadThread") + 1;
-
-    /// <summary>速度下限。</summary>
-    public static long NetTaskSpeedLimitLow = 256 * 1024L; //256K/s
-
-    private static long? netTaskSpeedLimitHighCache;
-
-    /// <summary>速度上限。若无限制则为 -1。</summary>
-    public static long NetTaskSpeedLimitHigh
-    {
-        get
-        {
-            //! 逐字移植豁免（Rider 反转 if）：VB :149-165 的 If 缓存判空结构
-            if (netTaskSpeedLimitHighCache == null)
-            {
-                var setting = SettingsService.Get<int>("ToolDownloadSpeed");
-                if (setting <= 14)
-                {
-                    netTaskSpeedLimitHighCache = Convert.ToInt64((setting + 1) * 0.1 * 1024 * 1024L);
-                } else if (setting <= 31)
-                {
-                    netTaskSpeedLimitHighCache = Convert.ToInt64((setting - 11) * 0.5 * 1024 * 1024L);
-                } else if (setting <= 41)
-                {
-                    netTaskSpeedLimitHighCache = Convert.ToInt64((setting - 21) * 1024 * 1024L);
-                } else
-                {
-                    netTaskSpeedLimitHighCache = -1;
-                }
-            }
-            return netTaskSpeedLimitHighCache.Value;
-        }
-    }
-
-    /// <summary>基于限速，当前可以下载的剩余量。</summary>
-    private static long netTaskSpeedLimitLeft = -1;
-
-    /// <summary>清空速度上限缓存（ModNet.vb:167-169；Value 参数与 VB 一致被忽略）。</summary>
-    public static void UpdateNetTaskSpeedLimitHigh(int value) => netTaskSpeedLimitHighCache = null;
-
-    /// <summary>增加限速余量（ModNet.vb:1584 StatRefresher 的 Interlocked.Add；VB 侧改为直呼本方法）。</summary>
-    public static void RefillSpeedLimit()
-    {
-        if (NetTaskSpeedLimitHigh > 0) Interlocked.Add(ref netTaskSpeedLimitLeft, Convert.ToInt64(NetTaskSpeedLimitHigh / 10.0));
-    }
-
-    #endregion
 
     #region 属性
 
@@ -329,7 +273,7 @@ public sealed class NetFile
             //! 逐字移植豁免（Rider 锁序环）：VB :623 SyncLock LockSource 内调 HasAvailableSource 同锁重入
             lock (LockSource)
             {
-                if (NetTaskThreadCount >= NetTaskThreadLimit || !HasAvailableSource() ||
+                if (NetSpeed.ThreadCount >= NetSpeed.ThreadLimit || !HasAvailableSource() ||
                     (IsNoSplit && Threads != null && Threads.State != NetState.Canceled)) return null;
                 if (State >= NetState.Merging || State == NetState.WaitingToCheck) return null;
                 lock (LockState)
@@ -412,7 +356,7 @@ StartThread:
                 }
             }
             //开始线程
-            Interlocked.Increment(ref NetTaskThreadCount);
+            Interlocked.Increment(ref NetSpeed.ThreadCount);
             lock (LockSource)
             {
                 if (!HasAvailableSource(false)) SourcesOnce.First().SingleThread = threadInfo;
@@ -558,12 +502,12 @@ StartThread:
                    httpDataCount > 0 && !IsProgramEnding && State < NetState.Merging && (!th.Source.IsFailed || th.Source.SingleThread == th))
             {
                 //限速
-                while (NetTaskSpeedLimitHigh > 0 && Interlocked.Read(ref netTaskSpeedLimitLeft) <= 0)
+                while (NetSpeed.SpeedLimitHigh > 0 && Interlocked.Read(ref NetSpeed.SpeedLimitLeft) <= 0)
                 {
                     Thread.Sleep(16);
                 }
                 var realDataCount = IsUnknownSize ? httpDataCount : (int) Math.Min(httpDataCount, th.DownloadUndone);
-                if (NetTaskSpeedLimitHigh > 0) Interlocked.Add(ref netTaskSpeedLimitLeft, -realDataCount);
+                if (NetSpeed.SpeedLimitHigh > 0) Interlocked.Add(ref NetSpeed.SpeedLimitLeft, -realDataCount);
                 var deltaTime = GetTimeMs() - th.LastReceiveTime;
                 if (deltaTime > 100000000) deltaTime = 1; //避免时间刻反转导致出现极大值
                 if (realDataCount > 0)
@@ -585,7 +529,7 @@ StartThread:
                     {
                         task.FailCount = 0;
                     }
-                    DownloadDoneDelta?.Invoke(realDataCount);
+                    NetManager.Instance.AddDownloadDone(realDataCount);
                     Interlocked.Add(ref DownloadDone, realDataCount);
                     th.DownloadDone += realDataCount;
                     resultStream!.Write(responseBytes, 0, realDataCount);
@@ -640,7 +584,7 @@ SourceBreak:
             cancelToken?.Dispose();
             if (!IsNoSplit) resultStream?.Dispose();
             //改变计数
-            Interlocked.Decrement(ref NetTaskThreadCount);
+            Interlocked.Decrement(ref NetSpeed.ThreadCount);
             //合并
             if (((FileSize >= 0 && DownloadDone >= FileSize) || (FileSize == -1 && DownloadDone > 0)) &&
                 State < NetState.Merging && th.State != NetState.Canceled) Merge(th);
@@ -665,7 +609,7 @@ SourceBreak:
             ex.Message.Contains("(502)") || ex.Message.Contains("(404)") ||
             ex.Message.Contains("未能解析") || ex.Message.Contains("无返回数据") || ex.Message.Contains("空间不足") ||
             ((ex.Message.Contains("(403)") || ex.Message.Contains("(429)")) && !th.Source.Url.Contains("bmclapi")) || //BMCLAPI 的部分源在高频率请求下会返回 403/429，所以不应因此禁用下载源
-            (th.Source.FailCount >= NetTaskThreadLimit.Clamp(5, 30) && DownloadDone < 1) || th.Source.FailCount > NetTaskThreadLimit + 2)
+            (th.Source.FailCount >= NetSpeed.ThreadLimit.Clamp(5, 30) && DownloadDone < 1) || th.Source.FailCount > NetSpeed.ThreadLimit + 2)
         {
             //当一个下载源有多个线程在下载时，只选择其中一个线程进行后续处理
             var isThisFail = false;
@@ -757,7 +701,7 @@ SourceBreak:
         {
             Threads = null;
         }
-        DownloadDoneDelta?.Invoke(-DownloadDone);
+        NetManager.Instance.AddDownloadDone(-DownloadDone);
         DownloadDone = 0;
         _speedLastDone = 0;
     }
@@ -928,7 +872,7 @@ SourceBreak:
         }
         try
         {
-            FileRemainDelta?.Invoke(-1);
+            NetManager.Instance.AddFileRemain(-1);
         } catch
         {
             //吞错继续
@@ -947,7 +891,7 @@ SourceBreak:
             if (State >= NetState.Finished) return;
             State = NetState.Finished;
         }
-        FileRemainDelta?.Invoke(-1);
+        NetManager.Instance.AddFileRemain(-1);
         if (printLog) Logger.Info($"{LocalName}：已完成");
         foreach (var task in Tasks)
         {
@@ -955,11 +899,9 @@ SourceBreak:
         }
     }
 
-    #region 过渡自驱调度（Task 3 由 NetManager.Register 接管后移除）
-
     /// <summary>
-    /// 开始下载（过渡语义，ModNet.vb 现有入队路径的等价承载）：执行宿主层 LoaderDownload.Start 的输入校验对应段（:1218-1236），
-    /// 随后以自驱线程承担 NetManager ThreadStarter 的逐文件调度（:1529-1571）。Task 3 将改为 NetManager 注册制。
+    /// 开始下载（无宿主的直用/测试入口）：执行宿主层 LoaderDownload.Start 的输入校验对应段（:1218-1236），
+    /// 随后注册进 NetManager，由管理器守护线程承担 ThreadStarter 的逐文件调度（:1529-1571，注册制）。
     /// </summary>
     public void Start()
     {
@@ -983,72 +925,9 @@ SourceBreak:
             State = NetState.WaitingToDownload;
             IsCopy = false;
         }
-        //? 过渡自驱：无宿主任务（测试/直用）时注册空宿主以满足 TryBeginThread 的任务在册检查（:679“由于中断，已没有可用任务”）；
-        //? Task 3 由 NetManager.Register 接管后随本段一并移除
-        Tasks.Add(new SelfTaskHost());
-        //自驱调度线程（裸 Thread + BelowNormal，对应 VB ThreadStarter 的裸线程模型）
-        var driver = new Thread(DriveLoop) { Name = $"下载 自驱调度 {Uuid}#", Priority = ThreadPriority.BelowNormal, IsBackground = true };
-        driver.Start();
+        NetManager.Instance.Register(this); //调度移交管理器守护线程（原过渡自驱 DriveLoop 已随注册制移除）
     }
 
-    /// <summary>过渡自驱用的空宿主：无宿主任务时占用 Tasks 槽位，回调无副作用（Task 3 移除）。</summary>
-    private sealed class SelfTaskHost : INetTaskHost
-    {
-        public int Uuid { get; } = GetUuid();
-        public int FailCount { get; set; }
-        public void OnFileFail(NetFile file) { }
-        public void OnFileFinish(NetFile file) { }
-    }
-
-    /// <summary>NetManagerClass.ThreadStarter（:1529-1571）的逐文件等价自驱循环，终态（Finished/Canceled）退出。</summary>
-    private void DriveLoop()
-    {
-        try
-        {
-            while (State < NetState.Finished)
-            {
-                Thread.Sleep(20);
-                if (State == NetState.WaitingToDownload)
-                {
-                    //为等待中的文件开始线程
-                    if (NetTaskThreadCount >= NetTaskThreadLimit) continue; //最大线程数检查
-                    var newThread = TryBeginThread();
-                    if (newThread != null && newThread.Source.Url.Contains("bmclapi")) Thread.Sleep(100); //减少 BMCLAPI 请求频率
-                } else if (State < NetState.Merging)
-                {
-                    //为进行中的文件追加线程
-                    if (Speed >= NetTaskSpeedLimitLow) continue; //下载速度足够，无需新增（过渡语义以本文件速度替代全局 NetManager.Speed）
-                    if (NetTaskThreadCount >= NetTaskThreadLimit) continue; //最大线程数检查
-                    //线程种类计数
-                    var preparingCount = 0;
-                    var downloadingCount = 0;
-                    if (Threads != null)
-                    {
-                        foreach (var thread in Threads.ToList())
-                        {
-                            if (thread.State < NetState.Downloading)
-                            {
-                                preparingCount++;
-                            } else if (thread.State == NetState.Downloading)
-                            {
-                                downloadingCount++;
-                            }
-                        }
-                    }
-                    //新增线程
-                    if (preparingCount > downloadingCount) continue; //准备中的线程已多于下载中的线程，不再新增
-                    var newThread = TryBeginThread();
-                    if (newThread != null && newThread.Source.Url.Contains("bmclapi")) Thread.Sleep(100); //减少 BMCLAPI 请求频率
-                }
-            }
-        } catch (Exception ex)
-        {
-            //VB ThreadStarter 为 AlertThenCrash；过渡自驱只影响单文件，降级为记录（Task 3 归还宿主调度后恢复原行为）
-            Logger.Error(ex, $"下载自驱调度出错（{LocalName}）");
-        }
-    }
-
-    #endregion
 
     #region 基础设施（随引擎迁入的宿主层等价实现）
 
