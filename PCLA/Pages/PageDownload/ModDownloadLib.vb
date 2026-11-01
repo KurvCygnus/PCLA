@@ -1,5 +1,8 @@
 Imports System.Text.Json
+Imports System.Text.Json.Nodes
 Imports PCLCS.Download
+Imports PCLCS.Install
+Imports PCLCS.Json
 Imports PCLCS.Net
 
 Public Module ModDownloadLib
@@ -10,8 +13,8 @@ Public Module ModDownloadLib
     ''' 获取下载某个 Minecraft 版本的加载器列表。
     ''' </summary>
     ''' <param name="VersionFolder">版本文件输出目录。</param>
+    ''' <remarks>版本 Json 落盘路径与 clientVersion 写入的决策段已迁入 C#（PCLCS.Install.VanillaInstallPlans）；Loader 链本体留 VB（计划裁定）。</remarks>
     Private Function McDownloadClientLoader(Id As String, JsonUrl As String, VersionFolder As String) As List(Of LoaderBase)
-        Dim InstanceName = PathUtils.GetLastPart(VersionFolder)
         Dim Loaders As New List(Of LoaderBase)
         Dim NewInstance As McInstance = Nothing
 
@@ -20,11 +23,11 @@ Public Module ModDownloadLib
             Loaders.Add(New LoaderTask(Of String, List(Of NetFile))("获取原版 json 文件下载地址",
             Sub(Task As LoaderTask(Of String, List(Of NetFile)))
                 Dim JsonAddress As String = DlClientListGet(Id)
-                Task.Output = New List(Of NetFile) From {New NetFile(DlSourceLauncherOrMetaGet(JsonAddress), VersionFolder & InstanceName & ".json")}
+                Task.Output = New List(Of NetFile) From {New NetFile(DlSourceLauncherOrMetaGet(JsonAddress), VanillaInstallPlans.VersionJsonPath(VersionFolder))}
             End Sub) With {.ProgressWeight = 2, .Show = False})
         End If
         Loaders.Add(New LoaderDownload(McDownloadClientJsonName, New List(Of NetFile) From {
-            New NetFile(DlSourceLauncherOrMetaGet(If(JsonUrl, "")), VersionFolder & InstanceName & ".json", New FileChecker With {.IsJson = True})
+            New NetFile(DlSourceLauncherOrMetaGet(If(JsonUrl, "")), VanillaInstallPlans.VersionJsonPath(VersionFolder), New FileChecker With {.IsJson = True})
         }) With {.ProgressWeight = 3})
         '读取 Json 文件并创建实例
         Loaders.Add(New LoaderTask(Of String, String)("读取 json 文件",
@@ -55,9 +58,7 @@ Public Module ModDownloadLib
             End Try
             '顺手添加 Json 项目
             Try
-                Dim InstanceJson As JObject = LegacyFileUtils.ReadAsJson(VersionFolder & InstanceName & ".json")
-                InstanceJson("clientVersion") = Id
-                FileUtils.Write($"{VersionFolder}{InstanceName}.json", InstanceJson.ToString)
+                VanillaInstallPlans.WriteClientVersion(VersionFolder, Id)
             Catch ex As Exception
                 Throw New Exception("添加客户端版本失败", ex)
             End Try
@@ -1891,35 +1892,19 @@ Retry:
         If FabricFolder IsNot Nothing Then ProfileSources.Add(("Fabric", FabricFolder))
         Logger.Info($"开始进行版本合并，输出：{VersionFolder}，" & String.Join("，", ProfileSources.Select(Function(Source) $"{Source.Name}：{Source.Folder}")))
         '读取文件并检查文件是否合规
-        Dim LoadedProfiles As New List(Of (Name As String, Json As JObject))
+        Dim LoadedProfiles As New List(Of (Name As String, Json As JsonObject))
         For Each Source In ProfileSources
             Dim ProfilePath = Path.Combine(Source.Folder, PathUtils.GetLastPart(Source.Folder) & ".json")
             Dim ProfileText = If(FileUtils.TryReadAsString(ProfilePath), "")
             If Not ProfileText.StartsWithF("{") Then Throw New Exception($"{Source.Name} json 有误，地址：{ProfilePath}，前段内容：{ProfileText.Substring(0, Math.Min(ProfileText.Length, 1000))}")
-            LoadedProfiles.Add((Source.Name, ProfileText.DeserializeJson(Of JObject)()))
+            LoadedProfiles.Add((Source.Name, JsonNodeUtils.ParseObject(ProfileText)))
         Next
-        '先获取 minecraftArguments，避免合并时原版参数被覆盖
+        '先获取 minecraftArguments，避免合并时原版参数被覆盖；覆盖层清理、JSON 合并与重组决策核已迁入 C#（PCLCS.Install.MergeJson），逐层转发（:1903-1922）
         Dim AllArguments = LoadedProfiles.Select(Function(Profile) If(Profile.Json("minecraftArguments")?.ToString(), " ")).Join(" ")
-        '合并（相关讨论见 #2801）
         Dim MergedJson = LoadedProfiles(0).Json 'Minecraft 原版 JSON
         For Each Loaded In LoadedProfiles.Skip(1)
-            Loaded.Json.Remove("releaseTime")
-            Loaded.Json.Remove("time")
-            MergedJson.Merge(Loaded.Json)
+            MergedJson = PCLCS.Install.MergeJson.Merge(MergedJson, Loaded.Json, AllArguments)
         Next
-        '填入 minecraftArguments
-        Dim SplitArguments As New List(Of String)
-        For Each Argument In AllArguments.Split(" ", True).Select(Function(Value) Value.Trim())
-            If Not Argument.StartsWithF("-") AndAlso SplitArguments.Any Then
-                Dim LastArgument = SplitArguments.Last
-                If LastArgument.StartsWithF("-") AndAlso Not LastArgument.Contains(" ") Then
-                    SplitArguments(SplitArguments.Count - 1) = LastArgument & " " & Argument
-                    Continue For
-                End If
-            End If
-            SplitArguments.Add(Argument)
-        Next
-        If SplitArguments.Any() Then MergedJson("minecraftArguments") = SplitArguments.Distinct().Join(" ")
         '修改
         MergedJson.Remove("_comment_")
         MergedJson.Remove("inheritsFrom")
@@ -1927,7 +1912,7 @@ Retry:
         Dim VersionName = PathUtils.GetLastPart(VersionFolder)
         MergedJson("id") = VersionName
         '保存
-        FileUtils.Write(Path.Combine(VersionFolder, VersionName & ".json"), MergedJson.ToString())
+        FileUtils.Write(Path.Combine(VersionFolder, VersionName & ".json"), MergedJson.ToJsonString(PCLCS.Install.MergeJson.WriteOptions))
         Logger.Info($"版本合并 {VersionName} 完成")
     End Sub
     ''' <summary>
@@ -2052,50 +2037,9 @@ Retry:
     ''' <summary>
     ''' 将安装好的临时版本文件夹覆盖到一个现有文件夹中。
     ''' </summary>
+    ''' <remarks>决策核已迁入 C#（PCLCS.Install.InstallCommit，ModDownloadLib.vb:2055-2099 原文）；本方法为宿主层转发。</remarks>
     Public Sub McInstallCommit(Instance As McInstance, NewManifest As McInstallManifest, BuildFolder As String, TargetFolder As String)
-        Dim OldFiles = If(Configs.McInstallManifest.Get(Instance.Config)?.ManagedFiles, {})
-        Dim NewFiles = NewManifest.ManagedFiles
-
-        '============== 整理变更的文件列表 ==============
-
-        Dim FilesToDelete As New List(Of String)
-        Dim FilesToMove As New List(Of (Source As String, Target As String))
-        'ManagedFiles
-        '新版里有：添加或覆盖新版文件
-        For Each NewFile In NewFiles
-            FilesToMove.Add((Path.Combine(BuildFolder, NewFile.RelativePath), Path.Combine(TargetFolder, NewFile.RelativePath)))
-        Next
-        '新版里没有，老版里有：删除本地文件到回收站
-        Dim NewFilePaths As New HashSet(Of String)(NewFiles.Select(Function(File) File.RelativePath))
-        For Each OldFile In OldFiles
-            If NewFilePaths.Contains(OldFile.RelativePath) Then Continue For
-            FilesToDelete.Add(PathUtils.ForCompare(Path.Combine(TargetFolder, OldFile.RelativePath)))
-        Next
-        '老版本 MC 的 assets 文件
-        If DirectoryUtils.Exists(BuildFolder & "resources\") Then DirectoryUtils.Copy(BuildFolder & "resources\", TargetFolder & "resources\")
-        'json 与 jar
-        Dim OldJsonPath As String = Instance.GetJsonPath()
-        FilesToDelete.Add(OldJsonPath)
-        FilesToDelete.Add(Path.ChangeExtension(OldJsonPath, ".jar"))
-        FilesToDelete.Add(Instance.PathVersion & Instance.Name & ".jar")
-        FilesToDelete = FilesToDelete.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-
-        '============== 实际修改 ==============
-
-        Instance.Config.Save()
-        For Each TargetPath In FilesToDelete
-            FileUtils.Delete(TargetPath, True)
-        Next
-        FileUtils.Move(BuildFolder & Instance.Name & ".jar", Instance.PathVersion & Instance.Name & ".jar")
-        FileUtils.Move(BuildFolder & Instance.Name & ".json", OldJsonPath)
-        For Each File In FilesToMove
-            DirectoryUtils.Create(PathUtils.RemoveLastPart(File.Target))
-            FileUtils.Copy(File.Source, File.Target)
-        Next
-        Dim ManagedFiles = NewFiles.Select(Function(File) New McInstallManifest.ManagedFile(File.RelativePath, File.Sha1,
-            FileUtils.GetInfo(Path.Combine(TargetFolder, File.RelativePath)).LastWriteTimeUtc, File.Component)).ToList()
-        Configs.McInstallManifest.Set(New McInstallManifest(NewManifest.SchemaVersion, NewManifest.Components, NewManifest.LastModifiedUtc, ManagedFiles), Instance.Config)
-        Instance.Config.Save()
+        InstallCommit.Commit(Instance.Config, Instance.PathVersion, Instance.Name, NewManifest, BuildFolder, TargetFolder)
     End Sub
 
     ''' <summary>
