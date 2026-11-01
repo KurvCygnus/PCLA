@@ -2,15 +2,18 @@ using PCLCS.Download;
 using PCLCS.Instances;
 using PCLCS.Minecraft.Download;
 using PCLCS.Net;
+using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json.Nodes;
 
 namespace PCLCS.Install;
 
 /// <summary>
-/// Forge/NeoForge 安装决策核（ModDownloadLib.vb 的决策段迁入；进程注入器、Loader 链与 WPF 留宿主层）：
-/// 安装器下载源（:1122-1141）、新版安装链（:1150-1193：解包合并 → 库清单 → MOJMAPS 追加 → NetFile 组装）、
-/// Legacy 方式 1/2（:1293-1342）与注入器输出行映射（:1039-1076）。
+/// 安装决策核（ModDownloadLib.vb 的决策段迁入；进程注入器、Loader 链与 WPF 留宿主层）：
+/// Forge/NeoForge 安装器下载源（:1122-1141）、新版安装链（:1150-1193：解包合并 → 库清单 → MOJMAPS 追加 → NetFile 组装）、
+/// Legacy 方式 1/2（:1293-1342）与注入器输出行映射（:1039-1076）；
+/// OptiFine 安装器地址/class 版本/方式 A 参数/方式 B 手写 Json（:359-630 与 :645-670 决策面）、
+/// LiteLoader redist 表/安装源/版本 Json 组装（:740-824 决策面）与 Fabric profile 下载决策（:1505-1524 决策面）。
 /// JSON 合并复用 MergeJson.MergeOverlay（Newtonsoft JObject.Merge 默认语义的 STJ 等价，无参数重组）。
 /// </summary>
 public static class InstallerPlans
@@ -241,6 +244,237 @@ public static class InstallerPlans
         }
     }
 
+    #region OptiFine 安装决策（ModDownloadLib.vb:359-630 与 :645-670 的决策面；进程运行段与 Loader 链留宿主层）
+
+    /// <summary>
+    /// OptiFine 安装器 class 头解析与 Java 版本需求决策（McDownloadOptiFineInstall :361-374 决策面）：
+    /// 校验 CAFEBABE 头与 49..100 版本界，回传 class 版本与 Java 范围（旧 AtLeast(New Version(ClassVersion - 44, 0))，:372）。
+    /// 读取失败（条目缺失 :364 / 头长不足 :367 / 头无效 :368 / 版本越界 :370-371）按旧异常类型上抛；
+    /// 宿主层 Catch 记 Warn 后回退默认 Java 21（:360 默认值 + :376-378）。
+    /// brief 计划稿将其并入 BuildOptiFinePlan 收敛为独立决策：解析发生在安装入口（Dispatch 令"include it if it feeds the plan"——
+    /// 其产物 JavaRange 供 SelectOrDownloadJava（VB 真值宿主段）消费，是安装计划的前置决策）。
+    /// </summary>
+    public static (int ClassVersion, ValueRange<Version> JavaRange) OptiFineClassVersion(string installerPath)
+    {
+        using var installer = FileUtils.OpenZip(installerPath);
+        var installerClass = installer.GetEntry("optifine/Installer.class") ?? throw new FileNotFoundException("未找到 optifine/Installer.class");   //旧 :363-364
+        using var stream = installerClass.Open();
+        using var reader = new BinaryReader(stream);
+        var header = reader.ReadBytes(8);
+        if (header.Length < 8) throw new IOException("Installer.class 长度不足");   //旧 :367
+        if (header[0] != 0xCA || header[1] != 0xFE || header[2] != 0xBA || header[3] != 0xBE) throw new InvalidDataException("Installer.class 文件头无效");   //旧 :368
+        var classVersion = header[6] * 0x100 + header[7];   //旧 :369（6-7 字节大端 major）
+        if (classVersion < 49) throw new InvalidDataException("Installer.class 版本过低");   //旧 :370
+        if (classVersion > 100) throw new InvalidDataException("Installer.class 版本过高");   //旧 :371
+        var javaRange = ValueRange<Version>.AtLeast(new Version(classVersion - 44, 0));   //旧 :372
+        Logger.Info($"OptiFine 安装器 class 版本：{classVersion}，需要 Java {javaRange}");   //旧 :373
+        return (classVersion, javaRange);
+    }
+
+    /// <summary>
+    /// OptiFine 安装链的版本名、安装器本地目标与方式 A/B 判定（McDownloadOptiFineLoader :485-490 决策面）：
+    /// 新版（Inherit 含 "w" 或 Drop >= 140，:487）安装器落 tempFolder + "OptiFine.jar"，旧版落
+    /// libraries\optifine\OptiFine\{名}\{文件}（:490）。tempFolder 为旧 RequestTaskTempFolder(True) 的惰性提供者
+    /// （旧 If(IsNewerVersion, ...) 短路：仅方式 A 取值），mcFolder 以 \ 结尾。
+    /// brief 计划稿的 (InstallerUrl, InstallerPath) 收敛：URL 决策见 <see cref="OptiFineDownloadSources"/>（源无偏好开关，二者拆分）。
+    /// </summary>
+    public static (string Id, string InstallerPath, bool IsNewerVersion) OptiFineInstallTarget(DlOptiFineListEntry entry, string mcFolder, Func<string> tempFolder)
+    {
+        var id = entry.InstanceName!;   //旧 :485
+        var isNewerVersion = entry.Inherit!.Contains("w") || McVersion.VersionToDrop(entry.Inherit) >= 140;   //旧 :487（快照名或 Drop 序数）
+        var fileName = entry.FileName!;
+        var installerPath = isNewerVersion
+            ? tempFolder() + "OptiFine.jar"
+            : mcFolder + @"libraries\optifine\OptiFine\" +
+              PathUtils.GetFileNameWithoutExtension(fileName).Replace("OptiFine_", "").Replace("preview_", "") + @"\" +
+              fileName.Replace("OptiFine_", "OptiFine-").Replace("preview_", "");   //旧 :490
+        return (id, installerPath, isNewerVersion);
+    }
+
+    /// <summary>
+    /// OptiFine 主文件下载源决策（:496-517 与 :648-669 两处逐字共用的决策面）：
+    /// [0] 恒为 BMCLAPI 源（#4281 的 1.8/1.9 → ".0" 补全；preview 走 "HD_U_" 段且空格换 "/"，正式走 "HD_U/" 段）；
+    /// officialPage 为宿主层抓取的 adloadx 页面（:508/:659 网络请求留宿主层），解析 "downloadx?f=..." 链接排第二，
+    /// 无匹配时抛 InvalidOperationException（旧 RegexSearch(...).First 的空序列语义，宿主层 Catch 记 Warn 后以 null 回退仅 BMCLAPI）。
+    /// checker 的 MinSize 由调用方按链承载（安装链 300KB :517 / 保存链 64KB :669）。
+    /// brief 计划稿的 preferBmclapi 参数无 VB 真值（旧代码无源偏好开关，BMCLAPI 恒首选），未迁入。
+    /// </summary>
+    public static (IReadOnlyList<string> Sources, FileChecker Checker) OptiFineDownloadSources(DlOptiFineListEntry entry, string? officialPage, long minSize)
+    {
+        var sources = new List<string>();
+        //BMCLAPI 源（:496-504 / :648-655）
+        var bmclapiInherit = entry.Inherit!;
+        if (bmclapiInherit is "1.8" or "1.9") bmclapiInherit += ".0";   //#4281
+        var name = entry.DisplayName!.Replace(entry.Inherit + " ", "");
+        sources.Add(entry.IsPreview
+            ? $"https://bmclapi2.bangbang93.com/optifine/{bmclapiInherit}/HD_U_{name.Replace(" ", "/")}"
+            : $"https://bmclapi2.bangbang93.com/optifine/{bmclapiInherit}/HD_U/{name}");
+        //官方源（:505-515 / :656-666）：页面抓取与 Warn 留宿主层，此处仅解析链接
+        if (officialPage is not null)
+        {
+            sources.Add("https://optifine.net/" + officialPage.RegexSearch("downloadx\\?f=[^\"']+").First());
+        }
+        return (sources, new FileChecker { MinSize = minSize });
+    }
+
+    /// <summary>
+    /// OptiFine 方式 A 的安装器进程参数（McDownloadOptiFineInstall :384-390 决策面）：
+    /// useJavaWrapper 由宿主层合并重试状态与设置项（旧 If UseJavaWrapper AndAlso Not Settings("LaunchAdvanceDisableJLW")，
+    /// 条件求值留宿主层以保 ExtractPatch 的惰性）；javaWrapperJar 为旧 ExtractPatch("Launch\JavaWrapper.jar", PathPure.Value)
+    /// 的惰性提供者（仅 JLW 分支取值，:386）；javaMajor >= 9 时前置 --add-exports（:390）。
+    /// 进程运行段（:392-475 的 Process/InstallSyncLock）留宿主层。
+    /// </summary>
+    public static string OptiFineInstallerArgs(string pathPure, string baseMcFolderHome, string target, Func<string> javaWrapperJar, int javaMajor, bool useJavaWrapper)
+    {
+        var arguments = useJavaWrapper
+            ? $"-Doolloo.jlw.tmpdir=\"{PathUtils.RemoveSlashSuffix(pathPure)}\" -Duser.home=\"{PathUtils.RemoveSlashSuffix(baseMcFolderHome)}\" -cp \"{target}\" -jar \"{javaWrapperJar()}\" optifine.Installer"
+            : $"-Duser.home=\"{PathUtils.RemoveSlashSuffix(baseMcFolderHome)}\" -cp \"{target}\" optifine.Installer";   //旧 :384-389
+        if (javaMajor >= 9) arguments = "--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED " + arguments;   //旧 :390
+        return arguments;
+    }
+
+    /// <summary>
+    /// OptiFine 方式 B 的手写版本 Json 全文（McDownloadOptiFineLoader :600-628 决策面，4 空格缩进原文逐字）：
+    /// ReleaseTime 为空（或缺失，VB "Nothing = "" 为真）时回退继承版本发布日期（:603-604，inheritReleaseDate 由宿主层读
+    /// McInstance 后传入）；isOldJson 为真走旧版 Json 格式（minimumLauncherVersion 数值 18 + minecraftArguments 双空格追加
+    /// TweakClass，:614-617），否则新版格式（"21" 字符串 + arguments.game，:620-628——旧代码原样的形态差异）。
+    /// minecraftArguments 为惰性提供者（旧 InheritInstance.JsonObject("minecraftArguments") 的缺失 NRE 保持在分支内）。
+    /// 行尾保真：旧 VB 源文件在本仓库为 LF，编译产物以 LF 写盘，C# 侧以显式 \n 拼接（InstallerPlans.cs 源文件为 CRLF）。
+    /// 写盘（:630 FileUtils.Write）与异常包装（"安装 OptiFine（方式 B）失败"）留宿主层。
+    /// brief 计划稿的 JsonObject HandwrittenJson 收敛为字符串：旧真值为手写字符串直接落盘，经 JsonObject 重组会改写布局与形态（"21" 字符串等）。
+    /// </summary>
+    public static string OptiFineHandwrittenJson(DlOptiFineListEntry entry, string inheritReleaseDate, bool isOldJson, Func<string> minecraftArguments, Action<double>? progress = null)
+    {
+        var date = string.IsNullOrEmpty(entry.ReleaseTime) ? inheritReleaseDate : entry.ReleaseTime!.Replace("/", "-");   //旧 :603-604
+        var libName = PathUtils.GetFileNameWithoutExtension(entry.FileName!).Replace("OptiFine_", "").Replace("preview_", "");   //旧 :607
+        var prefix = "{\n" +
+            $"    \"id\": \"{entry.InstanceName}\",\n" +
+            $"    \"inheritsFrom\": \"{entry.Inherit}\",\n" +
+            $"    \"time\": \"{date}T23:33:33+08:00\",\n" +
+            $"    \"releaseTime\": \"{date}T23:33:33+08:00\",\n" +
+            "    \"type\": \"release\",\n" +
+            "    \"libraries\": [\n" +
+            $"        {{\"name\": \"optifine:OptiFine:{libName}\"}},\n" +
+            "        {\"name\": \"net.minecraft:launchwrapper:1.12\"}\n" +
+            "    ],\n" +
+            "    \"mainClass\": \"net.minecraft.launchwrapper.Launch\",\n";
+        progress?.Invoke(0.8);   //旧 :611（前缀组装后、方式分支前）
+        return prefix + (isOldJson
+            ? "    \"minimumLauncherVersion\": 18,\n" +
+              $"    \"minecraftArguments\": \"{minecraftArguments()}  --tweakClass optifine.OptiFineTweaker\"\n" +
+              "}"
+            : "    \"minimumLauncherVersion\": \"21\",\n" +
+              "    \"arguments\": {\n" +
+              "        \"game\": [\n" +
+              "            \"--tweakClass\",\n" +
+              "            \"optifine.OptiFineTweaker\"\n" +
+              "        ]\n" +
+              "    }\n" +
+              "}");
+    }
+
+    #endregion
+
+    #region LiteLoader 安装决策（ModDownloadLib.vb:740-824 的决策面；下载入口、写盘与 WPF 留宿主层）
+
+    /// <summary>
+    /// LiteLoader 老版本 redist 硬编码地址表（McDownloadLiteLoaderSave :759-769 Select Case 逐字）；
+    /// 未列出的版本抛 NotSupportedException（旧 Case Else，:770-771）。
+    /// brief 计划稿的 (Url, Path)? 可空收敛：旧真值为抛出而非返回空，落盘路径由宿主层 SaveFile 对话框决定。
+    /// </summary>
+    public static string LegacyLiteLoaderRedist(string inherit) => inherit switch
+    {
+        "1.7.10" => "https://dl.liteloader.com/redist/1.7.10/liteloader-installer-1.7.10-04.jar",
+        "1.7.2" => "https://dl.liteloader.com/redist/1.7.2/liteloader-installer-1.7.2-04.jar",
+        "1.6.4" => "https://dl.liteloader.com/redist/1.6.4/liteloader-installer-1.6.4-01.jar",
+        "1.6.2" => "https://dl.liteloader.com/redist/1.6.2/liteloader-installer-1.6.2-04.jar",
+        "1.5.2" => "https://dl.liteloader.com/redist/1.5.2/liteloader-installer-1.5.2-01.jar",
+        _ => throw new NotSupportedException("未知的 Minecraft 版本（" + inherit + "）")
+    };
+
+    /// <summary>
+    /// LiteLoader 安装器下载源决策（McDownloadLiteLoaderSave :756-776 决策面）：
+    /// 老版本（IsLegacy）走 <see cref="LegacyLiteLoaderRedist"/>（单源），其余走 jenkins 官方源
+    /// （Inherit=1.8 走 ant/dist/，其余 build/libs/，:775）。
+    /// </summary>
+    public static IReadOnlyList<string> LiteLoaderInstallerSources(DlLiteLoaderListEntry entry)
+        => entry.IsLegacy
+            ? [LegacyLiteLoaderRedist(entry.Inherit!)]
+            : [$"http://jenkins.liteloader.com/job/LiteLoaderInstaller%20{entry.Inherit}/lastSuccessfulBuild/artifact/" +
+               $"{(entry.Inherit == "1.8" ? "ant/dist/" : "build/libs/")}{entry.FileName}"];
+
+    /// <summary>
+    /// LiteLoader 版本 Json 组装决策（McDownloadLiteLoaderLoader :801-815 决策面，键序逐字）：
+    /// 从条目 Inherit/ReleaseTime/JsonToken 拼 profile（time/releaseTime 经 yyyy/MM/dd HH:mm 不变文化解析后，
+    /// 以旧 Newtonsoft JValue(Date) 的 ISO 形态 yyyy-MM-ddTHH:mm:ss 承载），libraries 深拷贝自 JsonToken 并在末尾
+    /// 附加 liteloader 库项（:811）。JsonToken 的 tweakClass/libraries/version 缺失时 NRE（与旧 .ToString 链一致）。
+    /// 写盘（:817 FileUtils.Write，缩进布局以 MergeJson.WriteOptions 对齐旧 Newtonsoft ToString）与
+    /// 异常包装（"安装新 LiteLoader 版本失败"）留宿主层。
+    /// brief 计划稿的 (JsonObject liteLoaderToken, string targetName) 收敛为条目入参：VersionName 与 ReleaseTime
+    /// 均取自条目（:801/:806-807），brief 的 targetName 即此处 VersionName 的派生值。
+    /// </summary>
+    public static LiteLoaderPlan BuildLiteLoaderProfile(DlLiteLoaderListEntry entry)
+    {
+        var versionName = entry.Inherit + "-LiteLoader";   //旧 :801
+        var time = DateTime.ParseExact(entry.ReleaseTime!, "yyyy/MM/dd HH:mm", CultureInfo.InvariantCulture);   //旧 :806-807
+        var versionJson = new JsonObject
+        {
+            ["id"] = versionName,   //旧 :805
+            //? 旧 Newtonsoft JValue(Date) 的序列化形态（ISO、Kind=Unspecified 无时区）：以等价格式化保持文件输出一致
+            ["time"] = time.ToString("yyyy-MM-ddTHH:mm:ss"),   //旧 :806
+            ["releaseTime"] = time.ToString("yyyy-MM-ddTHH:mm:ss"),   //旧 :807
+            ["type"] = "release",   //旧 :808
+            //? JSON null 边界：旧 JsonToken("tweakClass") 缺失时 .ToString 链 NRE；插值的隐式转换为 null 容忍，须显式 ToString 保真
+            //! 逐字移植豁免（Rider 冗余 ToString）：该调用承载缺失键的 NRE（旧 :809 真值），不可省略
+            ["arguments"] = JsonNode.Parse($"{{\"game\":[\"--tweakClass\",\"{entry.JsonToken!["tweakClass"]!.ToString()}\"]}}"),   //旧 :809
+            ["libraries"] = entry.JsonToken["libraries"]!.DeepClone(),   //旧 :810（ToJToken 为拷贝语义）
+            ["mainClass"] = "net.minecraft.launchwrapper.Launch",   //旧 :812
+            ["minimumLauncherVersion"] = 18,   //旧 :813
+            ["inheritsFrom"] = entry.Inherit,   //旧 :814
+            ["jar"] = entry.Inherit   //旧 :815
+        };
+        ((JsonArray) versionJson["libraries"]!).Add(new JsonObject   //旧 :811（缺失/非数组时抛出，由宿主层包装）
+        {
+            //? 旧 JsonToken("version") 缺失时 .ToString NRE；字符串拼接对 null 容忍，须显式 ToString 保真
+            //! 逐字移植豁免（Rider 冗余 ToString）：该调用承载缺失键的 NRE（旧 :811 真值），不可省略
+            ["name"] = "com.mumfrey:liteloader:" + entry.JsonToken["version"]!.ToString(),
+            ["url"] = "https://dl.liteloader.com/versions/"
+        });
+        return new LiteLoaderPlan { VersionJson = versionJson, VersionName = versionName };
+    }
+
+    #endregion
+
+    #region Fabric 安装决策（ModDownloadLib.vb:1505-1524 的决策面；Loader 链与保存入口留宿主层）
+
+    /// <summary>
+    /// Fabric profile 下载决策（McDownloadFabricLoader :1508-1519 决策面）：
+    /// 版本 id = "fabric-loader-{版本}-{MC 名}"（:1508，版本文件夹与 Json 文件名同源）；
+    /// MC 名的 ∞ → infinite 替换仅用于下载地址（:1513 注释：放在 ID 后面避免影响版本文件夹名称）；
+    /// 源为 BMCLAPI 在前、meta.fabricmc.net 在后（:1516-1519）；校验器 IsJson。
+    /// VersionJsonPath = {mcFolder}versions\{id}\{id}.json（:1509/:1519）。mcFolder 以 \ 结尾。
+    /// brief 计划稿的 (profileJson → VersionJson/LibraryFolder) 无 VB 真值对应：旧代码对下载的 profile json
+    /// 零加工直接落盘（:1521），亦无独立 LibraryFolder 决策，收敛为下载源/路径/校验器决策。
+    /// </summary>
+    public static FabricPlan BuildFabricPlan(string fabricVersion, string minecraftName, string mcFolder)
+    {
+        var id = "fabric-loader-" + fabricVersion + "-" + minecraftName;   //旧 :1508
+        var queryName = minecraftName.Replace("∞", "infinite");   //旧 :1513（仅用于地址）
+        return new FabricPlan
+        {
+            InstanceId = id,
+            VersionJsonPath = mcFolder + @"versions\" + id + @"\" + id + ".json",   //旧 :1509/:1519
+            Sources =
+            [
+                $"https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader/{queryName}/{fabricVersion}/profile/json",   //旧 :1517
+                $"https://meta.fabricmc.net/v2/versions/loader/{queryName}/{fabricVersion}/profile/json"   //旧 :1518
+            ],
+            Checker = new FileChecker { IsJson = true }   //旧 :1519
+        };
+    }
+
+    #endregion
+
     #region 内部实现
 
     /// <summary>读取安装器条目为 JSON 对象（旧 Installer.GetEntry(...).Open().ReadString().DeserializeJson()）：
@@ -337,4 +571,36 @@ public sealed class ForgelikePlan
     /// <summary>解析出的支持库清单（含 MOJMAPS 追加项与 Forgelike 原始项移除，未按 LocalPath 去重，与旧 Libs 变量一致）；
     /// 宿主层复制到目标 MC 文件夹时消费（:1197-1203）。</summary>
     public List<LibEntry> Libraries { get; init; } = [];
+}
+
+/// <summary>
+/// LiteLoader 安装计划（ModDownloadLib.vb:801-815 版本 Json 组装决策面的产出）。
+/// </summary>
+public sealed class LiteLoaderPlan
+{
+    /// <summary>组装完成的版本 Json（键序逐字；写盘留宿主层，:817）。</summary>
+    public JsonObject VersionJson { get; init; } = new();
+
+    /// <summary>版本名（Inherit &amp; "-LiteLoader"，旧 :801；宿主层据此定位版本文件夹与 Json 落盘路径，:802）。</summary>
+    public string VersionName { get; init; } = "";
+}
+
+/// <summary>
+/// Fabric 安装计划（ModDownloadLib.vb:1508-1519 profile 下载决策面的产出）。
+/// brief 计划稿的 (VersionJson, LibraryFolder) 收敛：旧代码对下载的 profile json 零加工直接落盘（:1521），
+/// 无独立 LibraryFolder 决策，故承载下载源/落盘路径/校验器。
+/// </summary>
+public sealed class FabricPlan
+{
+    /// <summary>版本 id / 版本文件夹名（"fabric-loader-{版本}-{MC 名}"，旧 :1508）。</summary>
+    public string InstanceId { get; init; } = "";
+
+    /// <summary>profile Json 落盘路径（{mcFolder}versions\{id}\{id}.json，旧 :1509/:1519）。</summary>
+    public string VersionJsonPath { get; init; } = "";
+
+    /// <summary>候选下载源（BMCLAPI 在前，官方其后，旧 :1517-1518）。</summary>
+    public IReadOnlyList<string> Sources { get; init; } = [];
+
+    /// <summary>下载校验器（IsJson，旧 :1519）。</summary>
+    public FileChecker Checker { get; init; } = new();
 }

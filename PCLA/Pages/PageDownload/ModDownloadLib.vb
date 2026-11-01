@@ -357,22 +357,10 @@ pause"
         End Try
     End Sub
     Private Sub McDownloadOptiFineInstall(BaseMcFolderHome As String, Target As String, Task As LoaderTask(Of List(Of NetFile), Boolean), UseJavaWrapper As Boolean)
+        '安装器 class 头解析与 Java 版本需求决策已迁入 C#（PCLCS.Install.InstallerPlans.OptiFineClassVersion，:361-374）；读取失败时回退默认 Java 21（:360/:376-378）
         Dim JavaRange = ValueRange(Of Version).AtLeast(New Version(21, 0)) '默认值
         Try
-            Using Installer = FileUtils.OpenZip(Target)
-                Dim InstallerClass = Installer.GetEntry("optifine/Installer.class")
-                If InstallerClass Is Nothing Then Throw New FileNotFoundException("未找到 optifine/Installer.class")
-                Using Stream = InstallerClass.Open(), Reader As New BinaryReader(Stream)
-                    Dim Header = Reader.ReadBytes(8)
-                    If Header.Length < 8 Then Throw New IOException("Installer.class 长度不足")
-                    If Header(0) <> &HCA OrElse Header(1) <> &HFE OrElse Header(2) <> &HBA OrElse Header(3) <> &HBE Then Throw New InvalidDataException("Installer.class 文件头无效")
-                    Dim ClassVersion = Header(6) * &H100 + Header(7)
-                    If ClassVersion < 49 Then Throw New InvalidDataException("Installer.class 版本过低")
-                    If ClassVersion > 100 Then Throw New InvalidDataException("Installer.class 版本过高")
-                    JavaRange = ValueRange(Of Version).AtLeast(New Version(ClassVersion - 44, 0))
-                    Logger.Info($"OptiFine 安装器 class 版本：{ClassVersion}，需要 Java {JavaRange}")
-                End Using
-            End Using
+            JavaRange = InstallerPlans.OptiFineClassVersion(Target).JavaRange
         Catch ex As Exception
             Logger.Warn(ex, "读取 OptiFine 安装器 Java 版本失败")
         End Try
@@ -381,13 +369,15 @@ pause"
         If Task.IsCanceled Then Return
         If Java Is Nothing Then Throw New OperationCanceledException
         '添加 Java Wrapper 作为主 Jar
+        '安装器参数决策已迁入 C#（PCLCS.Install.InstallerPlans.OptiFineInstallerArgs，:384-390）；JLW 条件求值与 ExtractPatch 的惰性留此
         Dim Arguments As String
         If UseJavaWrapper AndAlso Not Settings.Get(Of Boolean)("LaunchAdvanceDisableJLW") Then
-            Arguments = $"-Doolloo.jlw.tmpdir=""{PathUtils.RemoveSlashSuffix(PathPure.Value)}"" -Duser.home=""{PathUtils.RemoveSlashSuffix(BaseMcFolderHome)}"" -cp ""{Target}"" -jar ""{LaunchUtils.ExtractPatch("Launch\JavaWrapper.jar", PathPure.Value)}"" optifine.Installer"
+            Arguments = InstallerPlans.OptiFineInstallerArgs(PathPure.Value, BaseMcFolderHome, Target,
+                Function() LaunchUtils.ExtractPatch("Launch\JavaWrapper.jar", PathPure.Value), Java.Version.Major, True)
         Else
-            Arguments = $"-Duser.home=""{PathUtils.RemoveSlashSuffix(BaseMcFolderHome)}"" -cp ""{Target}"" optifine.Installer"
+            Arguments = InstallerPlans.OptiFineInstallerArgs(PathPure.Value, BaseMcFolderHome, Target,
+                Function() "", Java.Version.Major, False)
         End If
-        If Java.Version.Major >= 9 Then Arguments = "--add-exports cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED " & Arguments
         '开始启动
         SyncLock InstallSyncLock
             Dim Info = New ProcessStartInfo With {
@@ -481,40 +471,32 @@ pause"
     ''' </summary>
     Private Function McDownloadOptiFineLoader(DownloadInfo As DlOptiFineListEntry, McFolder As String, ClientDownloadLoader As LoaderCombo(Of String), ClientFolder As String) As List(Of LoaderBase)
 
-        '参数初始化
-        Dim Id As String = DownloadInfo.InstanceName
+        '参数初始化（版本名、安装器本地目标与 A/B 判定决策已迁入 C#：PCLCS.Install.InstallerPlans.OptiFineInstallTarget，:485-490；
+        '临时文件夹经惰性回调保真旧 If(IsNewerVersion, ...) 短路）
+        Dim TargetPlan = InstallerPlans.OptiFineInstallTarget(DownloadInfo, McFolder, Function() RequestTaskTempFolder(True))
+        Dim Id As String = TargetPlan.Id
         Dim VersionFolder As String = McFolder & "versions\" & Id & "\"
-        Dim IsNewerVersion As Boolean = DownloadInfo.Inherit.Contains("w") OrElse McVersion.VersionToDrop(DownloadInfo.Inherit) >= 140
-        Dim Target As String = If(IsNewerVersion,
-            $"{RequestTaskTempFolder(True)}OptiFine.jar",
-            $"{McFolder}libraries\optifine\OptiFine\{PathUtils.GetFileNameWithoutExtension(DownloadInfo.FileName).Replace("OptiFine_", "").Replace("preview_", "")}\{DownloadInfo.FileName.Replace("OptiFine_", "OptiFine-").Replace("preview_", "")}")
+        Dim IsNewerVersion As Boolean = TargetPlan.IsNewerVersion
+        Dim Target As String = TargetPlan.InstallerPath
         Dim Loaders As New List(Of LoaderBase)
 
         '获取下载地址
         Loaders.Add(New LoaderTask(Of String, List(Of NetFile))("获取 OptiFine 主文件下载地址",
         Sub(Task As LoaderTask(Of String, List(Of NetFile)))
-            Dim Sources As New List(Of String)
-            'BMCLAPI 源
-            Dim BmclapiInherit As String = DownloadInfo.Inherit
-            If BmclapiInherit = "1.8" OrElse BmclapiInherit = "1.9" Then BmclapiInherit &= ".0" '#4281
-            If DownloadInfo.IsPreview Then
-                Sources.Add("https://bmclapi2.bangbang93.com/optifine/" & BmclapiInherit & "/HD_U_" & DownloadInfo.DisplayName.Replace(DownloadInfo.Inherit & " ", "").Replace(" ", "/"))
-            Else
-                Sources.Add("https://bmclapi2.bangbang93.com/optifine/" & BmclapiInherit & "/HD_U/" & DownloadInfo.DisplayName.Replace(DownloadInfo.Inherit & " ", ""))
-            End If
-            '官方源
-            Dim PageData As String
+            '下载源决策已迁入 C#（PCLCS.Install.InstallerPlans.OptiFineDownloadSources，:496-517）：BMCLAPI 源构造、官方链接解析与源排序；
+            '官方页抓取（:508-511 网络请求）留此，解析失败（无 downloadx 匹配）时以 Nothing 回退仅 BMCLAPI（与旧 Catch 一致）
+            Dim Plan = InstallerPlans.OptiFineDownloadSources(DownloadInfo, Nothing, 300 * 1024)
             Try
-                PageData = NetRequestByClientRetry("https://optifine.net/adloadx?f=" & DownloadInfo.FileName,
+                Dim PageData As String = NetRequestByClientRetry("https://optifine.net/adloadx?f=" & DownloadInfo.FileName,
                     Encoding:=New UTF8Encoding(False), Accept:="text/html", SimulateBrowserHeaders:=True)
                 Task.Progress = 0.8
-                Sources.Add("https://optifine.net/" & PageData.RegexSearch("downloadx\?f=[^""']+").First)
-                Logger.Info($"OptiFine {DownloadInfo.DisplayName} 官方下载地址：{Sources.Last}")
+                Plan = InstallerPlans.OptiFineDownloadSources(DownloadInfo, PageData, 300 * 1024)
+                Logger.Info($"OptiFine {DownloadInfo.DisplayName} 官方下载地址：{Plan.Sources.Last}")
             Catch ex As Exception
                 Logger.Warn(ex, $"获取 OptiFine {DownloadInfo.DisplayName} 官方下载地址失败")
             End Try
             '构造文件请求
-            Task.Output = New List(Of NetFile) From {New NetFile(Sources.ToArray, Target, New FileChecker With {.MinSize = 300 * 1024})}
+            Task.Output = New List(Of NetFile) From {New NetFile(Plan.Sources, Target, Plan.Checker)}
         End Sub) With {.ProgressWeight = 8})
         Loaders.Add(New LoaderDownload("下载 OptiFine 主文件", New List(Of NetFile)) With {.ProgressWeight = 8})
         Loaders.Add(New LoaderTask(Of List(Of NetFile), Boolean)("等待原版下载",
@@ -596,37 +578,12 @@ Retry:
                     FileUtils.Copy(McFolder & "versions\" & DownloadInfo.Inherit & "\" & DownloadInfo.Inherit & ".jar", VersionFolder & Id & ".jar")
                     Task.Progress = 0.7
                     '建立 Json 文件
+                    '手写 Json 组装决策已迁入 C#（PCLCS.Install.InstallerPlans.OptiFineHandwrittenJson，:600-630）：
+                    '继承版本日期/IsOldJson/minecraftArguments 由宿主层读取（McInstance 留此），进度检查点经回调保真 :611 的时机
                     Dim InheritInstance As New McInstance(McFolder & "versions\" & DownloadInfo.Inherit)
-                    Dim Json As String = "{
-    ""id"": """ & Id & """,
-    ""inheritsFrom"": """ & DownloadInfo.Inherit & """,
-    ""time"": """ & If(DownloadInfo.ReleaseTime = "", InheritInstance.ReleaseTime.ToString("yyyy'-'MM'-'dd"), DownloadInfo.ReleaseTime.Replace("/", "-")) & "T23:33:33+08:00"",
-    ""releaseTime"": """ & If(DownloadInfo.ReleaseTime = "", InheritInstance.ReleaseTime.ToString("yyyy'-'MM'-'dd"), DownloadInfo.ReleaseTime.Replace("/", "-")) & "T23:33:33+08:00"",
-    ""type"": ""release"",
-    ""libraries"": [
-        {""name"": ""optifine:OptiFine:" & PathUtils.GetFileNameWithoutExtension(DownloadInfo.FileName).Replace("OptiFine_", "").Replace("preview_", "") & """},
-        {""name"": ""net.minecraft:launchwrapper:1.12""}
-    ],
-    ""mainClass"": ""net.minecraft.launchwrapper.Launch"","
-                    Task.Progress = 0.8
-                    If InheritInstance.IsOldJson Then
-                        '输出旧版 Json 格式
-                        Json += "
-    ""minimumLauncherVersion"": 18,
-    ""minecraftArguments"": """ & InheritInstance.JsonObject("minecraftArguments").ToString & "  --tweakClass optifine.OptiFineTweaker""
-}"
-                    Else
-                        '输出新版 Json 格式
-                        Json += "
-    ""minimumLauncherVersion"": ""21"",
-    ""arguments"": {
-        ""game"": [
-            ""--tweakClass"",
-            ""optifine.OptiFineTweaker""
-        ]
-    }
-}"
-                    End If
+                    Dim Json = InstallerPlans.OptiFineHandwrittenJson(DownloadInfo,
+                        InheritInstance.ReleaseTime.ToString("yyyy'-'MM'-'dd"), InheritInstance.IsOldJson,
+                        Function() InheritInstance.JsonObject("minecraftArguments").ToString, Sub(P) Task.Progress = P)
                     FileUtils.Write(VersionFolder & Id & ".json", Json)
                 Catch ex As Exception
                     Throw New Exception("安装 OptiFine（方式 B）失败", ex)
@@ -644,29 +601,21 @@ Retry:
         '获取下载地址
         Loaders.Add(New LoaderTask(Of DlOptiFineListEntry, List(Of NetFile))("获取 OptiFine 下载地址",
         Sub(Task As LoaderTask(Of DlOptiFineListEntry, List(Of NetFile)))
-            Dim Sources As New List(Of String)
-            'BMCLAPI 源
-            Dim BmclapiInherit As String = DownloadInfo.Inherit
-            If BmclapiInherit = "1.8" OrElse BmclapiInherit = "1.9" Then BmclapiInherit &= ".0" '#4281
-            If DownloadInfo.IsPreview Then
-                Sources.Add("https://bmclapi2.bangbang93.com/optifine/" & BmclapiInherit & "/HD_U_" & DownloadInfo.DisplayName.Replace(DownloadInfo.Inherit & " ", "").Replace(" ", "/"))
-            Else
-                Sources.Add("https://bmclapi2.bangbang93.com/optifine/" & BmclapiInherit & "/HD_U/" & DownloadInfo.DisplayName.Replace(DownloadInfo.Inherit & " ", ""))
-            End If
-            '官方源
-            Dim PageData As String
+            '下载源决策已迁入 C#（PCLCS.Install.InstallerPlans.OptiFineDownloadSources，:648-669 与安装链 :496-517 逐字共用）；
+            '官方页抓取留此，解析失败时以 Nothing 回退仅 BMCLAPI（与旧 Catch 一致）
+            Dim Plan = InstallerPlans.OptiFineDownloadSources(DownloadInfo, Nothing, 64 * 1024)
             Try
-                PageData = NetRequestByClientRetry("https://optifine.net/adloadx?f=" & DownloadInfo.FileName,
+                Dim PageData As String = NetRequestByClientRetry("https://optifine.net/adloadx?f=" & DownloadInfo.FileName,
                     Encoding:=New UTF8Encoding(False), Accept:="text/html", SimulateBrowserHeaders:=True)
                 Task.Progress = 0.8
-                Sources.Add("https://optifine.net/" & PageData.RegexSearch("downloadx\?f=[^""']+").First)
-                Logger.Info($"OptiFine {DownloadInfo.DisplayName} 官方下载地址：{Sources.Last}")
+                Plan = InstallerPlans.OptiFineDownloadSources(DownloadInfo, PageData, 64 * 1024)
+                Logger.Info($"OptiFine {DownloadInfo.DisplayName} 官方下载地址：{Plan.Sources.Last}")
             Catch ex As Exception
                 Logger.Warn(ex, $"获取 OptiFine {DownloadInfo.DisplayName} 官方下载地址失败")
             End Try
             Task.Progress = 0.9
             '构造文件请求
-            Task.Output = New List(Of NetFile) From {New NetFile(Sources.ToArray, TargetFolder, New FileChecker With {.MinSize = 64 * 1024})}
+            Task.Output = New List(Of NetFile) From {New NetFile(Plan.Sources, TargetFolder, Plan.Checker)}
         End Sub) With {.ProgressWeight = 6})
         '下载
         Loaders.Add(New LoaderDownload("下载 OptiFine 主文件", New List(Of NetFile)) With {.ProgressWeight = 10, .Block = True})
@@ -753,28 +702,9 @@ Retry:
             '构造步骤加载器
             Dim Loaders As New List(Of LoaderBase)
             '下载
-            Dim Address As New List(Of String)
-            If DownloadInfo.IsLegacy Then
-                '老版本
-                Select Case DownloadInfo.Inherit
-                    Case "1.7.10"
-                        Address.Add("https://dl.liteloader.com/redist/1.7.10/liteloader-installer-1.7.10-04.jar")
-                    Case "1.7.2"
-                        Address.Add("https://dl.liteloader.com/redist/1.7.2/liteloader-installer-1.7.2-04.jar")
-                    Case "1.6.4"
-                        Address.Add("https://dl.liteloader.com/redist/1.6.4/liteloader-installer-1.6.4-01.jar")
-                    Case "1.6.2"
-                        Address.Add("https://dl.liteloader.com/redist/1.6.2/liteloader-installer-1.6.2-04.jar")
-                    Case "1.5.2"
-                        Address.Add("https://dl.liteloader.com/redist/1.5.2/liteloader-installer-1.5.2-01.jar")
-                    Case Else
-                        Throw New NotSupportedException("未知的 Minecraft 版本（" & DownloadInfo.Inherit & "）")
-                End Select
-            Else
-                '官方源
-                Address.Add("http://jenkins.liteloader.com/job/LiteLoaderInstaller%20" & DownloadInfo.Inherit & "/lastSuccessfulBuild/artifact/" & If(DownloadInfo.Inherit = "1.8", "ant/dist/", "build/libs/") & DownloadInfo.FileName)
-            End If
-            Loaders.Add(New LoaderDownload("下载主文件", New List(Of NetFile) From {New NetFile(Address.ToArray, Target, New FileChecker With {.MinSize = 1024 * 1024})}) With {.ProgressWeight = 15})
+            '安装器下载源决策已迁入 C#（PCLCS.Install.InstallerPlans.LiteLoaderInstallerSources / LegacyLiteLoaderRedist，:756-776）
+            Dim Address As IReadOnlyList(Of String) = InstallerPlans.LiteLoaderInstallerSources(DownloadInfo)
+            Loaders.Add(New LoaderDownload("下载主文件", New List(Of NetFile) From {New NetFile(Address, Target, New FileChecker With {.MinSize = 1024 * 1024})}) With {.ProgressWeight = 15})
             '启动
             Dim Loader As New LoaderCombo(Of DlLiteLoaderListEntry)("LiteLoader " & Id & " 安装器下载", Loaders) With {.OnStateChanged = AddressOf LoaderStateChangedHintOnly}
             Loader.Start(DownloadInfo)
@@ -798,23 +728,11 @@ Retry:
         Loaders.Add(New LoaderTask(Of String, String)("安装 LiteLoader",
         Sub(Task As LoaderTask(Of String, String))
             Try
-                Dim VersionName As String = DownloadInfo.Inherit & "-LiteLoader"
-                Dim VersionFolder As String = McFolder & "versions\" & VersionName & "\"
-                '构造版本 Json
-                Dim VersionJson As New JObject
-                VersionJson.Add("id", VersionName)
-                VersionJson.Add("time", Date.ParseExact(DownloadInfo.ReleaseTime, "yyyy/MM/dd HH:mm", Globalization.CultureInfo.InvariantCulture))
-                VersionJson.Add("releaseTime", Date.ParseExact(DownloadInfo.ReleaseTime, "yyyy/MM/dd HH:mm", Globalization.CultureInfo.InvariantCulture))
-                VersionJson.Add("type", "release")
-                VersionJson.Add("arguments", ("{""game"":[""--tweakClass"",""" & DownloadInfo.JsonToken("tweakClass").ToString & """]}").DeserializeJson())
-                VersionJson.Add("libraries", DownloadInfo.JsonToken("libraries").ToJToken())
-                CType(VersionJson("libraries"), JContainer).Add(("{""name"": ""com.mumfrey:liteloader:" & DownloadInfo.JsonToken("version").ToString & """,""url"": ""https://dl.liteloader.com/versions/""}").DeserializeJson())
-                VersionJson.Add("mainClass", "net.minecraft.launchwrapper.Launch")
-                VersionJson.Add("minimumLauncherVersion", 18)
-                VersionJson.Add("inheritsFrom", DownloadInfo.Inherit)
-                VersionJson.Add("jar", DownloadInfo.Inherit)
-                '输出 Json 文件，同时会新建该文件夹
-                FileUtils.Write(VersionFolder & VersionName & ".json", VersionJson.ToString)
+                '版本 Json 组装决策已迁入 C#（PCLCS.Install.InstallerPlans.BuildLiteLoaderProfile，:801-815：键序逐字，
+                'time/releaseTime 以旧 Newtonsoft JValue(Date) 的 ISO 形态承载）
+                Dim Profile = InstallerPlans.BuildLiteLoaderProfile(DownloadInfo)
+                '输出 Json 文件，同时会新建该文件夹（:816-817；WriteOptions 缩进对齐旧 Newtonsoft ToString；全限定以避开本模块私有 MergeJson）
+                FileUtils.Write(McFolder & "versions\" & Profile.VersionName & "\" & Profile.VersionName & ".json", Profile.VersionJson.ToJsonString(PCLCS.Install.MergeJson.WriteOptions))
             Catch ex As Exception
                 Throw New Exception("安装新 LiteLoader 版本失败", ex)
             End Try
@@ -1504,19 +1422,15 @@ Retry:
     ''' </summary>
     Private Function McDownloadFabricLoader(FabricVersion As String, MinecraftName As String, McFolder As String) As List(Of LoaderBase)
 
-        '参数初始化
-        Dim Id As String = "fabric-loader-" & FabricVersion & "-" & MinecraftName
-        Dim VersionFolder As String = McFolder & "versions\" & Id & "\"
+        '参数初始化（版本 id、Json 落盘路径、下载源与校验器决策已迁入 C#：PCLCS.Install.InstallerPlans.BuildFabricPlan，:1508-1519；
+        '∞ → infinite 的替换仅用于下载地址，版本 id 原样）
+        Dim Plan = InstallerPlans.BuildFabricPlan(FabricVersion, MinecraftName, McFolder)
         Dim Loaders As New List(Of LoaderBase)
 
         '下载 Json
-        MinecraftName = MinecraftName.Replace("∞", "infinite") '放在 ID 后面避免影响版本文件夹名称
         Loaders.Add(New LoaderTask(Of String, List(Of NetFile))("获取 Fabric 主文件下载地址",
         Sub(Task As LoaderTask(Of String, List(Of NetFile)))
-            Task.Output = New List(Of NetFile) From {New NetFile({
-                "https://bmclapi2.bangbang93.com/fabric-meta/v2/versions/loader/" & MinecraftName & "/" & FabricVersion & "/profile/json",
-                "https://meta.fabricmc.net/v2/versions/loader/" & MinecraftName & "/" & FabricVersion & "/profile/json"
-            }, VersionFolder & Id & ".json", New FileChecker With {.IsJson = True})} '构造文件请求
+            Task.Output = New List(Of NetFile) From {New NetFile(Plan.Sources, Plan.VersionJsonPath, Plan.Checker)} '构造文件请求
         End Sub) With {.ProgressWeight = 0.5})
         Loaders.Add(New LoaderDownload("下载 Fabric 主文件", New List(Of NetFile)) With {.ProgressWeight = 2.5})
 
