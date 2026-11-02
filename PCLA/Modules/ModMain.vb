@@ -1,6 +1,7 @@
 Imports System.Collections.ObjectModel
 Imports System.Windows.Interop
 Imports System.Windows.Threading
+Imports PCLCS.Install 'McInstallRequest 与任务临时文件夹判定已迁入 C#
 
 Public Module ModMain
 
@@ -943,7 +944,7 @@ NextFile:
         Dim ResultFolder As String
         Try
             ResultFolder = $"{PathTemp}TaskTemp\{GetUuid()}-{RandomInteger(0, 1000000)}\"
-            If RequireNonSpace AndAlso ResultFolder.Contains(" ") Then Exit Try '带空格
+            If InstallPlans.ShouldUseTempFallback(ResultFolder, RequireNonSpace) Then Exit Try '带空格（判定核已迁 C#，ModMain.vb:947：半角序数比较，全角不触发）
             DirectoryUtils.Create(ResultFolder)
             CheckPermissionWithException(ResultFolder)
             Return ResultFolder

@@ -1,5 +1,6 @@
 Imports System.Collections.ObjectModel
 Imports System.Text.RegularExpressions
+Imports PCLCS.Install 'McInstallRequest 已迁入 C#
 Imports PCLCS.Net
 
 Public Module ModModpack

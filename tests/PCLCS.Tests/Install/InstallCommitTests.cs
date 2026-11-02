@@ -35,7 +35,7 @@ public class InstallCommitTests
         var components = new McComponents(name, null, null, null, null, null, null, null);
         Configs.McInstallManifest.Set(new McInstallManifest(1, components, DateTime.UtcNow,
         [
-            new McInstallManifest.ManagedFile("oldfile.txt", "s1", DateTime.UtcNow, null),
+            new McInstallManifest.ManagedFile("oldfile.txt", "s1", DateTime.UtcNow),
             new McInstallManifest.ManagedFile("mods/oldmod.jar", "s2", DateTime.UtcNow, "OptiFine")
         ]), provider);
         var newManifest = new McInstallManifest(1, components, DateTime.UtcNow,
@@ -77,7 +77,7 @@ public class InstallCommitTests
         //目标版本文件夹无任何 *.json 候选：GetJsonPath 抛错（InstancePaths 语义），此时尚未修改任何文件
         var provider = new JsonConfigProvider(Path.Combine(Path.GetTempPath(), "PCLCS.Tests", Path.GetRandomFileName() + ".json"));
         var newManifest = new McInstallManifest(1, new McComponents(name, null, null, null, null, null, null, null),
-            DateTime.UtcNow, [new McInstallManifest.ManagedFile("newfile.txt", "n1", DateTime.UtcNow, null)]);
+            DateTime.UtcNow, [new McInstallManifest.ManagedFile("newfile.txt", "n1", DateTime.UtcNow)]);
 
         Assert.ThrowsAny<Exception>(() => InstallCommit.Commit(provider, target, name, newManifest, build, target));
 

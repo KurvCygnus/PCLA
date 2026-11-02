@@ -1,4 +1,5 @@
 Imports PCLCS.Download 'DlClientListResult 等条目模型已迁入 C#
+Imports PCLCS.Install 'McInstallRequest 已迁入 C#
 Public Class PageDownloadInstall
 
     Public Sub ControlInit()

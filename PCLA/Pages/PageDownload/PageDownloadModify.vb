@@ -1,5 +1,6 @@
 Imports System.Text.Json
 Imports PCLCS.Download 'DlOptiFineListEntry / DlForgeVersionEntry 等条目模型已迁入 C#
+Imports PCLCS.Install 'McInstallRequest 已迁入 C#
 
 ''' <summary>
 ''' 版本修改页：完整还原已安装组件后，复用安装页的选择交互。

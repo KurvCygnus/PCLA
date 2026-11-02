@@ -1482,59 +1482,16 @@ Retry:
 
 #Region "安装"
 
-    ''' <summary>
-    ''' 安装请求。
-    ''' </summary>
-    Public Class McInstallRequest
-        ''' <summary>
-        ''' 新版本安装必填。安装目标版本名称。
-        ''' </summary>
-        Public NewInstanceName As String
-        ''' <summary>
-        ''' 必填。安装目标文件夹。
-        ''' </summary>
-        Public InstanceFolder As String
-        ''' <summary>
-        ''' 必填。欲安装的 Minecraft 与组件版本。
-        ''' </summary>
-        Public Components As McComponents
-        ''' <summary>
-        ''' 可选。欲下载的 Minecraft Json 地址。
-        ''' </summary>
-        Public MinecraftJson As String = Nothing
-        ''' <summary>
-        ''' 欲下载的 Forge。
-        ''' </summary>
-        Public ForgeEntry As DlForgeVersionEntry = Nothing
-        ''' <summary>
-        ''' 欲下载的 NeoForge。
-        ''' </summary>
-        Public NeoForgeEntry As DlNeoForgeListEntry = Nothing
-        ''' <summary>
-        ''' 欲下载的 Fabric API 信息。
-        ''' </summary>
-        Public FabricApi As ResourceVersion = Nothing
-        ''' <summary>
-        ''' 欲下载的 OptiFabric 信息。
-        ''' </summary>
-        Public OptiFabric As ResourceVersion = Nothing
-        ''' <summary>
-        ''' 欲下载的 LiteLoader 详细信息。
-        ''' </summary>
-        Public LiteLoaderEntry As DlLiteLoaderListEntry = Nothing
-        ''' <summary>
-        ''' 是否为中间产物。
-        ''' </summary>
-        Public IsIntermediateOutput As Boolean = False
-    End Class
+    '安装请求 McInstallRequest 已迁入 C#（PCLCS.Install.McInstallRequest，原 :1488-1529 字段逐字），
+    '经文件头 Imports PCLCS.Install 别名直用。FabricApi/OptiFabric 的源类型 ResourceVersion 属 Resource 模块（未迁），
+    'C# 侧以 Object 承载，构造 NetFile 处强转使用。
 
     ''' <summary>
     ''' 获取合并安装加载器列表。
     ''' </summary>
     Public Function McInstallLoadersGet(Request As McInstallRequest) As List(Of LoaderBase)
-        '获取缓存目录（安装 Mod 加载器的文件夹不能包含空格）
-        Dim TempMcFolder As String = RequestTaskTempFolder(Request.Components.OptiFineEntry IsNot Nothing OrElse
-            Request.Components.ModLoaderVersions.ContainsKey(ModLoaders.Forge) OrElse Request.Components.ModLoaderVersions.ContainsKey(ModLoaders.NeoForge))
+        '获取缓存目录（安装 Mod 加载器的文件夹不能包含空格；需求判定已迁 C#：InstallPlans.RequiresNonSpaceTempFolder，:1535-1537）
+        Dim TempMcFolder As String = RequestTaskTempFolder(InstallPlans.RequiresNonSpaceTempFolder(Request.Components))
 
         '获取各个 Mod 加载器的缓存文件夹
         Dim OptiFineEntry = If(Request.Components.OptiFineEntry Is Nothing, Nothing,
@@ -1550,17 +1507,15 @@ Retry:
         Dim FabricVersion = If(Request.Components.ModLoaderVersions.ContainsKey(ModLoaders.Fabric), Request.Components.ModLoaderVersions(ModLoaders.Fabric), Nothing)
         Dim FabricFolder = If(FabricVersion Is Nothing, Nothing, $"{TempMcFolder}versions\fabric-loader-{FabricVersion}-{Request.Components.MinecraftVersion}")
 
-        '判断 OptiFine 是否作为 Mod 进行下载
-        Dim Modable = Request.Components.ModLoaderVersions.Any
+        '判断 OptiFine 是否作为 Mod 进行下载（判定核已迁 C#：InstallPlans.IsModable/IsOptiFineAsMod，:1553-1556；
+        'OptiFine 在场以 Components.OptiFineEntry 非空同判——非 null JsonObject 反序列化必得非空条目）
+        Dim Modable = InstallPlans.IsModable(Request.Components)
         Dim ModsTempFolder As String = $"{TempMcFolder}mods\"
-        Dim OptiFineAsMod = OptiFineEntry IsNot Nothing AndAlso Modable '选择了 OptiFine 与任意 Mod 加载器
+        Dim OptiFineAsMod = InstallPlans.IsOptiFineAsMod(Request.Components) '选择了 OptiFine 与任意 Mod 加载器
         If OptiFineAsMod Then
             Logger.Info("OptiFine 将作为 Mod 进行下载")
-            If LiteLoaderVersion IsNot Nothing Then
-                OptiFineFolder = $"{ModsTempFolder}{Request.Components.MinecraftVersion}\" '#8147
-            Else
-                OptiFineFolder = ModsTempFolder
-            End If
+            '缓存文件夹改写决策已迁 C#（OptiFineAsModFolder，:1557-1564，#8147：同装 LiteLoader 时按 MC 版本分目录）
+            OptiFineFolder = InstallPlans.OptiFineAsModFolder(ModsTempFolder, Request.Components.MinecraftVersion, LiteLoaderVersion)
         End If
 
         '记录日志
@@ -1571,31 +1526,27 @@ Retry:
         If LiteLoaderFolder IsNot Nothing Then Logger.Info($"LiteLoader 缓存：{LiteLoaderFolder}")
         Logger.Info($"对应的原版版本：{Request.Components.MinecraftVersion}")
 
-        '重复版本检查
+        '重复版本检查（判定核已迁 C#：InstallPlans.IsDuplicateVersion，:1574-1576；提示与中断留宿主层）
         Dim VersionFolder As String = PathUtils.AddSlashSuffix(Request.InstanceFolder)
-        If FileUtils.Exists($"{VersionFolder}{Request.NewInstanceName}.json") Then
+        If InstallPlans.IsDuplicateVersion(VersionFolder, Request.NewInstanceName) Then
             Hint("版本 " & Request.NewInstanceName & " 已经存在！", HintType.Red)
             Throw New OperationCanceledException
         End If
 
         Dim LoaderList As New List(Of LoaderBase)
         Dim ManagedFileSources As New Dictionary(Of String, String)
-        '添加忽略标识
-        LoaderList.Add(New LoaderTask(Of Integer, Integer)("添加忽略标识", Sub() FileUtils.Write(VersionFolder & ".pclignore", "用于临时地在 PCL 的版本列表中屏蔽此版本。")) With {.Show = False})
-        'Fabric API
-        If Request.Components.FabricApiVersion IsNot Nothing Then
-            Dim DownloadFile = Request.FabricApi.ToNetFile(ModsTempFolder, ResourceVersion.DownloadReason.Dependency, Request.Components.MinecraftVersion, ModLoaders.Fabric)
-            ManagedFileSources.Add("FabricApi", DownloadFile.LocalPath)
-            LoaderList.Add(New LoaderDownload("下载 Fabric API", New List(Of NetFile) From {DownloadFile}) With {
+        '添加忽略标识（写入内容常量已迁 C#：InstallPlans.PclIgnoreContent，:1584；写入无条件执行留宿主层）
+        LoaderList.Add(New LoaderTask(Of Integer, Integer)("添加忽略标识", Sub() FileUtils.Write(VersionFolder & ".pclignore", InstallPlans.PclIgnoreContent)) With {.Show = False})
+        'Fabric API / OptiFabric（组装决策已迁 C#：InstallPlans.BuildDependencyDownloads，:1585-1598；
+        'NetFile 构造经回调留宿主层——Resource 模块未迁，FabricApi/OptiFabric 以 Object 承载，此处强转）
+        For Each Dependency In InstallPlans.BuildDependencyDownloads(Request.Components,
+            Function(Key) If(Key = "FabricApi",
+                CType(Request.FabricApi, ResourceVersion).ToNetFile(ModsTempFolder, ResourceVersion.DownloadReason.Dependency, Request.Components.MinecraftVersion, ModLoaders.Fabric),
+                CType(Request.OptiFabric, ResourceVersion).ToNetFile(ModsTempFolder, ResourceVersion.DownloadReason.Dependency, Request.Components.MinecraftVersion, ModLoaders.Fabric)))
+            ManagedFileSources.Add(Dependency.SourceName, Dependency.File.LocalPath)
+            LoaderList.Add(New LoaderDownload(Dependency.LoaderTitle, New List(Of NetFile) From {Dependency.File}) With {
                 .ProgressWeight = 3, .Show = True, .Block = False})
-        End If
-        'OptiFabric
-        If Request.Components.OptiFabricVersion IsNot Nothing Then
-            Dim DownloadFile = Request.OptiFabric.ToNetFile(ModsTempFolder, ResourceVersion.DownloadReason.Dependency, Request.Components.MinecraftVersion, ModLoaders.Fabric)
-            ManagedFileSources.Add("OptiFabric", DownloadFile.LocalPath)
-            LoaderList.Add(New LoaderDownload("下载 OptiFabric", New List(Of NetFile) From {DownloadFile}) With {
-                .ProgressWeight = 3, .Show = True, .Block = False})
-        End If
+        Next
         '原版
         Dim ClientLoader = New LoaderCombo(Of String)("下载原版 " & Request.Components.MinecraftVersion,
             McDownloadClientLoader(Request.Components.MinecraftVersion, Request.MinecraftJson, VersionFolder)) With {
@@ -1689,8 +1640,8 @@ Retry:
             Configs.McInstallManifest.Set(New McInstallManifest(Versions.McInstallManifestVersion, Target, Date.UtcNow, ManagedFiles), InstanceConfig)
             InstanceConfig.Save()
         End Sub) With {.Show = False})
-        '删除忽略标识
-        If Not Request.IsIntermediateOutput Then
+        '删除忽略标识（删除决策已迁 C#：InstallPlans.ShouldDeletePclIgnore，:1692-1695；中间产物保留标识交由 McInstallCommit 处置）
+        If InstallPlans.ShouldDeletePclIgnore(Request.IsIntermediateOutput) Then
             LoaderList.Add(New LoaderTask(Of Integer, Integer)("删除忽略标识", Sub() FileUtils.Delete(VersionFolder & ".pclignore")) With {.Show = False})
         End If
         '总加载器
@@ -1756,24 +1707,16 @@ Retry:
             Dim SubLoaders As New List(Of LoaderBase)
             SubLoaders.Add(New LoaderTask(Of Integer, Integer)("检查 Natives 文件占用",
             Sub()
-                For Each File In DirectoryUtils.EnumerateFiles(GetNativesFolder(Instance), includeSubDirectories:=True, searchPattern:="*.dll")
-                    If Not FileUtils.IsAvailable(File) Then Throw New Exception($"Natives 文件正在被占用，请关闭游戏后再次尝试：{File}")
-                Next
+                '占用判定核已迁 C#（InstallPlans.FirstOccupiedNativesFile，:1757-1762；枚举序首个语义一致）；
+                '枚举来源 GetNativesFolder 留宿主层（ModLaunch）
+                Dim Occupied = InstallPlans.FirstOccupiedNativesFile(
+                    DirectoryUtils.EnumerateFiles(GetNativesFolder(Instance), includeSubDirectories:=True, searchPattern:="*.dll"))
+                If Occupied IsNot Nothing Then Throw New Exception($"Natives 文件正在被占用，请关闭游戏后再次尝试：{Occupied}")
             End Sub) With {.Show = False})
             '安装修改后的 MC 版本
             Dim BuildFolder = RequestTaskTempFolder() & Instance.Name & "\"
-            Dim BuildRequest As New McInstallRequest With {
-                .NewInstanceName = Instance.Name,
-                .InstanceFolder = BuildFolder,
-                .Components = Request.Components,
-                .MinecraftJson = Request.MinecraftJson,
-                .ForgeEntry = Request.ForgeEntry,
-                .NeoForgeEntry = Request.NeoForgeEntry,
-                .FabricApi = Request.FabricApi,
-                .OptiFabric = Request.OptiFabric,
-                .LiteLoaderEntry = Request.LiteLoaderEntry,
-                .IsIntermediateOutput = True
-            }
+            '构建请求组装决策已迁 C#（InstallPlans.BuildModificationRequest，:1765-1776：覆写实例名/构建目录/中间产物，其余字段直拷）
+            Dim BuildRequest = InstallPlans.BuildModificationRequest(Request, Instance.Name, BuildFolder)
             SubLoaders.AddRange(McInstallLoadersGet(BuildRequest))
             '版本合并
             Dim RenameFailed As Boolean = False
