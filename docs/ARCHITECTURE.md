@@ -7,7 +7,7 @@
 | 项目 | 语言 | 目标框架 | 作用 |
 | --- | --- | --- | --- |
 | `Plain Craft Launcher 2` | VB.NET + XAML | .NET Framework 4.8 | 启动器主体：UI、业务、Minecraft 域 |
-| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（W1 起，见 §5.5 与 §6.7） |
+| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（W1 起，见 §5.5 与 §6.7），网络请求/下载引擎与安装、整合包决策核（W2 起，见 §5.6 与 §6.8-6.10） |
 | `MeloongCore` | C#（子模块） | net48 / netstandard2.0 | 通用基础设施：日志、路径、配置、网络、文件工具 |
 | `MeloongCore.Wpf` | C# | net48 | WPF 相关基础件 |
 | `PCLCS.AotSmoke` | C# | net10.0 | NativeAOT 冒烟工程：发布 `PCLCS` + `MeloongCore.Shared` 的解析与迁移路径（见下文 §1.1） |
@@ -101,6 +101,8 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 
 ### 5.3 网络与下载
 
+> W2 起上段描述的请求核心、下载引擎与下载管理器已迁入 `PCLCS\Net`（见 §5.6）：`ModNet.vb` 只剩 VB 调用面的薄转发、`LoaderDownload` 宿主任务与端口/Ping 工具；本节的超时、重试、分片、限速与镜像行为全部由 C# 侧承载，语义不变。
+
 - 请求入口 `NetRequestByClient`（`ModNet.vb:10-38`）与重试包装 `NetRequestByClientRetry`（`:44-88`）：第 0 次 10 s、第 1 次 30 s、第 2 次 4 s，429 固定睡 10 s；403/404 直接抛出。
 - 底层共享一个 `HttpClient`，用 `CacheCow.Client` 的 `FileStore` 做磁盘缓存（`:226-229`）；响应整包读进 `MemoryStream`（`:267-271`）。仓库内没有代理配置，走系统代理。
 - UA 与鉴权头由 `SecretHeadersSign` 统一注入（`Modules\ModSecret.vb:26-38`）：UA 为 `PCL2/{版本}.{构建类型}`，`api.curseforge.com` 与 `forgecdn.net` 附加 `x-api-key`（值来自环境变量 `PCL_CURSEFORGE_API_KEY`）。`{CDN}` 占位符在本分支只是被删除（`:19-22`）。
@@ -127,6 +129,16 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - **导入**（`SettingsImport.cs`）：一次性懒式导入，只补缺失键，旧数据全程保留。全局源为注册表 `HKCU\Software\PCLADebug` 与 `<数据目录>\Setup.ini`；每实例源为 `<版本目录>\PCL\Setup.ini`。完成标记写在文档 `imported` 节，加密键先按旧算法解密再入新文档，解不开即跳过并告警。
 - **回调**：`SettingChanged(key, 新值, 实例键)` 在保存之后触发（旧版时序约束）；原 `OnChanged` 回调表集中在 `Settings.vb` 的 `ChangedHandlers` 统一注册。**实例键约定**：第三参是归一化实例键（已去除尾部路径分隔符），全局设置为空串 `""`；消费方不得拿它与 `McInstance.PathVersion`（尾部带分隔符）直接比较，需先做同样的归一。
 
+### 5.6 网络请求与下载引擎（PCLCS\Net，W2 起）
+
+`ModNet.vb` 的三块核心（请求、下载文件、下载管理）按"引擎迁 C#、宿主留 VB"拆分，行为由 `tests\PCLCS.Tests\Net` 以本机回环服务器（`LoopbackServer`）锁定：
+
+- **请求核心 `NetRequest`**（`PCLCS\Net\NetRequest.cs`）：`SendRequest` 承载字节级请求（缓存协商、重试、超时、UI 线程守卫经 `RunInUi` 回调），`NetRequestByClient`/`NetRequestByClientRetry`/`NetRequestByClientMultiple` 等便捷入口随迁；`NetRequestOptions` 收敛旧参数组，`NetResult` 携带状态码、响应字节与实际请求 URL。对宿主层全局状态的依赖走 provider：`CdnSigner`/`HeadersSigner`（VB 启动时接线 `ModSecret` 的签名实现，签名逻辑留 VB）、`RunInUiProvider`。
+- **下载引擎 `NetFile`**（`PCLCS\Net\NetFile.cs`）：单文件多线程分片下载逐字移植（256 KiB 分片、源切换、断点续传标记、临时文件合并）；`NetState` 枚举与 `NetSource` 源模型对 VB 真值逐字。`UuidProvider`/`PathTempProvider`/`IsProgramEndingProvider` 三个 provider 注入宿主全局状态，null 时回退本地实现（测试直用语义）。
+- **下载管理器 `NetManager`**（`PCLCS\Net\NetManager.cs`）：单例 `Instance`，`AllFiles` 跨任务按本地路径去重、三条守护线程（2 × ThreadStarter + StatRefresher）承担逐文件调度与每 0.1 秒的速度/进度刷新，`TempFolderProvider`/`CrashAlert` 回调接线（异常上报走 VB 的 `AlertThenCrash` 路径）。
+- **宿主边界**：`LoaderDownload` 与 `LoaderBase` 任务树留守 VB（裁定：Loader 体系不迁），以 `INetTaskHost`（`PCLCS\Net\NetFile.cs` 内接口）接入引擎——引擎经此通知单文件完成/失败并同步失败计数，VB 侧 `LoaderDownload` 用 `Implements` 承接（`ModNet.vb:194` 起）。`ModNet.vb` 的 `Sub New` 完成全部 provider 接线（`ModNet.vb:10-17`）。
+- **net48/net8 差异**：CacheCow 磁盘缓存协商仅在 net48 编译（`NetRequest.cs` 内 `#if NET48`），net8 为无缓存裸 `HttpClient`；过渡债见 `docs\TECHDEBT.md` §12。
+
 ## 6. Minecraft 域
 
 ### 6.1 模型
@@ -137,6 +149,8 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 ### 6.2 安装
 
+> W2 起 `McInstallRequest` 与安装决策核迁入 `PCLCS\Install`（见 §6.9）；本节的 Loader 链装配与进程执行仍在本节描述的 VB 文件中。
+
 - 入口 `McInstallStart`/`McModificationStart`（`Pages\PageDownload\ModDownloadLib.vb:1948-2062`），按 `McInstallRequest` 生成加载器链：原版、Forge/NeoForge、LiteLoader、Fabric、OptiFine（有加载器时作为 mod 安装）、合并 JSON、补库、写 manifest（`:1733-1944`）。
 - 原版文件计划 `DlClientFix`（`Modules\Minecraft\ModDownload.vb:54-153`）：jar、资源索引、库、资源对象，权重分别为 16/27 等。
 - 库解析 `McLibListGetWithJson`（`ModMinecraft.vb:1617-1725`）：处理 rules、natives、`${arch}`，按 `名称+是否 native` 去重并保留高版本；下载地址重写 `McLibNetFilesFromTokens`（`:1809-1862`）。
@@ -145,6 +159,8 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - 修改已装实例用临时目录构建后 `McInstallCommit`（`ModDownloadLib.vb:2067-2111`）做 manifest 差量提交。
 
 ### 6.3 下载清单与下载源
+
+> W2 起清单条目模型与 `DlModRequest` 请求核迁入 `PCLCS\Download`（见 §6.8）；VB 侧只剩清单加载器壳与字段映射。
 
 - 清单解析全部在 C#（`PCLCS\Minecraft\Download\`）：客户端清单 `ClientListParser`（`ComputeDrops`/`ContainsVersion`/`NormalizeId`）、OptiFine `OptiFineListParser`（官方 HTML / BMCLAPI JSON）、Forge 版本 `ForgeVersionParser`、Forge 构建 `ForgeBuildParser`（官方 HTML / BMCLAPI JSON，含 1.7.10/1.8.9 分支修正）、NeoForge `NeoForgeParser`、LiteLoader `LiteLoaderParser`、Fabric `FabricListParser`。VB 只负责网络请求、读取设置与字段映射。
 - 解析失败统一抛 `DownloadSourceException`（`PCLCS\Minecraft\Download\DownloadSourceException.cs`）：`Kind` 取 `DownloadFailureKind`（NotFound/InvalidPayload/TooFewEntries/MissingField/TargetVersionMissing/Timeout/Unexpected），`IsUnavailable` 只覆盖 NotFound 与 TargetVersionMissing。Forge 官方构建页的 404 由 `HttpRequestCodeException.StatusCode = HttpStatusCode.NotFound` 识别。
@@ -170,6 +186,8 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 ### 6.6 整合包与崩溃分析
 
+> W2 起格式识别链与部署计划核迁入 `PCLCS\Modpack`（见 §6.10）；解压、overrides 落盘与 Loader 编排仍留 VB。
+
 - 五种格式：CurseForge `manifest.json`、Modrinth `modrinth.index.json`、HMCL `mcbbs.packmeta`、MultiMC `mmc-pack.json`、MCBBS；入口 `ModpackInstall`（`ModModpack.vb:31`），按压缩包内文件名嗅探（`:44-72`），overrides 复制到版本目录并写入 `VersionArgumentIndie`（`:126-143`）。
 - 崩溃分析 `CrashAnalyzer`（`ModCrash.vb:1`）：收集最近 3 分钟的 crash-report 与 latest.log（`:21-85`），按文件类型截取头尾窗口（`:214-264`），再用约 60 条 `String.Contains` 规则匹配原因（`:474-584`），最后做 Mixin/模组名归因（`:589-670`）。规则即产品知识，行为由 `tests\PCLA.BehaviorTests` 的黄金语料锁定。
 
@@ -182,11 +200,38 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - **VB 包装**（`ModMinecraft.vb` 的 `McInstance`）：UI/ini/Logo 编排、`JsonConfigProvider` 与下载映射留在 VB，对核心做薄转发。
 - **JSON 快照规则**：`McInstance.JsonObject` 用 `LegacyJsonExtensions.ToJToken(_core.VersionJson)` 生成 Newtonsoft `JObject` 快照——W3 迁移完成前，外部对快照的修改不会写回，现有 VB 读取方均为只读。C# 内部跨 `JsonNode` 树移动一律 `DeepClone`，避免"已有父节点"异常。移植中的 JSON null 边界差异登记在 `docs\TECHDEBT.md` §10。
 
+### 6.8 资源检索数据面（PCLCS\Download，W2 起）
+
+`ModDownload.vb` 按"模型与请求核迁 C#、Loader 壳留 VB"拆分：
+
+- **模型面 `DownloadModels.cs`**：七类清单的结果与条目（`DlClientListResult`、`DlOptiFineListResult/Entry`、`DlForgeListResult/Entry`、`DlForgelikeEntry/DlForgeVersionEntry`、`DlNeoForgeListResult/Entry`、`DlLiteLoaderListResult/Entry`、`DlFabricListResult`）逐字迁移，公开成员保持字段形态与可见性；携带 JSON 的成员收敛为 System.Text.Json 类型，宿主层在边界经 `LegacyJsonExtensions.ToJToken` 互转（VB 壳工程仍以 Newtonsoft 消费这些模型）。`Drops.AllDrops` 的 Drop 缓存面随迁，VB 属性转发保持既有用法。
+- **请求核 `ModRequests.cs`**：`DlModRequest`（MCIM 镜像源按 `ToolDownloadMod` 三档策略排列、逐源尝试、全败归并 `AggregateException`）与 Forge 推荐版缓存的取值/刷新核（`ForgeRecommendedGet`/`ForgeRecommendedRefreshCore`）；线程派生、刷新标记与 Catch 留宿主层。
+- **VB 壳**：七个清单加载器（`DlClientListMain` 等）、`DlSourceLoader` 竞速与设置读取留在 `ModDownload.vb`，对 C# 模型做逐名转发（文件头 `Imports PCLCS.Download`）。
+
+### 6.9 安装决策核（PCLCS\Install，W2 起）
+
+`ModDownloadLib.vb` 按"决策核迁 C#、Loader 树留 VB"拆分（裁定：进程注入器、`LoaderCombo` 链装配、清单写入调用点、Natives 枚举与 WPF 留宿主层）：
+
+- **`MergeJson.cs`**：多版本 JSON 合并核——Newtonsoft `JObject.Merge` 默认语义（数组拼接/对象递归/标量覆盖/来源 null 忽略）的 STJ 等价，加上 `minecraftArguments` 参数重组（#2801）；VB 宿主逐层调用完成继承链折叠，`WriteOptions` 对齐旧 Newtonsoft 的缩进布局。
+- **`InstallerPlans.cs`**：五类加载器的安装决策——Forge/NeoForge 安装器地址与校验器、新版安装链计划（解包合并 → 库清单 → MOJMAPS 追加 → `NetFile` 组装）、Legacy 方式 1/2、注入器输出行→进度映射；OptiFine 安装目标/下载源/方式 A 参数/方式 B 手写版本 JSON；LiteLoader redist 表与版本 JSON 组装；Fabric profile 下载决策。
+- **`InstallPlans.cs`**：安装总装决策——临时目录无空格需求判定、Modable 与 OptiFineAsMod（#8147 缓存目录改写）、重复版本判定、`.pclignore` 删除决策、Fabric API/OptiFabric 依赖组装、修改安装的请求组装。
+- **`InstallCommit.cs`**：manifest 驱动的差量提交核（新增/覆盖/删入回收站/移动 + 清单重写），实例路径与清单按参数注入；失败不回滚（与原函数一致）。
+- **`VanillaInstallPlans.cs`**：原版客户端安装的版本 JSON 落盘路径与 `clientVersion` 标记写入。
+- **VB 壳**：`McInstallStart`/`McModificationStart` 与各 `McDownload*Loader` 保留 Loader 链与进程执行，决策点逐处转调 C#（`ModDownloadLib.vb` 从 2080 行降至 1865 行）。
+
+### 6.10 整合包判定与部署（PCLCS\Modpack，W2 起）
+
+`ModModpack.vb` 按"判定与部署核迁 C#、装载与 UI 留 VB"拆分：
+
+- **判定链 `ModpackDetect.cs`**：七格式识别（CurseForge / Modrinth / MCBBS / HMCL / MMC / 带启动器压缩包 / 普通压缩包）按压缩包内文件名先根目录后一级目录逐项判定，判定顺序逐字（#4194 优先级保持）；伴随产出 `ArchiveBaseFolder`，rar 拒绝与打开失败的三分支包装随核迁移。
+- **部署核 `ModpackDeploy.cs`**：各格式的计划产出（`CurseForgePlan`/`ModrinthPlan`/`McbbsPlan`/`HmclPlan`/Mmc components 映射）——版本与加载器解析、overrides 装载决策、Modrinth 文件过滤与 `NetFile` 组装、CF modules 分类；部署决策是纯数据产出，Host 层经回调注入版本名对话框、中央目录操作与不兼容加载器提示。
+- **VB 壳**：压缩包解压、overrides 复制到版本目录、MMC `instance.cfg` 的设置迁移（PreLaunchCommand/服务器/图标/JVM 参数，留在 VB，见 `docs\TECHDEBT.md` §12）与 Loader 编排留在 `ModModpack.vb`（706 行）。
+
 ## 7. 测试
 
 ### 7.1 PCLCS 单元测试
 
-`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
+`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测，以及 W2 迁入的网络请求/下载引擎（本机回环服务器夹具）、资源检索数据面、安装决策核与整合包判定/部署。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
 
 ### 7.2 行为黄金语料
 
