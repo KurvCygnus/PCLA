@@ -240,3 +240,4 @@
 - **合并分片时 >2GB 长度截断，旧版响亮失败。** `NetFile.cs:761` 合并分片用 `(int) thread.DownloadDone`：VB 的 `CInt` 超范围抛 `OverflowException`（响亮），C# 强转静默截断、合并出错误长度的文件。单个分片超过 2GB 仅在单线程直读超大文件时可达，MC 文件面（jar/资产/库）远低于该量级。
 - **JSON 合并对"新键且值为 JSON null"的写出差异。** 旧 Newtonsoft `JObject.Merge` 会把覆盖层的新 null 键写进产物（`"added":null`）；`MergeJson.Merge` 的 STJ 等价实现跳过不写（`PCLCS\Install\MergeJson.cs:76` 起；`tests\PCLCS.Tests\Install\MergeJsonTests.cs:112-115` 锁定 C# 语义）。仅合并产物文件本身可观察，下游读取"null 与缺失"同判、无行为差异；与 W1 §10 的 null 口径一并记录。
 - **LoopbackServer 端口 TOCTOU 是测试基建已知 flake。** `tests\PCLCS.Tests\Net\LoopbackServer.cs:23,25-26` 先 `FindFreePort()` 选端口（`:23`）再 `Prefixes.Add` + `Start()` 绑定（`:25-26`），两步之间端口可能被其它进程抢占，偶发 `HttpListener` 启动失败；W2 期间三次复现（Task 1/3/4），重跑即过。属测试基建问题，不涉生产代码；消除需把"选端口 + 绑定"合并为原子操作。
+- **测试套件以 `parallelizeTestCollections=false` 全局串行。** `tests\PCLCS.Tests\xunit.runner.json` 关闭集合级并行：当前 17 秒量级的套件选择全局串行，规避共享测试基建的并发干扰；套件规模增长后需重新评估该取舍。

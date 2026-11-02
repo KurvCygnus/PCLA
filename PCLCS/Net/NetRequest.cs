@@ -292,19 +292,19 @@ public static class NetRequest
                     bodies[index] = NetRequestByClient(urlList[index], options);
                 } catch (Exception ex)
                 {
-                    failCount++;
-                    requestEx = ex;
+                    Interlocked.Increment(ref failCount); //本重载为新代码：竞速线程的失败计数需原子累加
+                    Interlocked.Exchange(ref requestEx, ex); //最后失败记录原子写入，等待后经 Volatile.Read 读取
                 }
             });
             thread.Start();
             threads.Add(thread);
             Thread.Sleep((i + 1) * 250); //ModNet.vb:113 每个线程开始之前会略有延迟
         }
-        while (bodies.Count(static body => body != null) + failCount < urlList.Count) Thread.Sleep(20); //等待全部完成或全部失败
+        while (bodies.Count(static body => body != null) + Volatile.Read(ref failCount) < urlList.Count) Thread.Sleep(20); //等待全部完成或全部失败
         InterruptThreads(threads); //ModNet.vb:119-124 的收尾
-        if (failCount < urlList.Count) return bodies.Where(static body => body != null).Select(static body => body!).ToList();
+        if (Volatile.Read(ref failCount) < urlList.Count) return bodies.Where(static body => body != null).Select(static body => body!).ToList();
         InterruptThreads(threads); //ModNet.vb:127-132 的收尾
-        throw requestEx!;
+        throw Volatile.Read(ref requestEx)!;
     }
 
     /// <summary>

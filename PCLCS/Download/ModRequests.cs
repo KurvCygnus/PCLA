@@ -41,8 +41,7 @@ public static class ModRequests
                     RunInUi = RunInUiProvider
                 });
                 return JsonNode.Parse(body); //VB DeserializeJson()：RequireJson 已保证括号闭合的完整 JSON
-            }
-            catch (Exception ex)
+            } catch (Exception ex)
             {
                 errors.Add(ex);
             }
@@ -59,25 +58,24 @@ public static class ModRequests
         {
             switch (toolDownloadMod)
             {
-                case 0:
-                    urls.Add((mcimUrl, 10));
-                    urls.Add((mcimUrl, 10));
-                    urls.Add((url, 30));
-                    break;
-                case 1:
-                    urls.Add((url, initialTimeout));
-                    urls.Add((mcimUrl, 10));
-                    urls.Add((url, 30));
-                    urls.Add((mcimUrl, 30));
-                    break;
-                default:
-                    urls.Add((url, initialTimeout));
-                    urls.Add((url, 30));
-                    urls.Add((mcimUrl, 30));
-                    break;
+            case 0:
+                urls.Add((mcimUrl, 10));
+                urls.Add((mcimUrl, 10));
+                urls.Add((url, 30));
+                break;
+            case 1:
+                urls.Add((url, initialTimeout));
+                urls.Add((mcimUrl, 10));
+                urls.Add((url, 30));
+                urls.Add((mcimUrl, 30));
+                break;
+            default:
+                urls.Add((url, initialTimeout));
+                urls.Add((url, 30));
+                urls.Add((mcimUrl, 30));
+                break;
             }
-        }
-        else
+        } else
         {
             urls.Add((url, initialTimeout));
             urls.Add((url, 30));
@@ -102,8 +100,7 @@ public static class ModRequests
             var json = JsonNode.Parse(list!) as JsonObject; //VB JObject 强转：根非对象时走 Catch 返回 null；net48 引用程序集缺 NotNullWhen 标注，此 ! 为 Roslyn 所需（net8 下冗余）
             if (json is null || !mcVersionName.Contains('.') || !json.ContainsKey(mcVersionName)) return null;
             return json[mcVersionName]?.ToString() ?? ""; //VB If(Json(McVersionName), "").ToString：缺失/JSON null 均为空串
-        }
-        catch (Exception ex)
+        } catch (Exception ex)
         {
             Logger.Error(ex, $"获取 Forge 推荐版本失败（{mcVersionName ?? "null"}）");
             return null;
@@ -123,9 +120,9 @@ public static class ModRequests
         var recommendedList = new List<string>();
         foreach (var item in (resultJson as JsonArray)!) //根非数组时在取元素处抛出；条目非对象在强转处抛出（对照 VB 遍历强转），皆走宿主层 Catch
         {
-            var version = (JsonObject)item!; //STJ 对非对象节点的强转抛 InvalidOperationException，与 VB InvalidCastException 同归宿主层 Catch
+            var version = (JsonObject) item!; //STJ 对非对象节点的强转抛 InvalidOperationException，与 VB InvalidCastException 同归宿主层 Catch
             if (version["name"] is null || version["build"] is null) continue;
-            var name = (string?)version["name"]; //VB: Dim Name As String = Version("name")；非字符串值同样走 Catch
+            var name = (string?) version["name"]; //VB: Dim Name As String = Version("name")；非字符串值同样走 Catch
             if (!name.EndsWithF("-recommended")) continue;
             //内容为："1.15.2":"31.2.0"
             recommendedList.Add("\"" + name!.Replace("-recommended", "\":\"" + version["build"]!["version"]! + "\""));

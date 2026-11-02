@@ -131,8 +131,7 @@ public abstract class DlForgelikeEntry : IComparable<DlForgelikeEntry>
         if (Version != other!.Version)
         {
             return Version!.CompareTo(other.Version);
-        }
-        else
+        } else
         {
             return McUtils.CompareVersion(VersionName!, other.VersionName!);
         }
