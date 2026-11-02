@@ -535,17 +535,19 @@ Public Module ModModpack
     'MCBBS
     Private Function InstallPackMCBBS(FileAddress As String, Archive As ZipArchive, ArchiveBaseFolder As String,
                                       Optional InstanceName As String = Nothing) As LoaderCombo(Of String)
-        '读取 Json 文件（读取留宿主层，解析失败包装随宿主层保留）
-        Dim McbbsJson As String
+        '读取 Json 文件（读取与解析留宿主层，解析失败包装随宿主层保留——旧 :684-688 的同一 Try 形态；
+        '解析结果复用于版本名流，C# 计划核按字符串契约重解析，与 CF 的宿主预解析形态一致）
+        Dim McbbsJson As String, Json As JObject
         Try
             Dim Entry = If(Archive.GetEntry(ArchiveBaseFolder & "mcbbs.packmeta"), Archive.GetEntry(ArchiveBaseFolder & "manifest.json"))
             McbbsJson = Entry.Open().ReadString(Encoding.UTF8)
+            Json = McbbsJson.DeserializeJson()
         Catch ex As Exception
             Throw New Exception("MCBBS 整合包安装信息存在问题", ex)
         End Try
         '获取版本名
         If InstanceName Is Nothing Then
-            InstanceName = If(McbbsJson.DeserializeJson()("name"), "")
+            InstanceName = If(Json("name"), "")
             Dim Validate As New ValidateFolderName(McFolderSelected & "versions")
             If Validate.Validate(InstanceName) <> "" Then InstanceName = ""
             If InstanceName = "" Then InstanceName = MyMsgBoxInput("输入版本名称", "", "", New Collection(Of Validate) From {Validate})
