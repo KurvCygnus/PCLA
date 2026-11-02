@@ -204,7 +204,7 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 `ModDownload.vb` 按"模型与请求核迁 C#、Loader 壳留 VB"拆分：
 
-- **模型面 `DownloadModels.cs`**：七类清单的结果与条目（`DlClientListResult`、`DlOptiFineListResult/Entry`、`DlForgeListResult/Entry`、`DlForgelikeEntry/DlForgeVersionEntry`、`DlNeoForgeListResult/Entry`、`DlLiteLoaderListResult/Entry`、`DlFabricListResult`）逐字迁移，公开成员保持字段形态与可见性；携带 JSON 的成员收敛为 System.Text.Json 类型，宿主层在边界经 `LegacyJsonExtensions.ToJToken` 互转（VB 壳工程仍以 Newtonsoft 消费这些模型）。`Drops.AllDrops` 的 Drop 缓存面随迁，VB 属性转发保持既有用法。
+- **模型面 `DownloadModels.cs`**：七类清单中迁入的模型组（`DlClientListResult`、`DlOptiFineListResult/Entry`、`DlForgelikeEntry/DlForgeVersionEntry`、`DlNeoForgeListResult/Entry`、`DlLiteLoaderListResult/Entry`、`DlFabricListResult`）与 Drop 缓存面（`Drops.AllDrops`）逐字迁移，公开成员保持字段形态与可见性；携带 JSON 的成员收敛为 System.Text.Json 类型，宿主层在边界经 `LegacyJsonExtensions.ToJToken` 互转（VB 壳工程仍以 Newtonsoft 消费这些模型）。`DlForgeListResult` 留 VB（ModDownload 自用，`ModDownload.vb:366`），Drop 缓存的 VB 属性转发保持既有用法。
 - **请求核 `ModRequests.cs`**：`DlModRequest`（MCIM 镜像源按 `ToolDownloadMod` 三档策略排列、逐源尝试、全败归并 `AggregateException`）与 Forge 推荐版缓存的取值/刷新核（`ForgeRecommendedGet`/`ForgeRecommendedRefreshCore`）；线程派生、刷新标记与 Catch 留宿主层。
 - **VB 壳**：七个清单加载器（`DlClientListMain` 等）、`DlSourceLoader` 竞速与设置读取留在 `ModDownload.vb`，对 C# 模型做逐名转发（文件头 `Imports PCLCS.Download`）。
 
