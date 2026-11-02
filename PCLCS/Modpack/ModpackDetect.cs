@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -63,8 +62,7 @@ public static class ModpackDetect
             {
                 var json = (JsonObject?) JsonNode.Parse(
                     ReadEntry(archive.GetEntry("manifest.json")!), null, ParseOptions); //旧 DeserializeJson()：解析失败在此抛出
-                if (!json!.ContainsKey("addons")) return ModpackKind.CurseForge; //CurseForge 整合包
-                return ModpackKind.Mcbbs; //MCBBS 整合包
+                return json!.ContainsKey("addons") ? ModpackKind.Mcbbs : ModpackKind.CurseForge; //有 addons：MCBBS 整合包；无：CurseForge 整合包
             }
             if (archive.GetEntry("modpack.json") != null) return ModpackKind.Hmcl; //HMCL 整合包
             if (archive.GetEntry("modpack.zip") != null || archive.GetEntry("modpack.mrpack") != null) return ModpackKind.LauncherPack; //带启动器的压缩包

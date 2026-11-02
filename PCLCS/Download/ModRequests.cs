@@ -97,7 +97,11 @@ public static class ModRequests
                 Logger.Info("没有 Forge 推荐版本缓存文件");
                 return null;
             }
-            var json = JsonNode.Parse(list!) as JsonObject; //VB JObject 强转：根非对象时走 Catch 返回 null；net48 引用程序集缺 NotNullWhen 标注，此 ! 为 Roslyn 所需（net8 下冗余）
+#if NET48 //net48 引用程序集缺 NotNullWhen 标注：IsNullOrEmpty 守卫后 Roslyn 仍报 CS8604，此 ! 不可省略（net8 下冗余）
+            var json = JsonNode.Parse(list!) as JsonObject; //VB JObject 强转：根非对象时走 Catch 返回 null
+#else //net8 下 IsNullOrEmpty 守卫已证明非空，无需 null 警告禁止表达式
+            var json = JsonNode.Parse(list) as JsonObject; //VB JObject 强转：根非对象时走 Catch 返回 null
+#endif
             if (json is null || !mcVersionName.Contains('.') || !json.ContainsKey(mcVersionName)) return null;
             return json[mcVersionName]?.ToString() ?? ""; //VB If(Json(McVersionName), "").ToString：缺失/JSON null 均为空串
         } catch (Exception ex)

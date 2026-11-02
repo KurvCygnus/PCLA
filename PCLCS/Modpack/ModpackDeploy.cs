@@ -269,7 +269,7 @@ public static class ModpackDeploy
     /// </summary>
     public static (string TargetFolder, ModpackResourceKind Kind) ClassifyCurseForgeModules(JsonObject modJson)
     {
-        if (!modJson.ContainsKey("modules")) throw new ArgumentNullException("source"); //:284
+        if (!modJson.ContainsKey("modules")) throw new ArgumentNullException(nameof(modJson)); //:284
         var modules = modJson["modules"];
         var hasModules = modules switch
         {
@@ -395,7 +395,7 @@ public static class ModpackDeploy
             }
             //添加下载文件（:431-443）
             var downloadsNode = JGet(fileNode, "downloads");
-            if (downloadsNode is null) throw new ArgumentNullException("source"); //缺失时旧 SelectMany(Nothing) 的崩溃路径
+            if (downloadsNode is null) throw new ArgumentNullException(nameof(indexJson)); //缺失时旧 SelectMany(Nothing) 的崩溃路径
             List<string> rawDownloads = downloadsNode is JsonArray downloadsArray
                 ? downloadsArray.Select(static t => t?.ToString() ?? "").ToList() //标量 JValue 无子项 → 空（旧枚举语义）
                 : [];

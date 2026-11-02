@@ -27,14 +27,12 @@ public class ModpackTests
     private static string WriteZipContent(string name, params (string Entry, string Content)[] entries)
     {
         var path = Path.Combine(Path.GetTempPath(), "pclcs.pack." + name + "." + Guid.NewGuid().ToString("N") + ".zip");
-        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        foreach (var (entry, content) in entries)
         {
-            foreach (var (entry, content) in entries)
-            {
-                var e = zip.CreateEntry(entry);
-                using var writer = new StreamWriter(e.Open());
-                writer.Write(content);
-            }
+            var e = zip.CreateEntry(entry);
+            using var writer = new StreamWriter(e.Open());
+            writer.Write(content);
         }
         return path;
     }
@@ -155,7 +153,7 @@ public class ModpackTests
     [Fact]
     public void CurseForge_forge_recommended_is_rejected()   //:192
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildCurseForgePlan(
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildCurseForgePlan(
             """{"minecraft":{"version":"1.7.10","modLoaders":[{"id":"forge-recommended"}]}}""", "k"));
         Assert.Equal("该整合包版本过老，已不支持进行安装！", ex.Message);
     }
@@ -163,13 +161,13 @@ public class ModpackTests
     [Fact]
     public void CurseForge_missing_minecraft_is_rejected()   //:174
     {
-        Assert.Throws<Exception>(() => ModpackDeploy.BuildCurseForgePlan("""{"name":"x"}""", "k"));
+        Assert.Throws<Exception>(static () => ModpackDeploy.BuildCurseForgePlan("""{"name":"x"}""", "k"));
     }
 
     [Fact]
     public void CurseForge_parse_failure_is_wrapped()   //:169-173
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildCurseForgePlan("{", "k"));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildCurseForgePlan("{", "k"));
         Assert.Equal("CurseForge 整合包安装信息存在问题", ex.Message);
     }
 
@@ -205,7 +203,7 @@ public class ModpackTests
 
     [Fact]
     public void CurseForge_missing_modules_throws_like_old()   //:284 缺键时旧 Enumerable.Any(Nothing) 崩溃路径逐字保留
-        => Assert.Throws<ArgumentNullException>(() =>
+        => Assert.Throws<ArgumentNullException>(static () =>
             ModpackDeploy.ClassifyCurseForgeModules((JsonObject) JsonNode.Parse("""{"id":1}""")!));
 
     [Fact]
@@ -233,7 +231,7 @@ public class ModpackTests
     {
         Assert.Equal(@"C:\t\pack/overrides", ModpackDeploy.ResolveCurseForgeOverridesFolder(@"C:\t\", "pack/", "overrides"));   //旧字符串直拼（分隔符不归一）
         Assert.Equal(@"C:\t\pack/", ModpackDeploy.ResolveCurseForgeOverridesFolder(@"C:\t\", "pack/", "."));   //#5613 点号折叠
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.ResolveCurseForgeOverridesFolder(@"C:\t\", "pack/", @"..\..\evil"));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.ResolveCurseForgeOverridesFolder(@"C:\t\", "pack/", @"..\..\evil"));
         Assert.Equal("整合包的 overrides 路径超出了解压目录，请向整合包作者反馈此问题！", ex.Message);
     }
 
@@ -247,7 +245,7 @@ public class ModpackTests
             (JsonArray) JsonNode.Parse("""[{"id":1,"modules":null,"displayName":"A"},{"id":1,"modules":null,"displayName":"A"},{"id":2,"modules":[],"displayName":"B"}]""")!,   //重复 id（疑似 CurseForge Bug，:274-275）；modules 为 null（#1006）与空数组 → mods
             plan,
             _ => { prompts++; return false; },   //可选文件拒绝（:277-280）
-            (modJson, targetFolder, kind) =>
+            (_, targetFolder, kind) =>
             {
                 seen.Add((targetFolder, kind));
                 return new NetFile(["http://x/1.jar"], @"C:\v\mods\a.jar", null, false);
@@ -309,7 +307,7 @@ public class ModpackTests
 
     [Fact]
     public void Modrinth_missing_minecraft_is_rejected()   //:377
-        => Assert.Throws<Exception>(() => ModpackDeploy.BuildModrinthPlan("""{"dependencies":{}}""", "k"));
+        => Assert.Throws<Exception>(static () => ModpackDeploy.BuildModrinthPlan("""{"dependencies":{}}""", "k"));
 
     [Fact]
     public void Modrinth_path_escape_is_rejected()   //:436-441
@@ -453,7 +451,7 @@ public class ModpackTests
     {
         var plan = ModpackDeploy.BuildMcbbsPlan(
             """{"addons":[{"id":"game","version":"1.8.0"},{"id":"optifine","version":"HD_U_D5"}]}""",
-            optiFineListProvider: () => [OptiFineEntry("1.8", "OptiFine_1.8_HD_U_D5.jar", "1.8-OptiFine_HD_U_D5")]);
+            optiFineListProvider: static () => [OptiFineEntry("1.8", "OptiFine_1.8_HD_U_D5.jar", "1.8-OptiFine_HD_U_D5")]);
         Assert.Equal("1.8-OptiFine_HD_U_D5", plan.OptiFineEntry!["InstanceName"]!.ToString());
     }
 
@@ -462,7 +460,7 @@ public class ModpackTests
     {
         var plan = ModpackDeploy.BuildMcbbsPlan(
             """{"addons":[{"id":"game","version":"1.12.2"},{"id":"fabric","version":"0.16.9"}]}""",
-            optiFineListProvider: () => throw new InvalidOperationException("不应取列表"));
+            optiFineListProvider: static () => throw new InvalidOperationException("不应取列表"));
         Assert.Null(plan.OptiFineEntry);
         Assert.Equal("0.16.9", plan.ModLoaderVersions[ModLoaders.Fabric]);
     }
@@ -470,14 +468,14 @@ public class ModpackTests
     [Fact]
     public void Mcbbs_missing_game_is_rejected()   //:719
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildMcbbsPlan("""{"addons":[{"id":"forge","version":"1.0"}]}"""));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildMcbbsPlan("""{"addons":[{"id":"forge","version":"1.0"}]}"""));
         Assert.Equal("该 MCBBS 整合包未提供游戏版本信息，无法安装！", ex.Message);
     }
 
     [Fact]
     public void Mcbbs_missing_addons_is_rejected()   //:714
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildMcbbsPlan("""{"name":"x"}"""));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildMcbbsPlan("""{"name":"x"}"""));
         Assert.Equal("该 MCBBS 整合包未提供游戏版本附加信息，无法安装！", ex.Message);
     }
 
@@ -494,16 +492,16 @@ public class ModpackTests
     [Fact]
     public void Mcbbs_missing_optifine_entry_is_rejected()   //:737
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildMcbbsPlan(
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildMcbbsPlan(
             """{"addons":[{"id":"game","version":"1.12.2"},{"id":"optifine","version":"HD_U_C8"}]}""",
-            optiFineListProvider: () => [OptiFineEntry("1.16.5", "OptiFine_1.16.5_HD_U_G8.jar", "1.16.5-OptiFine_HD_U_G8")]));
+            optiFineListProvider: static () => [OptiFineEntry("1.16.5", "OptiFine_1.16.5_HD_U_G8.jar", "1.16.5-OptiFine_HD_U_G8")]));
         Assert.Equal("OptiFine 列表中没有整合包所需的 OptiFine HD_U_C8（Minecraft 1.12.2）", ex.Message);
     }
 
     [Fact]
     public void Mcbbs_parse_failure_is_wrapped()   //:683-688
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildMcbbsPlan("{"));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildMcbbsPlan("{"));
         Assert.Equal("MCBBS 整合包安装信息存在问题", ex.Message);
     }
 
@@ -522,14 +520,14 @@ public class ModpackTests
     [Fact]
     public void Hmcl_missing_game_version_is_rejected()   //:520
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildHmclPlan("""{"name":"HP"}"""));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildHmclPlan("""{"name":"HP"}"""));
         Assert.Equal("该 HMCL 整合包未提供游戏版本信息，无法安装！", ex.Message);
     }
 
     [Fact]
     public void Hmcl_parse_failure_is_wrapped()   //:499-503
     {
-        var ex = Assert.Throws<Exception>(() => ModpackDeploy.BuildHmclPlan("{"));
+        var ex = Assert.Throws<Exception>(static () => ModpackDeploy.BuildHmclPlan("{"));
         Assert.Equal("HMCL 整合包安装信息存在问题", ex.Message);
     }
 
