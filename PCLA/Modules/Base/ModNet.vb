@@ -17,6 +17,9 @@ Public Module ModNet
         '下载管理器（NetManager）的宿主层接线：缓存清理目录与守护线程异常上报（AlertThenCrash 路径）
         DownloadManager.TempFolderProvider = Function() PathTemp
         DownloadManager.CrashAlert = Sub(ex) Logger.Error(ex, Nothing, LogBehavior.AlertThenCrash)
+        '登录核（LoginCores）的宿主层接线：Mojang UUID 的 ini 缓存目录与已选实例原版版本号（W3 Task 3）
+        PCLCS.Launch.LoginCores.MojangUuidCacheFolder = Function() PathTemp & "Cache\Uuid"
+        PCLCS.Launch.LoginCores.SelectedVanillaMajor = Function() McInstanceSelected?.Version.Vanilla.Major
     End Sub
 
     ''' <summary>
