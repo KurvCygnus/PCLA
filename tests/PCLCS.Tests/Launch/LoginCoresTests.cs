@@ -27,6 +27,8 @@ public class LoginCoresTests : IDisposable
     {
         LoginCores.MojangUuidCacheFolder = null;
         LoginCores.SelectedVanillaMajor = null;
+        LoginCores.RunInUiProvider = null;
+        LoginCores.MojangApiBase = "https://api.mojang.com";
         foreach (var server in _servers) server.Dispose();
         if (Directory.Exists(_root)) Directory.Delete(_root, true);
     }
@@ -221,6 +223,29 @@ public class LoginCoresTests : IDisposable
         LoginCores.MojangApiBase = server.UrlPrefix;
         var ex = Assert.Throws<Exception>(() => LoginCores.MojangUuid("GhostName", throwOnNotFound));
         Assert.Equal("从官网获取正版 Uuid 失败", ex.Message);
+    }
+
+    [Fact]
+    public void MojangUuid_returns_uuid_even_when_cache_write_fails()
+    {
+        //旧 WriteIni 为整段 Try/Catch → Toast + 吞错（ModBase.vb:561-563）：缓存写失败不影响返回值
+        //（皮肤预览 PageLaunchLeft 的 McLoginMojangUuid(ID, True) 依赖此语义：旧实现写失败仍成功返回）
+        var blocker = Path.Combine(_root, "notafolder");
+        File.WriteAllText(blocker, "x");   //缓存目录指向一个文件 → Mojang.ini 写入必失败
+        LoginCores.MojangUuidCacheFolder = () => blocker;
+        using var server = NewServer(static _ => (200, """{"id":"E3B7C9D2A1B4F6058972C4D1E0A3B5C7"}""", null));
+        LoginCores.MojangApiBase = server.UrlPrefix;
+        Assert.Equal("E3B7C9D2A1B4F6058972C4D1E0A3B5C7", LoginCores.MojangUuid("WriteFailName", false));
+    }
+
+    [Fact]
+    public void MojangUuid_returns_uuid_even_when_cache_read_fails_to_empty()
+    {
+        //旧 ReadIni 读失败（IniGetContent Toast + Nothing）→ 默认空串 → 继续走查询；缓存目录为不存在的深层路径即覆盖该分支
+        LoginCores.MojangUuidCacheFolder = () => Path.Combine(_root, "absent", "sub");
+        using var server = NewServer(static _ => (200, """{"id":"B3B7C9D2A1B4F6058972C4D1E0A3B5C7"}""", null));
+        LoginCores.MojangApiBase = server.UrlPrefix;
+        Assert.Equal("B3B7C9D2A1B4F6058972C4D1E0A3B5C7", LoginCores.MojangUuid("ReadFailName", false));
     }
 
     #endregion

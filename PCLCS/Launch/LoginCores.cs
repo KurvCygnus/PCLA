@@ -24,6 +24,12 @@ public static class LoginCores
     /// </summary>
     public static Func<int?>? SelectedVanillaMajor { get; set; }
 
+    /// <summary>
+    /// UI 线程判定回调（旧 VB NetRequestByClientRetry 转发面恒传 AddressOf RunInUi，ModNet.vb:63；
+    /// NetRequest.SendRequest 以此在 UI 线程发真实网络请求时快速失败，ModNet.vb:219）。null 视为非 UI 线程（测试环境）。宿主层接线。
+    /// </summary>
+    public static Func<bool>? RunInUiProvider { get; set; }
+
     //* 测试注入面：旧 :1151 硬编码 "https://api.mojang.com/users/profiles/minecraft/"，回环测试改指本机假服务器
     internal static string MojangApiBase = "https://api.mojang.com";
 
@@ -79,8 +85,7 @@ public static class LoginCores
                 }
             } catch (Exception ex)
             {
-                //旧 :1132 的 LogBehavior.Toast 提示面留宿主层，此处仅记录
-                Logger.Error(ex, "皮肤信息获取失败，游戏将以无皮肤的方式启动");
+                Logger.Error(ex, "皮肤信息获取失败，游戏将以无皮肤的方式启动", LogBehavior.Toast);   //旧 :1132 逐字（Toast 级，非弹窗）
             }
             break;
         case 4:
@@ -116,7 +121,7 @@ public static class LoginCores
         try
         {
             var body = NetRequest.NetRequestByClientRetry(MojangApiBase + "/users/profiles/minecraft/" + name,
-                accept: "*/*", requireJson: true);
+                accept: "*/*", requireJson: true, runInUi: RunInUiProvider);   //旧 VB 转发面恒传 AddressOf RunInUi（ModNet.vb:63，UI 线程守卫）
             var gotJson = string.IsNullOrWhiteSpace(body) ? null : JsonNode.Parse(body);   //旧 DeserializeJson：空白返回 Nothing（:1152）
             if (gotJson is null) throw new FileNotFoundException("正版玩家档案不存在（" + name + "）");
             uuid = gotJson["id"]?.ToString() ?? "";   //旧 If(GotJson("id"), "")：缺失或 JSON null 均得空串
@@ -143,35 +148,50 @@ public static class LoginCores
     #region ini 缓存（旧 ModBase.ReadIni/WriteIni 的 Mojang.ini 单文件收敛版）
 
     //* 迁移后 Mojang.ini 仅本核读写（旧 MySkin 只删除整个目录并 IniClearCache，无读面），故不引入 VB 侧的全局 ini 缓存，
-    //* 每次现读现写与旧“读缓存 + 写时全量重写”的文件内容语义一致
-    private static Dictionary<string, string> IniLoad(string fileName)
+    //* 每次现读现写与旧“读缓存 + 写时全量重写”的文件内容语义一致；
+    //* 失败语义对齐旧 IniGetContent/WriteIni：读失败 → Toast + 视为空（旧 :496-499），写失败 → Toast + 吞掉（旧 :561-563）
+    private static Dictionary<string, string>? IniTryLoad(string fileName)
     {
-        var ini = new Dictionary<string, string>();
-        var content = FileUtils.TryReadAsString(fileName);
-        if (content is null) return ini;   //文件不存在或读取失败（旧 IniGetContent 返回 Nothing）
-        foreach (var line in content.Split(["\r\n", "\n"], StringSplitOptions.None))
+        try
         {
-            var index = line.IndexOfF(":");
-            if (index > 0) ini[line[..index]] = line[(index + 1)..];   //可能会有重复键，见 #3616
+            if (!FileUtils.Exists(fileName)) return null;   //旧 :488：文件不存在静默返回 Nothing
+            var ini = new Dictionary<string, string>();
+            foreach (var line in FileUtils.ReadAsString(fileName).Split(["\r\n", "\n"], StringSplitOptions.None))
+            {
+                var index = line.IndexOfF(":");
+                if (index > 0) ini[line[..index]] = line[(index + 1)..];   //可能会有重复键，见 #3616
+            }
+            return ini;
+        } catch (Exception ex)
+        {
+            Logger.Error(ex, $"生成 ini 文件缓存失败（{fileName}）", LogBehavior.Toast);   //旧 :497 文案逐字
+            return null;
         }
-        return ini;
     }
 
     private static string IniRead(string fileName, string key)
     {
-        var ini = IniLoad(fileName);
-        return ini.GetOrDefault(key, "")!;   //值经 IniLoad 构造必非 null；旧 ReadIni 的 DefaultValue="" 恒非空
+        var ini = IniTryLoad(fileName);
+        if (ini is null) return "";   //旧 :509：Content Is Nothing → DefaultValue
+        return ini.GetOrDefault(key, "")!;   //值经 IniTryLoad 构造必非 null；旧 ReadIni 的 DefaultValue="" 恒非空
     }
 
     private static void IniWrite(string fileName, string key, string value)
     {
-        if (key.Contains(':')) throw new Exception($"尝试写入 ini 文件 {fileName} 的键名中包含了冒号：{key}");
-        key = key.ReplaceLineEndings("");
-        value = value.ReplaceLineEndings("");
-        var ini = IniLoad(fileName);
-        if (ini.TryGetValue(key, out var existing) && existing == value) return;   //无需处理
-        ini[key] = value;
-        FileUtils.Write(fileName, string.Join("\r\n", ini.Select(pair => pair.Key + ":" + pair.Value)) + "\r\n");
+        try
+        {
+            if (key.Contains(':')) throw new Exception($"尝试写入 ini 文件 {fileName} 的键名中包含了冒号：{key}");
+            key = key.ReplaceLineEndings("");
+            value = value.ReplaceLineEndings("");
+            var ini = IniTryLoad(fileName) ?? [];   //旧 :539-540：Content Is Nothing → 新空字典
+            if (ini.TryGetValue(key, out var existing) && existing == value) return;   //无需处理
+            ini[key] = value;
+            FileUtils.Write(fileName, string.Join("\r\n", ini.Select(pair => pair.Key + ":" + pair.Value)) + "\r\n");
+        } catch (Exception ex)
+        {
+            //旧 :561-563 逐字：写失败（含键名校验）Toast + 吞掉，调用方照常拿到返回值
+            Logger.Error(ex, $"写入文件失败（{fileName} → {key}:{value}）", LogBehavior.Toast);
+        }
     }
 
     #endregion
@@ -205,6 +225,7 @@ public static class LoginCores
             Headers = RequestHeaders(),
             ContentType = "application/json; charset=utf-8",
             Accept = "*/*",   //旧 VB NetRequestByClient 默认 Accept="*/*"
+            RunInUi = RunInUiProvider,   //旧 VB 转发面恒传 AddressOf RunInUi（ModNet.vb:63，UI 线程守卫）
         });   //没有返回值的
         //将登录结果输出
         var result = new McLoginResult
@@ -246,6 +267,7 @@ public static class LoginCores
             ContentType = "application/json; charset=utf-8",
             Accept = "*/*",
             RequireJson = true,
+            RunInUi = RunInUiProvider,   //旧 VB 转发面恒传 AddressOf RunInUi（ModNet.vb:76，UI 线程守卫）
         }))!;   //旧 DeserializeJson 后必为对象；响应非 JSON 已被 RequireJson 拦截
         //将登录结果输出
         if (loginJson["selectedProfile"] is null) throw new Exception("选择的角色 " + SettingsService.Get<string>("Cache" + input.Token + "Name") + " 无效！");
@@ -309,6 +331,7 @@ public static class LoginCores
                 ContentType = "application/json; charset=utf-8",
                 Accept = "*/*",
                 RequireJson = true,
+                RunInUi = RunInUiProvider,   //旧 VB 转发面恒传 AddressOf RunInUi（ModNet.vb:76，UI 线程守卫）
             }))!;
             //检查登录结果（旧 :779：availableProfiles 缺失时在其 Count 处抛 NRE）
             var availableProfiles = loginJson["availableProfiles"]!.AsArray();
