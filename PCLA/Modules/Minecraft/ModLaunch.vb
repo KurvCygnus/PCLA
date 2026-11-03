@@ -1330,81 +1330,21 @@ Retry:
 #Region "解压 Natives"
 
     Private Sub McLaunchNatives(Loader As LoaderTask(Of Integer, Integer))
-
-        '创建文件夹
-        Dim Target As String = GetNativesFolder()
-        DirectoryUtils.Create(Target)
-
-        '解压文件
-        McLaunchLog("正在解压 Natives 文件")
-        Dim ExistFiles As New List(Of String)
-        For Each Native As McLibEntry In McLibListGet(McInstanceSelected, True)
-            If Not Native.IsNatives Then Continue For
-            Dim Zip As ZipArchive
-            Try
-                Zip = FileUtils.OpenZip(Native.LocalPath)
-            Catch ex As InvalidDataException
-                Logger.Warn(ex, $"打开 Natives 文件失败（{Native.LocalPath}）")
-                FileUtils.Delete(Native.LocalPath)
-                Throw New Exception("无法打开 Natives 文件（" & Native.LocalPath & "），该文件可能已损坏，请重新尝试启动游戏")
-            End Try
-            For Each Entry In Zip.Entries
-                Dim FileName As String = Entry.FullName
-                If PathUtils.GetExtension(FileName) = "dll" Then
-                    '实际解压文件的步骤
-                    Dim FilePath As String = Target & FileName
-                    ExistFiles.Add(FilePath)
-                    Dim OriginalFile = FileUtils.GetInfo(FilePath)
-                    If OriginalFile.Exists Then
-                        If OriginalFile.Length = Entry.Length Then
-                            If ModeDebug Then McLaunchLog("无需解压：" & FilePath)
-                            Continue For
-                        End If
-                        '删除原文件
-                        Try
-                            FileUtils.Delete(FilePath)
-                        Catch ex As UnauthorizedAccessException
-                            McLaunchLog("删除原 dll 访问被拒绝，这通常代表有一个 MC 正在运行，跳过解压：" & FilePath)
-                            McLaunchLog("实际的错误信息：" & ex.GetDisplay(True))
-                            Exit For
-                        End Try
-                    End If
-                    '解压新文件
-                    FileUtils.Write(FilePath, Entry.Open)
-                    McLaunchLog("已解压：" & FilePath)
-                End If
-            Next
-            If Zip IsNot Nothing Then Zip.Dispose()
-        Next
-
-        '删除多余文件
-        For Each FileName As String In DirectoryUtils.EnumerateFiles(Target)
-            If ExistFiles.Contains(FileName) Then Continue For
-            Try
-                McLaunchLog("删除：" & FileName)
-                FileUtils.Delete(FileName)
-            Catch ex As UnauthorizedAccessException
-                McLaunchLog("删除多余文件访问被拒绝，跳过删除步骤")
-                McLaunchLog("实际的错误信息：" & ex.GetDisplay(True))
-                Return
-            End Try
-        Next
-
+        '解压核已迁 C#（PCLCS.Launch.LaunchFiles.ExtractNatives，:1332-1393 逐行）；此处按宿主读取面转发
+        PCLCS.Launch.LaunchFiles.ExtractNatives(
+            GetNativesFolder(),
+            McLibListGet(McInstanceSelected, True).Where(Function(Entry) Entry.IsNatives).Select(Function(Entry) Entry.LocalPath).ToList(),
+            progress:=Nothing,
+            log:=Sub(Text) McLaunchLog(Text),
+            debug:=ModeDebug)
     End Sub
     ''' <summary>
     ''' 获取 Natives 文件夹路径，以 \ 结尾。
     ''' </summary>
     Public Function GetNativesFolder(Optional Instance As McInstance = Nothing) As String
+        '回退链核已迁 C#（PCLCS.Launch.LaunchFiles.GetNativesFolder，:1397-1408 逐字）；此处转发保持宿主读写面
         If Instance Is Nothing Then Instance = McInstanceSelected
-        Dim Result As String = PathUtils.AddSlashSuffix(PathUtils.ToShortPath(Instance.PathVersion)) & Instance.Name & "-natives\"
-        If Not (IsGBKEncoding OrElse Result.IsAsciiOnly()) Then
-            Result = Paths.AppData & ".minecraft\bin\natives\"
-            If Not Result.IsAsciiOnly() Then
-                Result = OsDrive & "ProgramData\" & PCLCS.Startup.LauncherIdentity.FolderName & "\natives\"
-            End If
-        End If
-        DirectoryUtils.Create(Result) '提前创建，这样 DirectoryUtils.Shorten 才有结果（否则在长路径下首次启动 Forge 会崩溃）
-        Return PathUtils.AddSlashSuffix(PathUtils.ToShortPath(Result))
+        Return PCLCS.Launch.LaunchFiles.GetNativesFolder(Instance.PathVersion, Instance.Name, IsGBKEncoding, OsDrive)
     End Function
 
 #End Region
@@ -1437,69 +1377,13 @@ Retry:
         End If
 
         '更新 launcher_profiles.json
-        Try
-            '确保可用
-            If Not McLoginLoader.Output.Type = "Microsoft" Then Exit Try
-            McFolderLauncherProfilesJsonCreate(McFolderSelected)
-            '构建需要替换的 Json 对象
-            Dim ReplaceJsonString As String = "
-            {
-              ""authenticationDatabase"": {
-                ""00000111112222233333444445555566"": {
-                  ""username"": """ & McLoginLoader.Output.Name.Replace("""", "-") & """,
-                  ""profiles"": {
-                    ""66666555554444433333222221111100"": {
-                        ""displayName"": """ & McLoginLoader.Output.Name & """
-                    }
-                  }
-                }
-              },
-              ""clientToken"": """ & McLoginLoader.Output.ClientToken & """,
-              ""selectedUser"": {
-                ""account"": ""00000111112222233333444445555566"", 
-                ""profile"": ""66666555554444433333222221111100""
-              }
-            }"
-            Dim ReplaceJson As JObject = (ReplaceJsonString).DeserializeJson()
-            '更新文件
-            Dim Profiles As JObject = LegacyFileUtils.ReadAsJson(McFolderSelected & "launcher_profiles.json")
-            Profiles.Merge(ReplaceJson)
-            FileUtils.Write(McFolderSelected & "launcher_profiles.json", Profiles.ToString, encoding:=Encoding.GetEncoding("GB18030"))
-            McLaunchLog("已更新 launcher_profiles.json")
-        Catch ex As Exception
-            Logger.Warn(ex, "更新 launcher_profiles.json 失败，将在删除文件后重试")
-            Try
-                FileUtils.Delete(McFolderSelected & "launcher_profiles.json")
-                McFolderLauncherProfilesJsonCreate(McFolderSelected)
-                '构建需要替换的 Json 对象
-                Dim ReplaceJsonString As String = "
-                    {
-                      ""authenticationDatabase"": {
-                        ""00000111112222233333444445555566"": {
-                          ""username"": """ & McLoginLoader.Output.Name.Replace("""", "-") & """,
-                          ""profiles"": {
-                            ""66666555554444433333222221111100"": {
-                                ""displayName"": """ & McLoginLoader.Output.Name & """
-                            }
-                          }
-                        }
-                      },
-                      ""clientToken"": """ & McLoginLoader.Output.ClientToken & """,
-                      ""selectedUser"": {
-                        ""account"": ""00000111112222233333444445555566"", 
-                        ""profile"": ""66666555554444433333222221111100""
-                      }
-                    }"
-                Dim ReplaceJson As JObject = ReplaceJsonString.DeserializeJson()
-                '更新文件
-                Dim Profiles As JObject = LegacyFileUtils.ReadAsJson(McFolderSelected & "launcher_profiles.json")
-                Profiles.Merge(ReplaceJson)
-                FileUtils.Write(McFolderSelected & "launcher_profiles.json", Profiles.ToString, encoding:=Encoding.GetEncoding("GB18030"))
-                McLaunchLog("已在删除后更新 launcher_profiles.json")
-            Catch exx As Exception
-                Logger.Error(exx, "更新 launcher_profiles.json 失败")
-            End Try
-        End Try
+        '合并核已迁 C#（PCLCS.Launch.LaunchFiles.MergeLauncherProfiles，原 :1439-1502 决策面，失败容忍语义 1:1）；
+        'Microsoft 守卫与 McFolderLauncherProfilesJsonCreate 依赖留宿主层
+        If McLoginLoader.Output.Type = "Microsoft" Then
+            PCLCS.Launch.LaunchFiles.MergeLauncherProfiles(
+                McFolderSelected, McLoginLoader.Output.Name, McLoginLoader.Output.ClientToken,
+                AddressOf McFolderLauncherProfilesJsonCreate, Sub(Text) McLaunchLog(Text))
+        End If
 
         '更新 options.txt
         Dim SetupFileAddress As String = McInstanceSelected.PathIndie & "options.txt"
@@ -1672,143 +1556,43 @@ IgnoreCustomSkin:
 
     End Sub
     Private Sub McLaunchCustom(Loader As LoaderTask(Of Integer, Integer))
-
-        '获取自定义命令
-        Dim CustomCommandGlobal As String = Settings.Get(Of String)("LaunchAdvanceRun")
-        If CustomCommandGlobal <> "" Then CustomCommandGlobal = ArgumentReplace(CustomCommandGlobal)
-        Dim CustomCommandVersion As String = Settings.Get(Of String)("VersionAdvanceRun", Instance:=McInstanceSelected)
-        If CustomCommandVersion <> "" Then CustomCommandVersion = ArgumentReplace(CustomCommandVersion)
-
-        '输出 bat
-        Try
-            Dim CmdString As String =
-                $"chcp {If(McLaunchEncoding.CodePage = 54936 AndAlso IsGBKEncoding, 936, McLaunchEncoding.CodePage)}>nul" & vbCrLf &
-                "@echo off" & vbCrLf &
-                $"title 启动 - {McInstanceSelected.Name}" & vbCrLf &
-                "echo 游戏正在启动，请稍候。" & vbCrLf &
-                $"cd /D ""{PathUtils.ToShortPath(McInstanceSelected.PathIndie)}""" & vbCrLf &
-                CustomCommandGlobal & vbCrLf &
-                CustomCommandVersion & vbCrLf &
-                $"""{McLaunchJavaSelected.JavaExePath}"" {McLaunchArgument}" & vbCrLf &
-                "echo 游戏已退出。" & vbCrLf &
-                "pause"
-            FileUtils.Write(
-                filePath:=If(CurrentLaunchOptions.SaveBatch, Paths.BaseThenName & "LatestLaunch.bat"),
-                text:=FilterAccessToken(CmdString, "F").Replace("%", "%%"),
-                encoding:=McLaunchEncoding)
-            If CurrentLaunchOptions.SaveBatch IsNot Nothing Then
-                McLaunchLog("导出启动脚本完成，强制结束启动过程")
-                CanceledHint = "导出启动脚本成功！"
-                OpenExplorer(CurrentLaunchOptions.SaveBatch)
-                Loader.Parent.Cancel()
-                Return '导出脚本完成
-            End If
-        Catch ex As Exception
-            Logger.Warn(ex, "输出启动脚本失败")
-            If CurrentLaunchOptions.SaveBatch IsNot Nothing Then Throw ex '直接触发启动失败
-        End Try
-
-        '执行自定义命令
-        If CustomCommandGlobal <> "" Then
-            McLaunchLog("正在执行全局自定义命令：" & CustomCommandGlobal)
-            Dim CustomProcess As Process = Nothing
-            Try
-                CustomProcess = StartProcess(New ProcessStartInfo With {
-                    .FileName = "cmd.exe",
-                    .Arguments = $"/c ""{CustomCommandGlobal}""",
-                    .WorkingDirectory = McFolderSelected,
-                    .UseShellExecute = False,
-                    .CreateNoWindow = True
-                })
-                If Settings.Get(Of Boolean)("LaunchAdvanceRunWait") Then
-                    Do Until CustomProcess.HasExited OrElse Loader.IsCanceled
-                        Thread.Sleep(10)
-                    Loop
-                End If
-            Catch ex As Exception
-                Logger.Error(ex, "执行全局自定义命令失败", LogBehavior.Toast)
-            Finally
-                If CustomProcess IsNot Nothing AndAlso Not CustomProcess.HasExited AndAlso Loader.IsCanceled Then
-                    McLaunchLog("由于取消启动，已强制结束自定义命令 CMD 进程") '#1183
-                    CustomProcess.Kill()
-                End If
-            End Try
-        End If
-        If CustomCommandVersion <> "" Then
-            McLaunchLog("正在执行版本自定义命令：" & CustomCommandVersion)
-            Dim CustomProcess As Process = Nothing
-            Try
-                CustomProcess = StartProcess(New ProcessStartInfo With {
-                    .FileName = "cmd.exe",
-                    .Arguments = $"/c ""{CustomCommandVersion}""",
-                    .WorkingDirectory = McFolderSelected,
-                    .UseShellExecute = False,
-                    .CreateNoWindow = True
-                })
-                If Settings.Get(Of Boolean)("VersionAdvanceRunWait", Instance:=McInstanceSelected) Then
-                    Do Until CustomProcess.HasExited OrElse Loader.IsCanceled
-                        Thread.Sleep(10)
-                    Loop
-                End If
-            Catch ex As Exception
-                Logger.Error(ex, "执行版本自定义命令失败", LogBehavior.Toast)
-            Finally
-                If CustomProcess IsNot Nothing AndAlso Not CustomProcess.HasExited AndAlso Loader.IsCanceled Then
-                    McLaunchLog("由于取消启动，已强制结束自定义命令 CMD 进程") '#1183
-                    CustomProcess.Kill()
-                End If
-            End Try
-        End If
-
+        '决策核已迁 C#（PCLCS.Launch.ProcessRunner.RunCustomCommands，原 :1674-1763 决策面）；此处按宿主读取面转发
+        PCLCS.Launch.ProcessRunner.RunCustomCommands(New PCLCS.Launch.CustomInputs With
+            {.InstanceName = McInstanceSelected.Name,
+             .InstanceIndiePath = McInstanceSelected.PathIndie,
+             .McFolderSelected = McFolderSelected,
+             .JavaExePath = McLaunchJavaSelected.JavaExePath,
+             .Arguments = McLaunchArgument,
+             .Encoding = McLaunchEncoding,
+             .IsGbkEncoding = IsGBKEncoding,
+             .SaveBatch = CurrentLaunchOptions?.SaveBatch,
+             .InstanceSettingsKey = McInstanceSelected.Core.InstanceSettingsKey,
+             .ArgumentReplace = Function(Text As String) ArgumentReplace(Text),
+             .FilterAccessToken = Function(Text As String, FilterChar As Char) FilterAccessToken(Text, FilterChar)},
+            New PCLCS.Launch.ProcessCallbacks With
+            {.IsCanceled = Function() Loader.IsCanceled,
+             .Log = Sub(Text) McLaunchLog(Text),
+             .SaveBatchHint = Sub() CanceledHint = "导出启动脚本成功！",
+             .OpenExplorer = Sub(Path As String) OpenExplorer(Path),
+             .CancelLaunch = Sub() Loader.Parent.Cancel()})
     End Sub
     Private Sub McLaunchRun(Loader As LoaderTask(Of Integer, Process))
-
-        '启动信息
-        Dim StartInfo As New ProcessStartInfo(McLaunchJavaSelected.JavaExePath) '使用 javaw.exe 会导致 #6263
-
-        '设置环境变量
-        Dim PathEnv As String = StartInfo.EnvironmentVariables("Path")
-        Dim Paths As New List(Of String)
-        If Not String.IsNullOrEmpty(PathEnv) Then Paths.AddRange(PathEnv.Split(";"))
-        Paths.Add(PathUtils.ToShortPath(McLaunchJavaSelected.Folder))
-        StartInfo.EnvironmentVariables("Path") = Paths.Distinct.Join(";"c)
-        StartInfo.EnvironmentVariables("appdata") = PathUtils.ToShortPath(McFolderSelected)
-
-        '设置其他参数
-        StartInfo.WorkingDirectory = McInstanceSelected.PathIndie
-        StartInfo.UseShellExecute = False
-        StartInfo.StandardOutputEncoding = McLaunchEncoding
-        StartInfo.StandardErrorEncoding = McLaunchEncoding
-        StartInfo.RedirectStandardOutput = True
-        StartInfo.RedirectStandardError = True
-        StartInfo.CreateNoWindow = True
-        StartInfo.Arguments = McLaunchArgument
-
-        '开始进程
-        Dim GameProcess = StartProcess(StartInfo)
-        McLaunchLog("已启动游戏进程：" & McLaunchJavaSelected.JavaExePath)
-        If Loader.IsCanceled Then
-            McLaunchLog("由于取消启动，已强制结束游戏进程") '#1631
-            GameProcess.Kill()
-            Return
+        '决策核已迁 C#（PCLCS.Launch.ProcessRunner.RunGameProcess，原 :1764-1812 决策面）；此处按宿主读取面转发
+        Dim GameProcess = PCLCS.Launch.ProcessRunner.RunGameProcess(New PCLCS.Launch.GameProcessInputs With
+            {.JavaExePath = McLaunchJavaSelected.JavaExePath,
+             .JavaFolder = McLaunchJavaSelected.Folder,
+             .McFolderSelected = McFolderSelected,
+             .WorkingDirectory = McInstanceSelected.PathIndie,
+             .Arguments = McLaunchArgument,
+             .Encoding = McLaunchEncoding},
+            New PCLCS.Launch.ProcessCallbacks With
+            {.IsCanceled = Function() Loader.IsCanceled,
+             .Log = Sub(Text) McLaunchLog(Text)})
+        '原 :1795-1796：取消路径（返回 Nothing）时不赋 Loader.Output / McLaunchProcess
+        If GameProcess IsNot Nothing Then
+            Loader.Output = GameProcess
+            McLaunchProcess = GameProcess
         End If
-        Loader.Output = GameProcess
-        McLaunchProcess = GameProcess
-
-        '进程优先级处理
-        Try
-            GameProcess.PriorityBoostEnabled = True
-            Select Case Settings.Get(Of Integer)("LaunchArgumentPriority")
-                Case 0 '高
-                    GameProcess.PriorityClass = ProcessPriorityClass.AboveNormal
-                Case 2 '低
-                    GameProcess.PriorityClass = ProcessPriorityClass.BelowNormal
-                Case Else '中
-            End Select
-        Catch ex As Exception
-            Logger.Error(ex, "设置进程优先级失败")
-        End Try
-
     End Sub
     Private Sub McLaunchWait(Loader As LoaderTask(Of Process, Integer))
 
