@@ -21,6 +21,9 @@ Public Module ModNet
         PCLCS.Launch.LoginCores.MojangUuidCacheFolder = Function() PathTemp & "Cache\Uuid"
         PCLCS.Launch.LoginCores.SelectedVanillaMajor = Function() McInstanceSelected?.Version.Vanilla.Major
         PCLCS.Launch.LoginCores.RunInUiProvider = AddressOf RunInUi
+        '微软登录步核（MsLoginSteps）的宿主层接线：OAuth ClientId 与 UI 线程守卫（W3 Task 4）
+        PCLCS.Launch.MsLoginSteps.OAuthClientIdProvider = Function() OAuthClientId
+        PCLCS.Launch.MsLoginSteps.RunInUiProvider = AddressOf RunInUi
     End Sub
 
     ''' <summary>
