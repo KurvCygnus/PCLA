@@ -846,6 +846,8 @@ LoginFinish:
                         MyMsgBox("请根据打开的网页的说明，修改账号的出生日期（至少改为 18 岁以上）。" & vbCrLf &
                                  "在修改成功后等待一分钟，然后再回到 PCL，就可以正常登录了！", "登录提示")
                     End If
+                Case Else
+                    Throw '防御：新增决策未映射宿主弹窗时原样上抛，不静默吞掉
             End Select
             Throw New OperationCanceledException
         End Try

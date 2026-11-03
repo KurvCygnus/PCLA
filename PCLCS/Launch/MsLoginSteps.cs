@@ -11,7 +11,7 @@ public enum MsPollOutcome
     /// <summary>重开设备码流（旧 Result 为 RestartException → 宿主密码登录引导弹窗选「重新登录」）。</summary>
     Retry,
     /// <summary>中止登录（旧 Result 为 Exception，含用户取消的 OperationCanceledException）。</summary>
-    Failure,
+    Failure
 }
 
 /// <summary>轮询回调的返回（旧 :785-802 弹窗终态）；由宿主轮询弹窗构造。</summary>
@@ -76,7 +76,7 @@ public enum MsLoginDecision
     /// <summary>Step5：未购买 Minecraft 或 XGP 已到期（旧 :946-951）。</summary>
     EntitlementMissing,
     /// <summary>Step6：玩家档案不存在（旧 :971-980，404）。</summary>
-    ProfileMissing,
+    ProfileMissing
 }
 
 /// <summary>
@@ -155,17 +155,18 @@ public static class MsLoginSteps
         while (true)   //旧 :777 GoTo Retry 环
         {
             log?.Invoke("开始微软登录步骤 1/6（原始登录）");   //旧 :778 逐字
-            var prepareJson = JsonNode.Parse(NetRequest.NetRequestByClientRetry(DeviceCodeUrl, new NetRequestOptions
+            JsonNode prepareJson = JsonNode.Parse(NetRequest.NetRequestByClientRetry(DeviceCodeUrl, new NetRequestOptions
             {
                 Method = HttpMethod.Post,
                 Content = $"client_id={OAuthClientIdProvider!()}&tenant=/consumers&scope=XboxLive.signin%20offline_access",   //旧 :780 逐字
                 ContentType = "application/x-www-form-urlencoded",
                 Accept = "*/*",   //旧 VB NetRequestByClient 转发面默认 Accept="*/*"
                 RequireJson = true,
-                RunInUi = RunInUiProvider,   //旧 VB 转发面恒传 AddressOf RunInUi（UI 线程守卫）
+                RunInUi = RunInUiProvider   //旧 VB 转发面恒传 AddressOf RunInUi（UI 线程守卫）
             }))!;   //旧 :781 DeserializeJson；响应非 JSON 已被 RequireJson 拦截
-            log?.Invoke("网页登录地址：" + prepareJson["verification_uri"]!.ToString());   //旧 :782 逐字
-            var poll = pollCallback(prepareJson.ToJsonString());   //轮询参数产出：devicecode 响应整体交宿主弹窗
+            //! 逐字移植豁免：旧 :782 的显式 .ToString() 在字符串拼接下冗余（object 重载同样经虚 ToString 求值），故省去显式调用
+            log?.Invoke("网页登录地址：" + prepareJson["verification_uri"]!);   //旧 :782 逐字
+            MsPollResult poll = pollCallback(prepareJson.ToJsonString());   //轮询参数产出：devicecode 响应整体交宿主弹窗
             switch (poll.Outcome)
             {
             case MsPollOutcome.Success:
@@ -201,10 +202,10 @@ public static class MsLoginSteps
                 Headers = new Dictionary<string, string>
                 {
                     ["Accept-Language"] = "en-US,en;q=0.5",   //旧 :813 逐字
-                    ["X-Requested-With"] = "XMLHttpRequest",
+                    ["X-Requested-With"] = "XMLHttpRequest"
                 },
                 TimeoutMs = 25000,   //旧 VB NetRequestByClientMultiple 转发面默认 Timeout=25000
-                RunInUi = RunInUiProvider,
+                RunInUi = RunInUiProvider
             });
         } catch (HttpRequestCodeException ex)
         {
@@ -222,11 +223,11 @@ public static class MsLoginSteps
                     "非常抱歉，该账号已被微软封禁，无法登录。", "登录失败", isWarn: true);   //旧 :825-827 文案逐字
             throw;   //旧 :829 Else Throw
         }
-        var resultJson = JsonNode.Parse(result)!.AsObject();   //旧 :833 DeserializeJson
+        JsonObject resultJson = JsonNode.Parse(result)!.AsObject();   //旧 :833 DeserializeJson
         return new MsTokens
         {
             AccessToken = resultJson["access_token"]!.ToString(),   //旧 :834
-            RefreshToken = resultJson["refresh_token"]!.ToString(),   //旧 :835
+            RefreshToken = resultJson["refresh_token"]!.ToString()   //旧 :835
         };
     }
 
@@ -262,7 +263,7 @@ public static class MsLoginSteps
             Accept = "*/*",   //旧 VB NetRequestByClient 转发面默认
             RequireJson = true,
             TimeoutMs = 25000,   //旧 VB NetRequestByClientMultiple 转发面默认
-            RunInUi = RunInUiProvider,
+            RunInUi = RunInUiProvider
         });
         return JsonNode.Parse(result)!["Token"]!.ToString();   //旧 :852
     }
@@ -297,7 +298,7 @@ public static class MsLoginSteps
                 Accept = "*/*",   //旧 VB NetRequestByClient 转发面默认
                 RequireJson = true,
                 TimeoutMs = 25000,   //旧 VB NetRequestByClientMultiple 转发面默认
-                RunInUi = RunInUiProvider,
+                RunInUi = RunInUiProvider
             });
         } catch (HttpRequestCodeException ex)
         {
@@ -318,11 +319,11 @@ public static class MsLoginSteps
                     "13 岁以上", "12 岁以下", "我不知道");   //旧 :883-894 文案逐字（vbCrLf）；改年龄引导弹窗与网页跳转由宿主映射
             throw;   //旧 :896 Else Throw
         }
-        var resultJson = JsonNode.Parse(result)!;   //旧 :900 DeserializeJson
+        JsonNode resultJson = JsonNode.Parse(result)!;   //旧 :900 DeserializeJson
         return new MsTokens
         {
             AccessToken = resultJson["Token"]!.ToString(),   //旧 :902 XSTSToken
-            Uhs = resultJson["DisplayClaims"]!["xui"]![0]!["uhs"]!.ToString(),   //旧 :903 UHS
+            Uhs = resultJson["DisplayClaims"]!["xui"]![0]!["uhs"]!.ToString()   //旧 :903 UHS
         };
     }
 
@@ -351,7 +352,7 @@ public static class MsLoginSteps
                 ContentType = "application/json",
                 Accept = "*/*",   //旧 VB NetRequestByClient 转发面默认
                 RequireJson = true,
-                RunInUi = RunInUiProvider,
+                RunInUi = RunInUiProvider
             });
         } catch (HttpRequestCodeException ex)
         {
@@ -373,7 +374,8 @@ public static class MsLoginSteps
                 throw;   //旧 :929 Else Throw
             }
         }
-        var resultJson = JsonNode.Parse(result)!;   //旧 :933 DeserializeJson
+        JsonNode resultJson = JsonNode.Parse(result)!;   //旧 :933 DeserializeJson
+        //? TECHDEBT：旧 :936 的 .ToObject(Of Integer) 亦能转换字符串型数值，STJ GetValue<int> 仅收数值 JSON；JSON null/缺键同归 NRE 面（病态响应差异）
         return (
             resultJson["access_token"]!.ToString(),   //旧 :935
             (int) (resultJson["expires_in"]!.GetValue<int>() + DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600));   //旧 :936：GetUnixTimestampUtc（ModBase.vb:840，Unix 秒）+ 提前 1 小时
@@ -381,7 +383,7 @@ public static class MsLoginSteps
 
     /// <summary>
     /// 微软登录步骤 5（旧 :939-957 决策面逐行）：验证微软账号是否持有 Minecraft（这也会刷新 XGP）。
-    /// items 为空抛 <see cref="MsLoginDecisionException"/> 由宿主弹购买引导；响应异常经 Warn 记录原始响应体后原样再抛（旧 :953-956）。
+    /// items 缺失/JSON null/空容器抛 <see cref="MsLoginDecisionException"/> 由宿主弹购买引导；响应异常经 Warn 记录原始响应体后原样再抛（旧 :953-956）。
     /// </summary>
     /// <param name="accessToken">步骤 4 取得的 Minecraft AccessToken。</param>
     /// <param name="log">启动日志（原 McLaunchLog 默认级；null 时静默）。</param>
@@ -395,16 +397,22 @@ public static class MsLoginSteps
             Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer " + accessToken },   //旧 :943
             RequireJson = true,
             TimeoutMs = 25000,   //旧 VB NetRequestByClientMultiple 转发面默认
-            RunInUi = RunInUiProvider,
+            RunInUi = RunInUiProvider
         });
         try
         {
-            var resultJson = JsonNode.Parse(result)!.AsObject();
-            var items = (JsonArray?) resultJson["items"];
-            //? 旧 :946 为 ContainsKey("items") AndAlso items.Any（late-bound）：键缺失/JSON null 时在 Nothing 上抛 NRE，
-            //? 经下方 Catch（旧 :953-956）Warn 后原样再抛；C# 以 null 收敛缺失与非数组，`items!.Count` 等价在该处抛 NRE。
-            //? 病态「非空 JSON 对象 items」旧视为持有（.Any=True），真实端点恒返回数组，差异记 TECHDEBT
-            if (items!.Count == 0)
+            JsonObject resultJson = JsonNode.Parse(result)!.AsObject();
+            JsonNode? items = resultJson["items"];
+            //? 旧 :946 为 ContainsKey("items") AndAlso items.Any（AndAlso 短路）：缺键时不再评估 .Any，
+            //? Not(False) 即走购买弹窗；JSON null 的 JValue 枚举为空（.Any=False）与空容器同弹窗——旧代码无 NRE 路径。
+            //? .Any 按子项计数：非空数组/对象视为持有，标量/空容器/缺键/JSON null 视为未持有
+            var itemCount = items switch
+            {
+                JsonArray array => array.Count,
+                JsonObject obj => obj.Count,
+                _ => 0
+            };
+            if (itemCount == 0)
                 throw new MsLoginDecisionException(MsLoginDecision.EntitlementMissing,
                     "你尚未购买正版 Minecraft，或者 Xbox Game Pass 已到期。", "登录失败", "购买 Minecraft", "取消");   //旧 :947 文案逐字；商店跳转与取消由宿主映射
             return true;
@@ -434,7 +442,7 @@ public static class MsLoginSteps
                 Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer " + accessToken },   //旧 :965
                 RequireJson = true,
                 TimeoutMs = 25000,   //旧 VB NetRequestByClientMultiple 转发面默认
-                RunInUi = RunInUiProvider,
+                RunInUi = RunInUiProvider
             });
         } catch (HttpRequestCodeException ex)
         {
@@ -451,12 +459,12 @@ public static class MsLoginSteps
                 throw;   //旧 :982 Case Else Throw
             }
         }
-        var resultJson = JsonNode.Parse(result)!;   //旧 :985 DeserializeJson
+        JsonNode resultJson = JsonNode.Parse(result)!;   //旧 :985 DeserializeJson
         return new MsProfile
         {
             Uuid = resultJson["id"]!.ToString(),   //旧 :986
             UserName = resultJson["name"]!.ToString(),   //旧 :987
-            ProfileJson = result,   //旧 :988
+            ProfileJson = result   //旧 :988
         };
     }
 

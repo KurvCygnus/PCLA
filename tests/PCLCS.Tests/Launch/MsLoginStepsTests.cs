@@ -27,14 +27,14 @@ public class MsLoginStepsTests : IDisposable
         MsLoginSteps.McLoginUrl = "https://api.minecraftservices.com/authentication/login_with_xbox";
         MsLoginSteps.EntitlementsUrl = "https://api.minecraftservices.com/entitlements/mcstore";
         MsLoginSteps.ProfileUrl = "https://api.minecraftservices.com/minecraft/profile";
-        foreach (var server in _servers) server.Dispose();
+        foreach (LoopbackServer server in _servers) server.Dispose();
     }
 
-    /// <summary>起一个回环假服务器并接管全部七端点（用例结束自动回收）；同时注入假 ClientId。</summary>
-    private LoopbackServer UseEndpoints(Func<HttpListenerRequest, (int, string, Dictionary<string, string>?)> responder)
+    /// <summary>起一个回环假服务器并接管全部七端点（用例结束自动回收，取用经 <c>_servers[^1]</c>）；同时注入假 ClientId。</summary>
+    private void UseEndpoints(Func<HttpListenerRequest, (int, string, Dictionary<string, string>?)> responder)
     {
-        MsLoginSteps.OAuthClientIdProvider = () => "test-client-id";
-        var server = new LoopbackServer();
+        MsLoginSteps.OAuthClientIdProvider = static () => "test-client-id";
+        LoopbackServer server = new();
         _servers.Add(server);
         server.Responder = responder;
         MsLoginSteps.DeviceCodeUrl = server.UrlPrefix + "devicecode";
@@ -44,12 +44,11 @@ public class MsLoginStepsTests : IDisposable
         MsLoginSteps.McLoginUrl = server.UrlPrefix + "mts";
         MsLoginSteps.EntitlementsUrl = server.UrlPrefix + "mcstore";
         MsLoginSteps.ProfileUrl = server.UrlPrefix + "profile";
-        return server;
     }
 
-    private static string? Body(HttpListenerRequest request)
+    private static string Body(HttpListenerRequest request)
     {
-        using var reader = new StreamReader(request.InputStream);
+        using StreamReader reader = new(request.InputStream);
         return reader.ReadToEnd();
     }
 
@@ -67,7 +66,7 @@ public class MsLoginStepsTests : IDisposable
             body = Body(req);
             return (200, """{"device_code":"DEV123","user_code":"ABCD-1234","verification_uri":"https://microsoft.com/link","interval":5}""", null);
         });
-        var flow = MsLoginSteps.BeginDeviceCodeFlow(json =>
+        MsDeviceCode flow = MsLoginSteps.BeginDeviceCodeFlow(json =>
         {
             polledJson = json;
             return MsPollResult.Succeed("AT", "RT");
@@ -77,7 +76,7 @@ public class MsLoginStepsTests : IDisposable
         Assert.Equal("application/x-www-form-urlencoded", contentType);
         Assert.Equal("client_id=test-client-id&tenant=/consumers&scope=XboxLive.signin%20offline_access", body);
         //轮询参数产出：devicecode 响应整体交宿主弹窗（旧 :785 Converter.Content = PrepareJson）
-        var polled = JsonNode.Parse(polledJson!)!;
+        JsonNode polled = JsonNode.Parse(polledJson!)!;
         Assert.Equal("DEV123", polled["device_code"]!.ToString());
         Assert.Equal("ABCD-1234", polled["user_code"]!.ToString());
         Assert.Equal("https://microsoft.com/link", polled["verification_uri"]!.ToString());
@@ -91,7 +90,7 @@ public class MsLoginStepsTests : IDisposable
         var calls = 0;
         UseEndpoints(_ => { calls++; return (200, """{"device_code":"D"}""", null); });
         var polls = 0;
-        var flow = MsLoginSteps.BeginDeviceCodeFlow(_ =>
+        MsDeviceCode flow = MsLoginSteps.BeginDeviceCodeFlow(_ =>
         {
             polls++;
             //首轮宿主密码登录引导选“重新登录”（旧 RestartException 面）→ Retry；次轮成功
@@ -106,8 +105,8 @@ public class MsLoginStepsTests : IDisposable
     public void DeviceFlow_fail_rethrows_callback_exception_verbatim()
     {
         UseEndpoints(static _ => (200, """{"device_code":"D"}""", null));
-        var failure = new Exception("$你拒绝了 PCL 申请的权限……");
-        var ex = Assert.Throws<Exception>(() => MsLoginSteps.BeginDeviceCodeFlow(_ => MsPollResult.Fail(failure)));
+        Exception failure = new("$你拒绝了 PCL 申请的权限……");
+        Exception ex = Assert.Throws<Exception>(() => MsLoginSteps.BeginDeviceCodeFlow(_ => MsPollResult.Fail(failure)));
         Assert.Same(failure, ex);   //旧 :798-799：TypeOf Exception → 原样抛出
     }
 
@@ -116,8 +115,8 @@ public class MsLoginStepsTests : IDisposable
     {
         var calls = 0;
         UseEndpoints(_ => { calls++; return (500, "boom", null); });
-        Assert.ThrowsAny<HttpRequestCodeException>(() =>
-            MsLoginSteps.BeginDeviceCodeFlow(_ => MsPollResult.Succeed("AT", "RT")));
+        Assert.ThrowsAny<HttpRequestCodeException>(static () =>
+            MsLoginSteps.BeginDeviceCodeFlow(static _ => MsPollResult.Succeed("AT", "RT")));
         //旧 NetRequestByClientRetry 语义：前两次均在 5.5 秒内快速失败时不再第三次尝试（快速失败面，与 NetRequestTests 503 用例同真值）
         Assert.Equal(2, calls);
     }
@@ -139,7 +138,7 @@ public class MsLoginStepsTests : IDisposable
             requestedWith = req.Headers["X-Requested-With"];
             return (200, """{"access_token":"AT","refresh_token":"RT","expires_in":3600}""", null);
         });
-        var tokens = MsLoginSteps.RefreshTokens("rt_code");
+        MsTokens tokens = MsLoginSteps.RefreshTokens("rt_code");
         //旧 :811-814：表单体（refresh_token 经 FormUrlEscape）、Accept-Language 与 X-Requested-With 头
         Assert.Equal("client_id=test-client-id&refresh_token=rt_code&grant_type=refresh_token&scope=XboxLive.signin%20offline_access", body);
         Assert.Equal("application/x-www-form-urlencoded", contentType);
@@ -158,7 +157,7 @@ public class MsLoginStepsTests : IDisposable
     public void Refresh_relogin_table_returns_signal(string response)
     {
         UseEndpoints(_ => (400, response, null));
-        var tokens = MsLoginSteps.RefreshTokens("rt");
+        MsTokens tokens = MsLoginSteps.RefreshTokens("rt");
         //旧 :821：返回 ("Relogin", "")，宿主 McLoginMsStart 判定不变
         Assert.Equal("Relogin", tokens.AccessToken);
         Assert.Equal("", tokens.RefreshToken);
@@ -168,7 +167,7 @@ public class MsLoginStepsTests : IDisposable
     public void Refresh_security_interrupt_throws_decision()
     {
         UseEndpoints(static _ => (400, """{"error":"Account security interrupt"}""", null));
-        var ex = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.RefreshTokens("rt"));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.RefreshTokens("rt"));
         Assert.Equal(MsLoginDecision.SecurityInterrupt, ex.Decision);
         Assert.Equal("该账号由于安全问题无法登陆，请前往微软账户页获取更多信息。", ex.Text);   //旧 :823 文案逐字
         Assert.Equal("登录失败", ex.Title);
@@ -180,7 +179,7 @@ public class MsLoginStepsTests : IDisposable
     public void Refresh_service_abuse_throws_decision()
     {
         UseEndpoints(static _ => (400, """{"error":"service abuse"}""", null));
-        var ex = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.RefreshTokens("rt"));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.RefreshTokens("rt"));
         Assert.Equal(MsLoginDecision.ServiceAbuse, ex.Decision);
         Assert.Equal("非常抱歉，该账号已被微软封禁，无法登录。", ex.Text);   //旧 :826 文案逐字
         Assert.Equal("登录失败", ex.Title);
@@ -191,7 +190,7 @@ public class MsLoginStepsTests : IDisposable
     public void Refresh_other_error_rethrows()
     {
         UseEndpoints(static _ => (400, """{"error":"some random error"}""", null));
-        Assert.ThrowsAny<HttpRequestCodeException>(() => MsLoginSteps.RefreshTokens("rt"));   //旧 :829 Else Throw
+        Assert.ThrowsAny<HttpRequestCodeException>(static () => MsLoginSteps.RefreshTokens("rt"));   //旧 :829 Else Throw
     }
 
     [Fact]
@@ -199,7 +198,7 @@ public class MsLoginStepsTests : IDisposable
     {
         var calls = 0;
         UseEndpoints(_ => ++calls == 1 ? (500, "first fails", null) : (200, """{"access_token":"AT2","refresh_token":"RT2"}""", null));
-        var tokens = MsLoginSteps.RefreshTokens("rt");
+        MsTokens tokens = MsLoginSteps.RefreshTokens("rt");
         Assert.Equal(2, calls);   //旧 :810-814 ThreadCount:=2：线程 1 失败后线程 2 胜出
         Assert.Equal(("AT2", "RT2"), (tokens.AccessToken, tokens.RefreshToken));
     }
@@ -272,7 +271,7 @@ public class MsLoginStepsTests : IDisposable
             body = Body(req);
             return (200, """{"Token":"XSTST","DisplayClaims":{"xui":[{"uhs":"UHS1"}]}}""", null);
         });
-        var tokens = MsLoginSteps.XstsAuthorize("XBLT");
+        MsTokens tokens = MsLoginSteps.XstsAuthorize("XBLT");
         //旧 :858-865 逐字；换行随源文件行尾（旧 VB 源为 CRLF），比较不区分行尾
         Assert.Equal("""
             {
@@ -297,7 +296,7 @@ public class MsLoginStepsTests : IDisposable
     public void Xsts_error_code_table_maps_to_decisions(string errorCode, MsLoginDecision decision)
     {
         UseEndpoints(_ => (401, "{\"XErr\":" + errorCode + ",\"Message\":\"Whoa body\"}", null));
-        var ex = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.XstsAuthorize("XBLT"));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.XstsAuthorize("XBLT"));
         Assert.Equal(decision, ex.Decision);
     }
 
@@ -306,22 +305,22 @@ public class MsLoginStepsTests : IDisposable
     {
         //四档弹窗规格逐字（旧 :873/:876/:881/:884-885 的文案、标题、按钮与 IsWarn），宿主按此映射 MyMsgBox
         UseEndpoints(static _ => (401, "2148916227", null));
-        var banned = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.XstsAuthorize("XBLT"));
+        MsLoginDecisionException banned = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.XstsAuthorize("XBLT"));
         Assert.Equal(("该账号似乎已被微软封禁，无法登录。", "登录失败", "我知道了", null, null, true),
             (banned.Text, banned.Title, banned.Button1, banned.Button2, banned.Button3, banned.IsWarn));
 
         _servers[^1].Responder = static _ => (401, "2148916233", null);
-        var notRegistered = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.XstsAuthorize("XBLT"));
+        MsLoginDecisionException notRegistered = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.XstsAuthorize("XBLT"));
         Assert.Equal(("你尚未注册 Xbox 账户，请在注册后再登录。", "登录提示", "注册", "取消", null, false),
             (notRegistered.Text, notRegistered.Title, notRegistered.Button1, notRegistered.Button2, notRegistered.Button3, notRegistered.IsWarn));
 
         _servers[^1].Responder = static _ => (401, "2148916235", null);
-        var region = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.XstsAuthorize("XBLT"));
+        MsLoginDecisionException region = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.XstsAuthorize("XBLT"));
         Assert.Equal(("你的网络所在的国家或地区无法登录微软账号。\r\n请使用加速器或 VPN，然后再试。", "登录失败", "我知道了", null, null, false),
             (region.Text, region.Title, region.Button1, region.Button2, region.Button3, region.IsWarn));
 
         _servers[^1].Responder = static _ => (401, "2148916238", null);
-        var age = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.XstsAuthorize("XBLT"));
+        MsLoginDecisionException age = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.XstsAuthorize("XBLT"));
         Assert.Equal(("该账号年龄不足，你需要先修改出生日期，然后才能登录。\r\n该账号目前填写的年龄是否在 13 岁以上？", "登录提示", "13 岁以上", "12 岁以下", "我不知道", false),
             (age.Text, age.Title, age.Button1, age.Button2, age.Button3, age.IsWarn));
     }
@@ -330,7 +329,7 @@ public class MsLoginStepsTests : IDisposable
     public void Xsts_other_error_rethrows()
     {
         UseEndpoints(static _ => (401, """{"XErr":1}""", null));
-        Assert.ThrowsAny<HttpRequestCodeException>(() => MsLoginSteps.XstsAuthorize("XBLT"));   //旧 :896 Else Throw
+        Assert.ThrowsAny<HttpRequestCodeException>(static () => MsLoginSteps.XstsAuthorize("XBLT"));   //旧 :896 Else Throw
     }
 
     #endregion
@@ -347,7 +346,7 @@ public class MsLoginStepsTests : IDisposable
             contentType = req.Headers["Content-Type"];
             return (200, """{"access_token":"MCAT","expires_in":86400}""", null);
         });
-        var (accessToken, expiresAt) = MsLoginSteps.MinecraftToken("XSTST", "UHS1");
+        (string accessToken, int expiresAt) = MsLoginSteps.MinecraftToken("XSTST", "UHS1");
         //旧 :910：{"identityToken":"XBL3.0 x=UHS;XSTST"}
         Assert.Equal("""{"identityToken":"XBL3.0 x=UHS1;XSTST"}""", body);
         Assert.Equal("application/json", contentType);
@@ -361,7 +360,7 @@ public class MsLoginStepsTests : IDisposable
     public void McToken_403_throws_verbatim_red_text()
     {
         UseEndpoints(static _ => (403, "forbidden", null));
-        var ex = Assert.Throws<Exception>(() => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));
+        Exception ex = Assert.Throws<Exception>(static () => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));
         Assert.Equal("$当前 IP 的登录尝试异常。\r\n如果你使用了 VPN 或加速器，请把它们关掉或更换节点后再试！", ex.Message);   //旧 :921 逐字
     }
 
@@ -369,7 +368,7 @@ public class MsLoginStepsTests : IDisposable
     public void McToken_503_throws_verbatim_red_text()
     {
         UseEndpoints(static _ => (503, "unavailable", null));
-        var ex = Assert.Throws<Exception>(() => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));
+        Exception ex = Assert.Throws<Exception>(static () => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));
         Assert.Equal("$Mojang 服务器出现问题，请稍后再试。\r\n你的网络是正常的，PCL 也是正常的，是 Mojang 出问题了……", ex.Message);   //旧 :924 逐字
     }
 
@@ -377,7 +376,7 @@ public class MsLoginStepsTests : IDisposable
     public void McToken_account_suspended_throws_decision()
     {
         UseEndpoints(static _ => (400, """{"error":"ACCOUNT_SUSPENDED"}""", null));   //#8655
-        var ex = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));
         Assert.Equal(MsLoginDecision.AccountSuspended, ex.Decision);
         Assert.Equal("该账号似乎已被微软封禁，无法登录。", ex.Text);   //旧 :926 文案逐字
         Assert.Equal("登录失败", ex.Title);
@@ -388,7 +387,7 @@ public class MsLoginStepsTests : IDisposable
     public void McToken_other_error_rethrows()
     {
         UseEndpoints(static _ => (400, """{"error":"other"}""", null));
-        Assert.ThrowsAny<HttpRequestCodeException>(() => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));   //旧 :929 Else Throw
+        Assert.ThrowsAny<HttpRequestCodeException>(static () => MsLoginSteps.MinecraftToken("XSTST", "UHS1"));   //旧 :929 Else Throw
     }
 
     #endregion
@@ -415,19 +414,31 @@ public class MsLoginStepsTests : IDisposable
     public void Entitlements_empty_items_throws_purchase_decision()
     {
         UseEndpoints(static _ => (200, """{"items":[]}""", null));
-        var ex = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.EntitlementsOk("MCAT"));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.EntitlementsOk("MCAT"));
         Assert.Equal(MsLoginDecision.EntitlementMissing, ex.Decision);
         Assert.Equal("你尚未购买正版 Minecraft，或者 Xbox Game Pass 已到期。", ex.Text);   //旧 :947 文案逐字
         Assert.Equal("登录失败", ex.Title);
         Assert.Equal(("购买 Minecraft", "取消", null, false), (ex.Button1, ex.Button2, ex.Button3, ex.IsWarn));
     }
 
-    [Fact]
-    public void Entitlements_missing_items_key_throws_without_decision()
+    [Theory]
+    [InlineData("""{"foo":1}""")]   //缺键：旧 :946 AndAlso 短路（ContainsKey=False 即不再评估 .Any）→ Not(False) 走购买弹窗
+    [InlineData("""{"items":null}""")]   //JSON null：JValue 空枚举 .Any=False → 购买弹窗（旧代码无 NRE 路径）
+    public void Entitlements_missing_or_null_items_throw_purchase_decision(string response)
     {
-        //旧 :946：ContainsKey 短路后 late-bound .Any 在 Nothing 上抛 NRE → 经 :953-956 Warn 后原样再抛（不走弹窗）
-        UseEndpoints(static _ => (200, """{"foo":1}""", null));
-        Assert.Throws<NullReferenceException>(() => MsLoginSteps.EntitlementsOk("MCAT"));
+        UseEndpoints(_ => (200, response, null));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.EntitlementsOk("MCAT"));
+        Assert.Equal(MsLoginDecision.EntitlementMissing, ex.Decision);
+        Assert.Equal("你尚未购买正版 Minecraft，或者 Xbox Game Pass 已到期。", ex.Text);   //旧 :947 文案逐字
+        Assert.Equal(("购买 Minecraft", "取消", null, false), (ex.Button1, ex.Button2, ex.Button3, ex.IsWarn));
+    }
+
+    [Fact]
+    public void Entitlements_non_empty_object_items_count_as_held()
+    {
+        //旧 :946 的 .Any 按子项计数：非空 JSON 对象亦视为持有——锁定 C# 与该真值一致
+        UseEndpoints(static _ => (200, """{"items":{"sku":"GAME"}}""", null));
+        Assert.True(MsLoginSteps.EntitlementsOk("MCAT"));
     }
 
     [Fact]
@@ -435,7 +446,7 @@ public class MsLoginStepsTests : IDisposable
     {
         //旧 RequireJson:=True：非 JSON 在请求面被拦（FormatException），不经 :953 的 Warn 包装
         UseEndpoints(static _ => (200, "not json", null));
-        Assert.Throws<FormatException>(() => MsLoginSteps.EntitlementsOk("MCAT"));
+        Assert.Throws<FormatException>(static () => MsLoginSteps.EntitlementsOk("MCAT"));
     }
 
     #endregion
@@ -452,7 +463,7 @@ public class MsLoginStepsTests : IDisposable
             authorization = req.Headers["Authorization"];
             return (200, raw, null);
         });
-        var profile = MsLoginSteps.Profile("MCAT");
+        MsProfile profile = MsLoginSteps.Profile("MCAT");
         Assert.Equal("Bearer MCAT", authorization);
         Assert.Equal(("E3B7C9D2A1B4F6058972C4D1E0A3B5C7", "Steve", raw), (profile.Uuid, profile.UserName, profile.ProfileJson));
     }
@@ -461,7 +472,7 @@ public class MsLoginStepsTests : IDisposable
     public void Profile_404_throws_create_profile_decision()
     {
         UseEndpoints(static _ => (404, """{"title":"NotFound"}""", null));
-        var ex = Assert.Throws<MsLoginDecisionException>(() => MsLoginSteps.Profile("MCAT"));
+        MsLoginDecisionException ex = Assert.Throws<MsLoginDecisionException>(static () => MsLoginSteps.Profile("MCAT"));
         Assert.Equal(MsLoginDecision.ProfileMissing, ex.Decision);
         Assert.Equal("请先创建 Minecraft 玩家档案，然后再重新登录。", ex.Text);   //旧 :975 文案逐字
         Assert.Equal("登录失败", ex.Title);
@@ -472,7 +483,7 @@ public class MsLoginStepsTests : IDisposable
     public void Profile_429_throws_verbatim_red_text()
     {
         UseEndpoints(static _ => (429, "too many", null));
-        var ex = Assert.Throws<Exception>(() => MsLoginSteps.Profile("MCAT"));
+        Exception ex = Assert.Throws<Exception>(static () => MsLoginSteps.Profile("MCAT"));
         Assert.Equal("$登录尝试太过频繁，请等待几分钟后再试！", ex.Message);   //旧 :970 逐字
     }
 
@@ -480,7 +491,7 @@ public class MsLoginStepsTests : IDisposable
     public void Profile_other_error_rethrows()
     {
         UseEndpoints(static _ => (500, "server error", null));
-        Assert.ThrowsAny<HttpRequestCodeException>(() => MsLoginSteps.Profile("MCAT"));   //旧 :982 Case Else Throw
+        Assert.ThrowsAny<HttpRequestCodeException>(static () => MsLoginSteps.Profile("MCAT"));   //旧 :982 Case Else Throw
     }
 
     #endregion
