@@ -157,8 +157,10 @@ public static class LaunchFiles
     private static void MergeLauncherProfilesCore(string filePath, JsonObject replaceJson, Action<string>? log, string successLog)
     {
         //更新文件
-        //? 与旧 :1465 的 JObject 直转一致：文件缺失/损坏/根非对象时在此抛出，交由失败容忍链处理
-        var profiles = JsonNode.Parse(FileUtils.ReadAsString(filePath)) as JsonObject
+        //? 读取经 FileUtils.ReadAsJson 宽松解析（DocumentOptions：跳过注释、允许尾逗号，与旧 Newtonsoft 一致）——
+        //? 严格 Parse 会把带注释/尾逗号的用户文件当损坏清掉重建（数据丢失形偏差，评审修正项）
+        //? 与旧 :1465 的 JObject 直转一致：文件缺失/纯空白（解析为 null）/根非对象时在此抛出，交由失败容忍链处理
+        var profiles = FileUtils.ReadAsJson(filePath) as JsonObject
             ?? throw new InvalidCastException($"launcher_profiles.json 的根不是 JSON 对象（{filePath}）");
         MergeJson(profiles, replaceJson); //与 JObject.Merge 默认语义对齐（见 MergeJson 注）
         //? net8 差异（随 Task 1 编码注）：net8 未注册 CodePagesEncodingProvider 时 GetEncoding("GB18030") 抛出；

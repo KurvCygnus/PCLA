@@ -193,13 +193,16 @@ public class LaunchFilesTests : IDisposable
         Assert.Contains(logs, line => line.Contains("已更新 launcher_profiles.json"));
     }
 
-    [Fact]
-    public void MergeLauncherProfiles_recovers_from_corruption()
+    [Theory]
+    [InlineData("{invalid json")] //损坏 JSON
+    [InlineData("   \r\n\t ")] //纯空白：旧 Newtonsoft 解析为 Nothing → 合并处 NRE 进容忍链
+    [InlineData("[1,2]")] //根非对象：旧 JObject 直转失败进容忍链
+    public void MergeLauncherProfiles_recovers_from_corruption(string content)
     {
         //:1469-1501：合并失败 → 删除后经创建回调重建并重试
         var folder = _root + "corrupt" + Path.DirectorySeparatorChar;
         Directory.CreateDirectory(folder);
-        File.WriteAllText(folder + "launcher_profiles.json", "{invalid json");
+        File.WriteAllText(folder + "launcher_profiles.json", content);
         var logs = new List<string>();
 
         LaunchFiles.MergeLauncherProfiles(folder, "玩家", "token-1", CreateIfMissing, log: logs.Add);
@@ -211,9 +214,28 @@ public class LaunchFilesTests : IDisposable
     }
 
     [Fact]
+    public void MergeLauncherProfiles_preserves_comments_and_trailing_commas()
+    {
+        //宽松解析对齐旧 Newtonsoft（LegacyJsonExtensions：跳过注释、允许尾逗号）——
+        //此类文件不得触发容忍链清掉重建（否则用户自定义 launcher_profiles 被清除，数据丢失形偏差）
+        var folder = _root + "lenient" + Path.DirectorySeparatorChar;
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(folder + "launcher_profiles.json",
+            "// 自定义注释\r\n{\"profiles\":{\"custom\":{\"name\":\"keep-me\"}},}\r\n");
+
+        LaunchFiles.MergeLauncherProfiles(folder, "玩家", "token-2", CreateIfMissing, log: null);
+
+        Assert.Equal(1, _createCalls); //文件已存在，回调短路，未走重建
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(folder + "launcher_profiles.json"))!.AsObject();
+        Assert.Equal("keep-me", json["profiles"]!["custom"]!["name"]!.ToString()); //用户自定义保留
+        Assert.Equal("token-2", json["clientToken"]!.ToString()); //合并照常生效
+    }
+
+    [Fact]
     public void MergeLauncherProfiles_swallows_unrecoverable_failure()
     {
         //:1499-1501：重试仍失败 → 仅记错误日志，不向上抛
+        //（FileUtils.Delete 对不存在的文件为 no-op 返回 null，属核心库保证；首删后文件不存在，重试链在创建回调处失败）
         var folder = _root + "unrecoverable" + Path.DirectorySeparatorChar;
         Directory.CreateDirectory(folder);
 
