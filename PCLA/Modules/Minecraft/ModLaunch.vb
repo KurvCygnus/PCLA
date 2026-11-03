@@ -1232,11 +1232,21 @@ Retry:
              .AccessToken = McLoginLoader.Output.AccessToken}
     End Function
 
+    '继承链父版本解析器（旧 :1204/:1335 的 Function(name) (New McInstance(name)).JsonObject… 等价面）：
+    'ResolveVersionFolder（McInstance.New :471 的路径解析）→ InstanceCore(Folder, McFolderSelected, Folder, RunInUi)
+    '（McInstance.New :472，不自动 Load）→ .VersionJson 惰性读盘 + HMCL/inherit 合并（旧 .JsonObject 快照的源，
+    'ModMinecraft.vb:397-399 即 _core.VersionJson 转 JObject）
+    Private Function McLaunchResolveParent(Name As String) As System.Text.Json.Nodes.JsonObject
+        Dim Folder = Instances.InstancePaths.ResolveVersionFolder(Name, McFolderSelected)
+        Return New Instances.InstanceCore(Folder, McFolderSelected, Folder, AddressOf RunInUi).VersionJson
+    End Function
+
     'JVM 段的宿主读取面（原 :1192-1323 直接读取的模块状态收敛于此）
     Private Function McLaunchJvmInputs() As PCLCS.Launch.JvmInputs
         Return New PCLCS.Launch.JvmInputs With
             {.Instance = McInstanceSelected.Core,
              .Environment = New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
+             .ResolveParent = AddressOf McLaunchResolveParent,
              .LaunchJava = McLaunchJavaSelected,
              .IsGbkEncoding = IsGBKEncoding,
              .PathPure = PathPure.Value,
@@ -1257,6 +1267,7 @@ Retry:
         Return New PCLCS.Launch.GameInputs With
             {.Instance = McInstanceSelected.Core,
              .Environment = New PCLCS.Minecraft.Launch.RuleEnvironment(My.Computer.Info.OSVersion),
+             .ResolveParent = AddressOf McLaunchResolveParent,
              .Version = McInstanceSelected.Version,
              .ArgumentReplace = Function(Text As String) ArgumentReplace(Text),
              .ExtraGameArgs = CurrentLaunchOptions.ExtraGameArgs,

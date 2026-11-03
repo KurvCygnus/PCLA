@@ -126,7 +126,8 @@ public class LaunchArgumentsTests : IDisposable
         var instance = NewInstance("segtest", BaseJson("segtest",
             Jvm("-Dtest.jvm=1"), Game("--username", "${auth_player_name}"),
             "org.lwjgl:lwjgl:3.4.1"));
-        var inputs = NewJvmInputs(instance, NewJava(18, "UTF-8"), NewLogin());
+        SettingsService.Set("VersionServerNide", "nide.example.org", instance.InstanceSettingsKey);
+        var inputs = NewJvmInputs(instance, NewJava(18, "UTF-8"), NewLogin("Nide"));
 
         var result = LaunchArguments.BuildJvmArguments(inputs);
 
@@ -138,6 +139,8 @@ public class LaunchArgumentsTests : IDisposable
             "-Djdk.lang.Process.allowAmbiguousCommands=True",
             "-Dfml.ignoreInvalidMinecraftCertificates=True",
             "-Dfml.ignorePatchDiscrepancies=True",
+            // 统一通行证：Nide 登录（:1218-1220，服务器取版本设置）
+            "-javaagent:\"${pure_directory}\\nide8auth.jar\"=\"nide.example.org\"",
             // JLW：Java 18 ≥ 9 需要 --add-exports 对，再 tmpdir
             "--add-exports",
             "cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED",
@@ -165,6 +168,45 @@ public class LaunchArgumentsTests : IDisposable
             // JLW -jar 必须在最后
             "-jar",
             inputs.JavaWrapperJar()
+        }, result);
+    }
+
+    [Fact]
+    public void Jvm_arguments_resolve_inherits_from_chain()
+    {
+        // Fix 轮接线锚定（ModLaunch.vb McLaunchResolveParent）：BuildJvmArguments 必须把宿主解析器传入
+        // CollectJvm（:1204）——解析器缺失时 BuildChain 对一切含 inheritsFrom 的版本（Forge 为主）NRE。
+        // 解析器形态与宿主一致：ResolveVersionFolder → InstanceCore(folder, mcFolder, folder) → .VersionJson（惰性读盘）。
+        Directory.CreateDirectory(VersionDir("parent"));
+        File.WriteAllText(Path.Combine(VersionDir("parent"), "parent.json"),
+            BaseJson("parent", Jvm("-Dparent.jvm=1")).ToJsonString());
+        var child = BaseJson("child", Jvm("-Dchild.jvm=1"));
+        child["inheritsFrom"] = "parent";
+        var childCore = NewInstance("child", child);
+
+        // 与 ModLaunch.vb McLaunchResolveParent 相同的构造（测试无 RunInUi，null 即非 UI 线程读取重试语义）
+        Func<string, JsonObject?> resolveParent = name =>
+        {
+            var folder = InstancePaths.ResolveVersionFolder(name, _root);
+            return new InstanceCore(folder, _root, folder).VersionJson;
+        };
+        var inputs = NewJvmInputs(childCore, NewJava(17, "UTF-8"), NewLogin());
+        inputs.ResolveParent = resolveParent;
+        SettingsService.Set("LaunchAdvanceJvm", "");
+        SettingsService.Set("LaunchAdvanceDisableJLW", true);
+        SettingsService.Set("LaunchAdvanceGC", 3);
+
+        var result = LaunchArguments.BuildJvmArguments(inputs);
+
+        // InstanceCore.VersionJson 已做 inherit 合并（MergeInheritedVersions 数组拼接，父在前子在后），
+        // CollectJvm 的链走行再取父级一次，最终经 JVM 去重收敛：父级参数在前、子级在后（旧 VB 同构行为）。
+        Assert.Equal(new[]
+        {
+            "-Dparent.jvm=1", "-Dchild.jvm=1",
+            "-Xmx2048m",
+            "-Dlog4j2.formatMsgNoLookups=true",
+            "-Dsun.stdout.encoding=utf-8",   // Java 17 < 19 用 sun.*，FileEncodingName UTF-8 → utf-8
+            "-Dsun.stderr.encoding=utf-8"
         }, result);
     }
 

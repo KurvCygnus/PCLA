@@ -329,6 +329,10 @@ public static class LaunchArguments
         args.Add("-Dlog4j2.formatMsgNoLookups=true");
 
         //编码（#4700、#5892、#5909、#6934、#8950、#9241）
+        //? net8 差异（Fix 评审项，账本已记）：net48 为运行目标；net8（仅 AOT 冒烟）未注册 CodePagesEncodingProvider
+        //? 时，GBK 等 exotic 代码页在下方 GetEncoding 处抛出，ANSICodePage 回退同样会抛且不受保护。
+        //? 如需 net8 运行：启动时 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)（随共享框架分发，
+        //? 无需 NuGet）；当前按约束不接线、不加包。
         var useCompatEncoding = inputs.LaunchJava.Version!.Major >= 18;
         var encodingName = useCompatEncoding
             ? inputs.LaunchJava.NativeEncodingName //Java 18+ 会添加 COMPAT，因此 Java 会回退到 native.encoding
@@ -534,6 +538,11 @@ public static class LaunchArguments
         }
 
         //窗口尺寸
+        //? 舍入语义（Fix 评审项，账本条目"舍入核验"）：旧 VB 的 Size 解析为 System.Windows.Size（Double；
+        //? PCLA.vbproj:727 项目级导入 System.Windows，System.Drawing 仅为 Reference 未导入，MeloongCore 无自定义
+        //? Size），全程 Double 运算、仅在下方 Yield 处 Math.Round（银行家舍入 ToEven）一次，与本 C# 面逐位一致——
+        //? 中间无取整，"Case 2 + DPI 叠加最坏差 1px"的中间舍入分歧在当前工程解析下不存在；若未来把整型 Size
+        //? （如 System.Drawing）引入导入面，旧语义将出现中间舍入（.Width /= … 处两次银行家舍入），届时须复核此处。
         double targetWidth, targetHeight;
         switch (SettingsService.Get<int>("LaunchArgumentWindowType"))
         {
