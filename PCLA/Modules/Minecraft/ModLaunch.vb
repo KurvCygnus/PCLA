@@ -120,7 +120,7 @@ Public Module ModLaunch
     Public McLaunchLoader As New LoaderTask(Of McLaunchOptions, Object)("Loader Launch", AddressOf McLaunchStart) With {.OnStateChanged = AddressOf McLaunchState}
     Public McLaunchLoaderReal As LoaderCombo(Of Object)
     Public McLaunchProcess As Process
-    Public McLaunchWatcher As Watcher
+    Public McLaunchWatcher As PCLCS.Watch.Watcher
     Private Sub McLaunchState(Loader As LoaderTask(Of McLaunchOptions, Object))
         Select Case McLaunchLoader.State
             Case LoadState.Finished, LoadState.Failed, LoadState.Waiting, LoadState.Canceled
@@ -1370,15 +1370,18 @@ IgnoreCustomSkin:
         If WindowTitle = "" Then WindowTitle = Settings.Get(Of String)("LaunchArgumentTitle")
         WindowTitle = ArgumentReplace(WindowTitle, ReplaceTime:=False)
 
-        '初始化等待
-        Dim Watcher As New Watcher(Loader, McInstanceSelected, WindowTitle)
+        '初始化等待（看门狗核已迁 C#：PCLCS.Watch.Watcher，旧 ModWatcher.vb:66-116 逐行；
+        '宿主面读取 Loader/Instance，崩溃分析委托目标留 VB——Instance 于构造时冻结）
+        Dim LaunchInstance = McInstanceSelected
+        Dim Watcher As New PCLCS.Watch.Watcher(New ModWatcher.WatcherHost(Loader, LaunchInstance), WindowTitle,
+            Sub(Watched) ModWatcher.RunCrashAnalyzer(Watched, LaunchInstance))
         McLaunchWatcher = Watcher
 
-        '等待
-        Do While Watcher.State = Watcher.MinecraftState.Loading
+        '等待（枚举经类型限定访问，避免 BC42025 实例访问嵌套类型）
+        Do While Watcher.State = PCLCS.Watch.Watcher.MinecraftState.Loading
             Thread.Sleep(100)
         Loop
-        If Watcher.State = Watcher.MinecraftState.Crashed Then
+        If Watcher.State = PCLCS.Watch.Watcher.MinecraftState.Crashed Then
             Throw New OperationCanceledException
         End If
 
