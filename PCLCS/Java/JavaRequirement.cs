@@ -324,8 +324,9 @@ public static class JavaRequirement
 
     /// <summary>
     /// 版本独立设置读取（宿主层 Settings.vb:140-149 的 instanceKey 面：先懒式导入该实例的旧设置，再经服务读取；导入失败不阻断读取）。
+    /// internal：Task 6 JavaSelection 的实例设置读取共用同一 instanceKey 面。
     /// </summary>
-    private static T GetInstanceSetting<T>(string key, string instanceKey)
+    internal static T GetInstanceSetting<T>(string key, string instanceKey)
     {
         try
         {
