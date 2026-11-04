@@ -467,6 +467,11 @@ public sealed class Watcher
                 var titleBuilder = new StringBuilder(512);
                 GetWindowText(hWnd, titleBuilder, titleBuilder.Capacity);
                 var title = titleBuilder.ToString();
+                //有的 Mod 可以修改窗口标题，所以不能检测是否为 Minecraft 打头，这并不准确
+                //部分版本会搞个 GLFW message window，高版本还有个 Hidden Utility Window，都要反选
+                //? 次序对齐旧 :325-336：标题反选先于进程读取（否则白名单窗每拍多付一次 GetProcessById，
+                //? 且对将被反选的窗口误报「枚举 Minecraft 窗口进程失败」）；注入路径同链，过滤结果等价
+                if (IsRejectedWindowTitle(title)) return true;
                 //获取窗口关联的进程
                 GetWindowThreadProcessId(hWnd, out var processId);
                 DateTime? processStartTime;
@@ -495,10 +500,7 @@ public sealed class Watcher
             if (window.ClassName == "SDL_app" && !window.IsVisible) return;
             //获取窗口标题名
             var windowText = window.Title;
-            //有的 Mod 可以修改窗口标题，所以不能检测是否为 Minecraft 打头，这并不准确
-            //部分版本会搞个 GLFW message window，高版本还有个 Hidden Utility Window，都要反选
-            if (string.IsNullOrWhiteSpace(windowText) || windowText == "SDL_app" || windowText == "PopupMessageWindow" ||
-               windowText.StartsWithF("GLFW") || windowText.EndsWithF("Hidden Utility Window")) return;
+            if (IsRejectedWindowTitle(windowText)) return;
             //获取窗口关联的进程
             try
             {
@@ -517,6 +519,12 @@ public sealed class Watcher
     /// <summary>类名白名单（旧 :321 逐字；Win32 路径的前置惰性读取与注入路径的过滤链共用）。</summary>
     private static bool IsMinecraftWindowClass(string className) =>
         className == "GLFW30" || className == "SDL_app" || className == "LWJGL" || className == "SunAwtFrame";
+
+    /// <summary>标题反选（旧 :330-331 逐字；Win32 路径的前置惰性读取与注入路径的过滤链共用）。</summary>
+    //! 逐字移植豁免：Rider 建议合并为逻辑模式，保持 VB OrElse 链逐字形状（旧 :330-331）
+    private static bool IsRejectedWindowTitle(string windowText) =>
+        string.IsNullOrWhiteSpace(windowText) || windowText == "SDL_app" || windowText == "PopupMessageWindow" ||
+        windowText.StartsWithF("GLFW") || windowText.EndsWithF("Hidden Utility Window");
 
     //! Win32 声明随类迁移（旧 :346-353 Declare 逐字；VB 的 Integer hWnd 收紧为 IntPtr——HWND 值域在 32 位内，行为一致；
     //! VB Declare 的 Boolean 经 VARIANT_BOOL（2 字节）marshaling，此处以 4 字节 BOOL 对齐 Win32 约定，使用的返回值（IsWindowVisible）等价）

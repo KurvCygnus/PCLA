@@ -1371,10 +1371,9 @@ IgnoreCustomSkin:
         WindowTitle = ArgumentReplace(WindowTitle, ReplaceTime:=False)
 
         '初始化等待（看门狗核已迁 C#：PCLCS.Watch.Watcher，旧 ModWatcher.vb:66-116 逐行；
-        '宿主面读取 Loader/Instance，崩溃分析委托目标留 VB——Instance 于构造时冻结）
-        Dim LaunchInstance = McInstanceSelected
-        Dim Watcher As New PCLCS.Watch.Watcher(New ModWatcher.WatcherHost(Loader, LaunchInstance), WindowTitle,
-            Sub(Watched) ModWatcher.RunCrashAnalyzer(Watched, LaunchInstance))
+        '经模块工厂构造：嵌套类型实例化与委托创建均不触发模块初始化，工厂的模块成员调用保证 Sub New 回调接线先行——
+        '旧 :82 经模块内 WatcherStateChanged 调用隐式完成的同一保证；Instance 于调用时冻结）
+        Dim Watcher As PCLCS.Watch.Watcher = ModWatcher.CreateWatcher(Loader, McInstanceSelected, WindowTitle)
         McLaunchWatcher = Watcher
 
         '等待（枚举经类型限定访问，避免 BC42025 实例访问嵌套类型）

@@ -107,10 +107,22 @@ Public Module ModWatcher
     End Class
 
     ''' <summary>
-    ''' 崩溃分析委托目标（原 Watcher.Crashed :363-377 的分析段；CrashAnalyzer 为 W4 域留 VB）。
-    ''' 2 秒延迟与「崩溃分析开始」日志在 C# 核内，此处仅编排分析器。
+    ''' 看门狗工厂（ModLaunch.vb:1374 构造点的收敛入口）。
+    ''' 时序保证：模块成员调用先于方法体运行本模块 Sub New 的宿主回调接线——嵌套类型实例化（New WatcherHost）
+    ''' 与委托创建（ldftn）均不触发模块初始化，直连 C# 构造会丢失会话首个看门狗的全部宿主回调
+    ''' （构造/阶段/窗口/退出日志经 ?.Invoke 静默吞掉、汇总翻转守卫闩死致 MinecraftStart/Stop 永不运行）；
+    ''' 旧 :82 经模块内 WatcherStateChanged 调用隐式完成同一保证。Instance 于调用时冻结（旧构造时捕获语义）。
     ''' </summary>
-    Friend Sub RunCrashAnalyzer(Watched As PCLCS.Watch.Watcher, Instance As McInstance)
+    Public Function CreateWatcher(Loader As LoaderTask(Of Process, Integer), Instance As McInstance, WindowTitle As String) As PCLCS.Watch.Watcher
+        Return New PCLCS.Watch.Watcher(New WatcherHost(Loader, Instance), WindowTitle,
+            Sub(Watched) RunCrashAnalyzer(Watched, Instance))
+    End Function
+
+    ''' <summary>
+    ''' 崩溃分析委托目标（原 Watcher.Crashed :363-377 的分析段；CrashAnalyzer 为 W4 域留 VB）。
+    ''' 2 秒延迟与「崩溃分析开始」日志在 C# 核内，此处仅编排分析器（仅由 CreateWatcher 工厂闭包调用）。
+    ''' </summary>
+    Private Sub RunCrashAnalyzer(Watched As PCLCS.Watch.Watcher, Instance As McInstance)
         Dim Analyzer As New CrashAnalyzer(Instance)
         Analyzer.Collect(Instance.PathIndie, Watched.LatestLog.ToList)
         Analyzer.Prepare()

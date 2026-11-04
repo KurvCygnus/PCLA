@@ -45,12 +45,12 @@ public class WatcherTests : IDisposable
         //让监控线程（前台线程）尽快退出并清理子进程
         foreach (var watcher in _watchers)
         {
-            try { watcher.State = Watcher.MinecraftState.Ended; } catch (Exception) { }
+            try { watcher.State = Watcher.MinecraftState.Ended; } catch (Exception) { } //? 尽力而为收尾：终态已置或宿主已断开则忽略（lint 空 catch 豁免口径）
         }
         foreach (var process in _processes)
         {
-            try { if (!process.HasExited) process.Kill(); } catch (Exception) { }
-            try { process.Dispose(); } catch (Exception) { }
+            try { if (!process.HasExited) process.Kill(); } catch (Exception) { } //? 尽力而为收尾：替身可能已自行退出或被系统回收
+            try { process.Dispose(); } catch (Exception) { } //? 尽力而为收尾：句柄可能已失效
         }
         Watcher.LaunchLog = null;
         Watcher.StateChanged = null;
@@ -59,7 +59,7 @@ public class WatcherTests : IDisposable
         Watcher.WindowProbe = null;
         Watcher.TestResetGlobals();
         Watcher.McWatcherList = _savedList;
-        try { SettingsService.Reset("LaunchArgumentWindowType"); } catch (Exception) { }
+        try { SettingsService.Reset("LaunchArgumentWindowType"); } catch (Exception) { } //? 尽力而为收尾：键可能不存在于配置存储
         try { if (Directory.Exists(_root)) Directory.Delete(_root, true); } catch (IOException) { }
     }
 
