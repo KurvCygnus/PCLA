@@ -7,7 +7,7 @@
 | 项目 | 语言 | 目标框架 | 作用 |
 | --- | --- | --- | --- |
 | `Plain Craft Launcher 2` | VB.NET + XAML | .NET Framework 4.8 | 启动器主体：UI、业务、Minecraft 域 |
-| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（W1 起，见 §5.5 与 §6.7），网络请求/下载引擎与安装、整合包决策核（W2 起，见 §5.6 与 §6.8-6.10） |
+| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（W1 起，见 §5.5 与 §6.7），网络请求/下载引擎与安装、整合包决策核（W2 起，见 §5.6 与 §6.8-6.10），启动栈决策核（参数/进程/文件/登录）与 Java 管理核、日志看门狗（W3 起，见 §6.11-6.13） |
 | `MeloongCore` | C#（子模块） | net48 / netstandard2.0 | 通用基础设施：日志、路径、配置、网络、文件工具 |
 | `MeloongCore.Wpf` | C# | net48 | WPF 相关基础件 |
 | `PCLCS.AotSmoke` | C# | net10.0 | NativeAOT 冒烟工程：发布 `PCLCS` + `MeloongCore.Shared` 的解析与迁移路径（见下文 §1.1） |
@@ -115,6 +115,8 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 
 ### 5.4 登录与凭据
 
+> W3 起微软登录六步的网络/解析/决策核迁入 `PCLCS\Launch\MsLoginSteps`，离线 UUID、Mojang UUID 与 authlib/Nide 请求核迁入 `PCLCS\Launch\LoginCores`（见 §6.11）；下文行号为迁移前锚点，仍留 VB 的部分为：设备码轮询弹窗（`WaitingMyMsgBox`）、错误分支弹窗与角色选择 UI（裁定 11）。
+
 - 微软登录六步都在 `ModLaunch.vb`：设备码（`:882-912`）、刷新令牌（`:914-946`）、Xbox Live（`:948-962`）、XSTS（`:964-1014`）、`login_with_xbox`（`:1016-1046`）、`/entitlements/mcstore`（`:1048-1066`）与 `/minecraft/profile`（`:1068-1098`）。
 - 令牌缓存在 `CacheMsV2*` 系列设置项（`Settings.vb:52-57`，加密）；Nide/Authlib 的账号密码在 `LoginNidePass`/`LoginAuthPass`（`:80,82`，同样加密，但为 DES + 固定 IV）。
 - 客户端 ID 走环境变量 `PCL_MS_CLIENT_ID`（`ModSecret.vb:10`），仓库不携带任何密钥。
@@ -171,6 +173,8 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 ### 6.4 启动
 
+> W3 起参数拼装、进程启动、Natives/`launcher_profiles.json` 文件核、登录核与看门狗迁入 C#（见 §6.11 与 §6.13）；下文行号为迁移前锚点，仍留 VB 的部分为：`McLaunchStart` 的 Loader 链组装、Prerun 的 GPU 偏好/options.txt/离线皮肤段、登录 UI 编排与弹窗分支、`McLaunchLog` 脱敏（裁定 1-4/11，过渡债见 `docs\TECHDEBT.md` §14）。
+
 - `McLaunchStart`（`ModLaunch.vb:31-206`）组装加载器链：Java → 登录 → 补文件 → 参数 → natives → 预执行 → 自定义命令 → 启动 → 等窗口 → 结束，权重见 `:122-145`。
 - JVM 参数 `McLaunchArgumentsJVM`（`:1221-1347`）：继承链合并、`-Xmx`、GC 策略、Authlib/Nide 注入、JLW、log4j 缓解参数、编码参数。
 - 游戏参数 `McLaunchArgumentsGame`（`:1349-1422`）：新旧两种格式、OptiFineForgeTweaker 重排、2023-05-04 之后改用 `--quickPlayMultiplayer`。
@@ -179,6 +183,8 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - 监控 `Watcher`（`ModWatcher.vb:58-394`）：状态机 `Loading/Running/Crashed/Ended/Canceled`，用 `EnumWindows` 找游戏窗口，崩溃判定基于日志关键字。
 
 ### 6.5 Java
+
+> W3 起版本需求表（`GetJavaRequirement`）、初始化决策核与选择编排核迁入 `PCLCS\Java`（见 §6.12）；本节第一段的 `Java` 类型与探测仍在 `PCLCS\Java.cs`，其余行号为迁移前锚点。
 
 - `Java` 类型与探测在 `PCLCS\Java.cs:6-77`：执行 `java.exe -XshowSettings:properties -version`，15 s 超时，解析版本、位数与编码；候选目录约 20 个硬编码位置加 `JDK_HOME`/`JAVA_HOME`（`:136-168`），排序偏好 Java 21（`:124`）。
 - 版本需求表 `GetJavaRequirement`（`Modules\Minecraft\ModJava.vb:128-273`）：按 MC 版本、日期与加载器分别收紧区间（如 Forge 34.0.0-36.2.25 要求 Java 8u320 以下）。
@@ -227,11 +233,38 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - **部署核 `ModpackDeploy.cs`**：各格式的计划产出（`CurseForgePlan`/`ModrinthPlan`/`McbbsPlan`/`HmclPlan`/Mmc components 映射）——版本与加载器解析、overrides 装载决策、Modrinth 文件过滤与 `NetFile` 组装、CF modules 分类；部署决策是纯数据产出，Host 层经回调注入版本名对话框、中央目录操作与不兼容加载器提示。
 - **VB 壳**：压缩包解压、overrides 复制到版本目录、MMC `instance.cfg` 的设置迁移（PreLaunchCommand/服务器/图标/JVM 参数，留在 VB，见 `docs\TECHDEBT.md` §12）与 Loader 编排留在 `ModModpack.vb`（706 行）。
 
+### 6.11 启动栈决策核（PCLCS\Launch，W3 起）
+
+`ModLaunch.vb` 按"决策核迁 C#、Loader 壳与 UI 留 VB"拆分（2057 → 1424 行），行为由 `tests\PCLCS.Tests\Launch` 以回环服务器与假响应夹具锁定：
+
+- **参数拼装核 `LaunchArguments`**：`BuildArguments` 总编排、`BuildJvmArguments`（nide/authlib javaagent、JLW/LUA 判定——LUA 经 W1 `Libraries.ListGetJson` C# 等价（裁定 9）、内存、GC、log4j 缓解、编码段）、`BuildGameArguments`（OptiFineForgeTweaker 重排与版本 JSON 改写，写盘经 `versionJsonWriter` 回调绑定 `FileUtils.Write`，裁定 10）、`BuildReplacementTable`（`${...}` 替换表，UI 线程等待经 `runInUiWait` 委托）；`LaunchArgument`/`LaunchEncoding` 模块状态随迁，VB 薄转发保持读写面。
+- **进程启动核 `ProcessRunner`**：`RunGameProcess`（ToShortPath 长路径处理、Path/appdata 环境变量、stdout/stderr 重定向与编码、取消 Kill #1631、优先级）与 `RunCustomCommands`（bat 导出、可等待、取消 Kill）；日志与取消回调经 `ProcessCallbacks` 注入（裁定 4：OpenExplorer/Hint 留 VB）。
+- **文件核 `LaunchFiles`**：`ExtractNatives`（占用/损坏处理）、`GetNativesFolder`（GBK/ASCII → AppData → ProgramData 回退链）、`MergeLauncherProfiles`（`launcher_profiles.json` 合并，失败容忍语义 1:1，GB18030 写回）。
+- **登录核 `LoginCores` / `MsLoginSteps`**：离线 UUID（含皮肤调整 #3746）、Mojang UUID（ini 缓存）、authlib/Nide validate/refresh/login 请求核；微软登录六步 `BeginDeviceCodeFlow` → `RefreshTokens` → `XblAuthenticate` → `XstsAuthorize` → `MinecraftToken` → `EntitlementsOk` → `Profile`（entitlements 短路语义与错误分诊表逐字；`MsLoginDecisionException` 携带弹窗文案回宿主）。
+- **宿主读取面与 provider 清单**：各核以 `LaunchArgumentInputs`/`JvmInputs`/`GameInputs`/`TokenInputs` 等输入载体收敛宿主状态（设置键经 `SettingsService`、登录输出为宿主构造的快照 `McLoginOutput`、JLW/LUA 补丁 jar 惰性 `Func`）；对宿主全局状态的依赖走静态 provider，由 `ModNet.vb` 的 `Sub New` 统一接线（`ModNet.vb:21-26`）：`LoginCores.MojangUuidCacheFolder`/`SelectedVanillaMajor`/`RunInUiProvider`、`MsLoginSteps.OAuthClientIdProvider`（env `PCL_MS_CLIENT_ID`，值经 `ModSecret`）/`RunInUiProvider`；null 时为测试直用语义。
+- **VB 壳**：`McLaunchStart`（`ModLaunch.vb:64`）保留 Loader 链组装（裁定 1，LoaderBase 体系不迁）；登录 UI 编排、`WaitingMyMsgBox` 轮询弹窗与 MyMsgBox 错误分支留 VB（裁定 2/11）；Prerun 的 GPU 偏好、options.txt ini 段与离线皮肤资源包留 VB（裁定 3，见 `docs\TECHDEBT.md` §14）。
+
+### 6.12 Java 管理核（PCLCS\Java，W3 起）
+
+`ModJava.vb` 按"需求表与决策核迁 C#、UI 壳与 Loader 组装留 VB"拆分（585 → 222 行）。命名空间留 `PCLCS` 根：`PCLCS.Java`（类）已占用 `Java` 之名，`PCLCS.Java` 子命名空间会在同层遮蔽该类引用（CS0118，已实测裁定）。
+
+- **需求表与初始化决策核 `JavaRequirement`**：`Get` 按版本/日期/加载器收紧 `ValueRange<Version>` 区间交集（原版/OptiFine/Forge/NeoForge/Fabric/LiteLoader/统一通行证全表，`JavaRequirementQuery` 载体携带版本 JSON 提取基元）；`InitAsync` 三态 `JavaInitState`（HasCache/NoJava/Failed）——老版本迁移 → 读缓存 → 无 Java 判定，异常掩蔽语义保持（`docs\TECHDEBT.md` §11/§14）；`JavaUtils.SortAsync` 以阻塞 `.Run()` 包装（B3 裁定：既有 C# 工具内部，非新引 async 链）。
+- **选择编排核 `JavaSelection`**：`SelectOrDownload` 三分支逐字（版本文件夹搜索 / JavaForced `PreviewGet` 自动重置 + `CheckAsync` 验活（裁定 7）/ 需求区间 → 既有列表 → 搜索等待与重搜（#3797 `JavaLock` 互斥）→ Mojang 清单匹配 → 无匹配手装提示 → 下载重选）；`MigrateInstanceJavaSettings` 版本独立 Java 设置迁移决策；`CreateJavaDownloadFiles` 产出 NetFile 下载清单（piston-meta manifest，3 哈希跳过 #3827），LoaderDownload 组装留宿主（裁定 6）。弹窗/Hint/页面切换/列表刷新经 `JavaSelectionCallbacks` 注入。
+- **provider 接线**：`JavaSelection.JavaListFetcher` 由宿主经 `NetRequestByLoader` + `DlVersionListOrder` 供给 Mojang 清单下载结果（`ModJava.vb:6` 接线，保持 1:1 下载机制）；`SortAsyncOverride`/`SearchFoldersOverride`/`CheckAsyncOverride` 为测试注入点，宿主层不接线。
+
+### 6.13 日志看门狗（PCLCS\Watch，W3 起）
+
+`ModWatcher.vb` 的 `Watcher` 类全量迁入 `PCLCS\Watch\Watcher.cs`（394 → 134 行，裁定 5）：
+
+- **核**：进程日志监控（阶段进度、崩溃关键字表、退出码崩溃判定——2012+ 版本发布时间条件）、游戏窗口枚举与最大化（Win32 P/Invoke，Windows 绑定见 `docs\TECHDEBT.md` §14）、Kill；状态机 `MinecraftState`（Loading/Running/Crashed/Ended/Canceled）顺序逐字；64 ms×3 = 192 ms 窗口标题节拍与裸线程语义 1:1（B3 后置）。全局集合 `McWatcherList`/`HasRunningMinecraft` 由 C# 持有，VB 薄转发属性保留公共名（`FormMain` 消费面不变）。
+- **回调面**：`StateChanged`（→ MinecraftStart/MinecraftStop）、`LaunchLog`（→ `McLaunchLog`，脱敏留 VB）、`CrashHint`（Hint 文案留 VB）、`Feedback`（→ FeedbackInfo）在 `ModWatcher.Sub New` 接线；崩溃分析（CrashAnalyzer，W4 域）经构造参数委托留 VB；`WindowProbe` 为窗口枚举的测试注入缝。
+- **宿主面与工厂**：构造参数 Loader/Instance 的读取收敛为 `IWatcherHost`（游戏进程、进度、取消、版本发布时间；`ModWatcher.WatcherHost` 以 `Implements` 承接）。看门狗构造统一走 `ModWatcher.CreateWatcher` 工厂（`ModWatcher.vb:116`，调用点 `ModLaunch.vb:1376`）：模块成员调用先于方法体触发 `Sub New` 的回调接线——嵌套类型实例化与委托创建不会触发模块初始化，直连 C# 构造会静默丢失会话首个看门狗的全部宿主回调（时序缺陷已修，见提交 a872dcc）。
+
 ## 7. 测试
 
 ### 7.1 PCLCS 单元测试
 
-`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测，以及 W2 迁入的网络请求/下载引擎（本机回环服务器夹具）、资源检索数据面、安装决策核与整合包判定/部署。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
+`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测，W2 迁入的网络请求/下载引擎（本机回环服务器夹具）、资源检索数据面、安装决策核与整合包判定/部署，以及 W3 迁入的启动参数拼装/进程/文件/登录核（回环与假响应夹具）、Java 需求表与选择编排、日志看门狗（假窗口枚举注入）。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
 
 ### 7.2 行为黄金语料
 
@@ -239,7 +272,7 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - 测试进程内初始化临时目录；不启动 WPF、不访问网络、不写真实用户目录。
 - `CrashAnalyzer.GetAnalyzeResult` 是唯一生产可见性接缝（`Friend` + `InternalsVisibleTo`）。
 - 语料是合成数据；行为变化必须显式更新断言，不能靠放宽断言通过。
-- 当前共 36 个测试：3 个宿主冒烟、10 个实例模型、8 个崩溃分析、11 个配置读写、4 个实例列表。
+- 当前共 37 个测试：3 个宿主冒烟、10 个实例模型、8 个崩溃分析、11 个配置读写、4 个实例列表、1 个看门狗接线时序（W3 工厂接线回归）。
 - 不使用 `dotnet test` 直接构建：PCLA 是 VB + WPF，`dotnet build` 不跑 VB 的 XAML 生成目标，会报大量 `BC30506`。行为测试用 MSBuild 构建，再用 `vstest.console` 运行（`.\tools\test-behavior.ps1`）。
 
 ## 8. 关键路径速查
@@ -249,8 +282,8 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 | 启动 | `Application.xaml.vb:7` | `FormMain.xaml.vb:284` → `:349` |
 | 页面切换 | `FormMain.PageChange` `:1362` | `PageChangeActual` `:1413` → `PageChangeAnim` `:1513` |
 | 安装版本 | `PageDownloadInstall.BtnStart_Click:1149` | `ModDownloadLib.McInstallStart:1948` |
-| 启动游戏 | `ModLaunch.McLaunchStart:31` | `:106` → `McLaunchRun:2093` → `Watcher:58` |
+| 启动游戏 | `ModLaunch.McLaunchStart:64` | Loader 链组装（留 VB）→ `McLaunchRun:1325` → `ProcessRunner.RunGameProcess`（PCLCS\Launch）→ `ModWatcher.CreateWatcher:1376` → `Watcher`（PCLCS\Watch） |
 | 下载文件 | `LoaderDownload.Start` `ModNet.vb:1396` | `NetManager:1639` → `NetFile:579` |
 | 资源搜索 | `ResourceSearcher.Search:73` | CurseForge / Modrinth JSON |
-| 微软登录 | `McLoginMsStart:542` | `MsLoginStep1New..6` `:882-1098` |
+| 微软登录 | `McLoginMsStart:547` | 六步核 `MsLoginSteps`（PCLCS\Launch）：`BeginDeviceCodeFlow`..`Profile` |
 | 崩溃分析 | `CrashAnalyzer:1` | `AnalyzeCrit1..3` `:474-670` |
