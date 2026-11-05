@@ -59,6 +59,8 @@ public sealed class JvmInputs
     public Version WindowsVersion = null!;
     /// <summary>登录输出快照（宿主层从 McLoginLoader.Output 构造）。</summary>
     public McLoginOutput Login = null!;
+    /// <summary>UI 线程判定回调（宿主层 RunInUi 委托；null 视为非 UI 线程）。</summary>
+    public Func<bool>? RunInUi;
     /// <summary>启动日志（原 McLaunchLog 默认级；null 时静默）。</summary>
     public Action<string>? Log;
     /// <summary>Warn 级启动日志（原 McLaunchLog(…, LogLevel.Warn)；null 时静默）。</summary>
@@ -249,7 +251,7 @@ public static class LaunchArguments
             try
             {
                 log?.Invoke($"开始 Authlib Injector Prefetch");
-                var response = NetRequest.NetRequestByClientRetry(server, new NetRequestOptions { Encoding = System.Text.Encoding.UTF8 });
+                var response = NetRequest.NetRequestByClientRetry(server, new NetRequestOptions { Encoding = System.Text.Encoding.UTF8, RunInUi = inputs.RunInUi });
                 args.Add($@"-javaagent:""${{pure_directory}}\authlib-injector.jar""=""{server}""");
                 args.Add("-Dauthlibinjector.side=client");
                 args.Add("-Dauthlibinjector.yggdrasil.prefetched=" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(response)));

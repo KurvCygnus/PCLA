@@ -353,3 +353,6 @@ docs/superpowers/
 
 #* 实机差分验证用临时启动器
 .parity/
+
+#* CacheCow 本地缓存运行时产物（仓库根，不可提交）
+鏈垱寤哄�笺�侰ache/

@@ -318,6 +318,7 @@ public class JavaRequirementTests : IDisposable
         Assert.Equal(Versions.JavaConfigVersion, configs.ConfigVersion);   //旧 :30 完成迁移
         Assert.Equal(2, configs.List.Count);
         Assert.Contains(configs.List, j => PathUtils.IsSame(j.Folder, "C:\\fake\\b\\"));
+        Assert.True(PathUtils.IsSame(configs.List[0].Folder, "C:\\fake\\b\\"));  //强制选择的 Java 置顶（Remove+Insert(0)，旧 :21 语义）
     }
 
     [Fact]

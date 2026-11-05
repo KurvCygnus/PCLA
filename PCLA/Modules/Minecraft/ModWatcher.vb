@@ -107,7 +107,7 @@ Public Module ModWatcher
     End Class
 
     ''' <summary>
-    ''' 看门狗工厂（ModLaunch.vb:1374 构造点的收敛入口）。
+    ''' 看门狗工厂（ModLaunch.vb:1376 构造点的收敛入口）。
     ''' 时序保证：模块成员调用先于方法体运行本模块 Sub New 的宿主回调接线——嵌套类型实例化（New WatcherHost）
     ''' 与委托创建（ldftn）均不触发模块初始化，直连 C# 构造会丢失会话首个看门狗的全部宿主回调
     ''' （构造/阶段/窗口/退出日志经 ?.Invoke 静默吞掉、汇总翻转守卫闩死致 MinecraftStart/Stop 永不运行）；

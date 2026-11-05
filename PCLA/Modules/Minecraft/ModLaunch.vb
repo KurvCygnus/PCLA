@@ -1004,6 +1004,7 @@ LoginFinish:
              .Debug = ModeDebug,
              .WindowsVersion = Environment.OSVersion.Version,
              .Login = McLaunchLoginOutput(),
+             .RunInUi = AddressOf RunInUi,
              .Log = Sub(Text) McLaunchLog(Text),
              .WarnLog = Sub(Text) McLaunchLog(Text, LogLevel.Warn)}
     End Function
