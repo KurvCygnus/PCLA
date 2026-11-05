@@ -2,7 +2,7 @@ Imports System.Text.Json.Nodes
 Imports PCLCS.Net
 
 '说明：McInstance 的 JSON 管线已切换到 PCLCS.Instances.InstanceCore；McInstance.JsonObject 暴露的是
-'由 LegacyJsonExtensions.ToJToken(_core.VersionJson) 生成的 Newtonsoft JObject 快照——W3 迁移完成前，
+'由 LegacyJsonExtensions.ToJToken(_core.VersionJson) 生成的 Newtonsoft JObject 快照——核心层迁移完成前，
 '外部对快照的修改不会写回核心（现有 VB 读取方均为只读，已核实）。
 Public Module ModMinecraft
 
@@ -392,7 +392,7 @@ Public Module ModMinecraft
         ''' </summary>
         Public Property JsonObject As JObject
             Get
-                '快照：W3 迁移完成前，外部对快照的修改不会写回核心（现有读取方均为只读，见文件头说明）
+                '快照：核心层迁移完成前，外部对快照的修改不会写回核心（现有读取方均为只读，见文件头说明）
                 If _JsonObject Is Nothing Then _JsonObject = CType(_core.VersionJson.ToJToken(), JObject)
                 Return _JsonObject
             End Get
@@ -594,7 +594,7 @@ Public Module ModMinecraft
             If _VersionOverridden Then Return VersionDisplayNameOverridden() '见 RefreshInfo：外部覆盖 Version 时核心无法感知
             Return _core.VersionDisplayName()
         End Function
-        ''' <summary>旧 :750-785 的描述计算，仅用于 Version 被外部覆盖的场景（W3 随列表编排一并迁移）。</summary>
+        ''' <summary>旧 :750-785 的描述计算，仅用于 Version 被外部覆盖的场景（已随列表编排一并迁移）。</summary>
         Private Function VersionDisplayNameOverridden() As String
             'Mod Loader 信息
             Dim ModLoaderInfo As String = ""

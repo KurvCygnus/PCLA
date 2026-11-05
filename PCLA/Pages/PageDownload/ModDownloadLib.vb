@@ -14,7 +14,7 @@ Public Module ModDownloadLib
     ''' 获取下载某个 Minecraft 版本的加载器列表。
     ''' </summary>
     ''' <param name="VersionFolder">版本文件输出目录。</param>
-    ''' <remarks>版本 Json 落盘路径与 clientVersion 写入的决策段已迁入 C#（PCLCS.Install.VanillaInstallPlans）；Loader 链本体留 VB（计划裁定）。</remarks>
+    ''' <remarks>版本 Json 落盘路径与 clientVersion 写入的决策段已迁入 C#（PCLCS.Install.VanillaInstallPlans）；Loader 链本体留 VB。</remarks>
     Private Function McDownloadClientLoader(Id As String, JsonUrl As String, VersionFolder As String) As List(Of LoaderBase)
         Dim Loaders As New List(Of LoaderBase)
         Dim NewInstance As McInstance = Nothing
@@ -1260,7 +1260,7 @@ Retry:
     ''' <summary>
     ''' 尝试刷新 Forge 推荐版本缓存。
     ''' </summary>
-    ''' <remarks>决策核已迁入 C#（PCLCS.Download.ModRequests.ForgeRecommendedRefreshCore）；线程派生、刷新标记与 Catch 留宿主层（计划裁定 3）。</remarks>
+    ''' <remarks>决策核已迁入 C#（PCLCS.Download.ModRequests.ForgeRecommendedRefreshCore）；线程派生、刷新标记与 Catch 留宿主层。</remarks>
     Public Sub McDownloadForgeRecommendedRefresh()
         If IsForgeRecommendedRefreshed Then Return
         IsForgeRecommendedRefreshed = True

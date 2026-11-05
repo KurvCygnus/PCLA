@@ -23,7 +23,7 @@ public class InstanceScannerTests : IDisposable
 
     private string VersionDir(string name) => Path.Combine(_root, "versions", name + Path.DirectorySeparatorChar);
 
-    #region JSON 工厂（沿用 Task 4 InstanceCoreTests 的形状：vanilla/forge/neoforge/fabric/optifine/liteloader/fool/snapshot/old/broken）
+    #region JSON 工厂（沿用 InstanceCoreTests 的形状：vanilla/forge/neoforge/fabric/optifine/liteloader/fool/snapshot/old/broken）
 
     private static JsonObject BaseJson(string id, string type, params string[] libraries)
     {

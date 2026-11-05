@@ -11,7 +11,7 @@ namespace PCLCS.Tests;
 /// JavaSelection（Java 选择编排核）测试。
 /// 分支 2/3/自动与迁移决策对照 ModJava.vb 旧锚点逐行（迁移判定 → 分支 2 版本文件夹搜索 / 3 JavaForced /
 /// 自动 = 需求区间 → 列表选择 → 搜索等待与重搜（#3797 JavaLock）→ Mojang 清单匹配 → 无匹配弹窗 → 下载重选）；
-/// JavaForced PreviewGet 自动重置（裁定 7）经真实处理器挂接；manifest 清单 3 哈希跳过（#3827）与 NetFile 映射经假 fetcher 注入；无进程、无 UI、无网络。
+/// JavaForced PreviewGet 自动重置经真实处理器挂接；manifest 清单 3 哈希跳过（#3827）与 NetFile 映射经假 fetcher 注入；无进程、无 UI、无网络。
 /// </summary>
 [Collection("PCLCS.Settings")]   //SettingsService 与 JavaSelection 注入面均为进程级状态，串行执行
 public class JavaSelectionTests : IDisposable
@@ -45,7 +45,7 @@ public class JavaSelectionTests : IDisposable
     #region 注入面
 
     /// <summary>内存配置面：隔离全局 Configs（ConfigProviders.Default 落真实 %APPDATA%，测试不可触碰）。
-    /// JavaForced 挂接真实 PreviewGet 处理器（Configs.JavaForcedPreviewGet，裁定 7），其 JavaList 成员判定经 JavaListReader 覆写指向本面列表。</summary>
+    /// JavaForced 挂接真实 PreviewGet 处理器（Configs.JavaForcedPreviewGet），其 JavaList 成员判定经 JavaListReader 覆写指向本面列表。</summary>
     private sealed class FakeSelectionConfigs : IJavaSelectionConfigAccess
     {
         public ConcurrentList<Java> List = new();
@@ -246,7 +246,7 @@ public class JavaSelectionTests : IDisposable
     [InlineData("previewget-null", true)]
     public void SelectOrDownload_branch3_forced_java_states(string mode, bool tryFixOrHint)
     {
-        //notinlist 需绕过 PreviewGet 以触达旧 :148 的手动重置分支；previewget-null 用真实处理器（裁定 7 交互）
+        //notinlist 需绕过 PreviewGet 以触达旧 :148 的手动重置分支；previewget-null 用真实处理器（ 交互）
         bool wirePreviewGet = mode != "notinlist";
         FakeSelectionConfigs configs = UseFakeConfigs(wirePreviewGet);
         configs.Migrated.Set(true, TestProvider());   //分支测试代表迁移完成后的状态（旧 :115 迁移先行）
@@ -299,7 +299,7 @@ public class JavaSelectionTests : IDisposable
             Assert.Empty(Ui.MsgBoxes);
             break;
         case "notinlist":
-            //旧 :148-156：手动重置分支（裁定 7：与 PreviewGet 并存不去重）→ 重置 + 刷新 + 跳过，无弹窗
+            //旧 :148-156：手动重置分支（与 PreviewGet 并存不去重）→ 重置 + 刷新 + 跳过，无弹窗
             Assert.Null(result);
             Assert.Equal(1, configs.ForcedResetCount);
             Assert.Equal(1, Ui.UpdateListsCount);
@@ -307,7 +307,7 @@ public class JavaSelectionTests : IDisposable
             Assert.Empty(Ui.MsgBoxes);
             break;
         case "previewget-null":
-            //PreviewGet 自动重置后与 unset 同径（未选择 Java），且存储已被处理器自动重置（裁定 7）
+            //PreviewGet 自动重置后与 unset 同径（未选择 Java），且存储已被处理器自动重置
             Assert.Null(result);
             Assert.Equal(0, configs.ForcedResetCount);   //处理器内 Reset 直达全局条目，不经访问面
             (string caption2, string title2, _, _) = Assert.Single(Ui.MsgBoxes);
@@ -320,7 +320,7 @@ public class JavaSelectionTests : IDisposable
     [Fact]
     public void JavaForced_previewget_resets_value_absent_from_list()
     {
-        //裁定 7：Configs.cs:24-31 的 PreviewGet 自动重置语义（真实处理器经隔离列表挂接）
+        //Configs.cs:24-31 的 PreviewGet 自动重置语义（真实处理器经隔离列表挂接）
         FakeSelectionConfigs configs = UseFakeConfigs();
         var provider = new JsonConfigProvider(Path.Combine(_root, "forced.json"));
         Java java = JavaAt(@"C:\fake\forced-previewget\");
@@ -333,7 +333,7 @@ public class JavaSelectionTests : IDisposable
     [Fact]
     public void JavaForced_previewget_keeps_value_present_in_list()
     {
-        //裁定 7：在列表中的值原样保留
+        //在列表中的值原样保留
         FakeSelectionConfigs configs = UseFakeConfigs();
         var provider = new JsonConfigProvider(Path.Combine(_root, "forced.json"));
         Java java = JavaAt(@"C:\fake\forced-previewget\");

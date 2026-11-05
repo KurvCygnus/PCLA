@@ -14,7 +14,7 @@ public sealed class McLaunchOptions
 
     /// <summary>强行指定启动的 MC 版本。默认值：null。使用 McInstanceCurrent。</summary>
     //? 实际类型为 VB 侧 McInstance（未迁移），暂以 object 承载；宿主层转发类经属性收窄回 McInstance，
-    //? C# 消费经宿主转换（Task 8 FabricApi/OptiFabric 的 object 先例，已裁定）
+    //? C# 消费经宿主转换（FabricApi/OptiFabric 的 object 先例）
     public object? Instance;
 
     /// <summary>额外的启动参数。</summary>

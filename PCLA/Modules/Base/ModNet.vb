@@ -7,7 +7,7 @@ Imports System.Net.Http.Headers
 Public Module ModNet
 
     Sub New()
-        '将 VB 侧的签名实现接线到 C# 网络核心；签名逻辑留在 ModSecret（与 W1 SettingsService.IdentifyProvider 同模式）
+        '将 VB 侧的签名实现接线到 C# 网络核心；签名逻辑留在 ModSecret（与 SettingsService.IdentifyProvider 同模式）
         NetRequest.CdnSigner = AddressOf SecretCdnSign
         NetRequest.HeadersSigner = AddressOf HeadersSignAdapter
         '下载引擎（NetFile）对宿主层全局状态的接线：全局 Uuid、缓存目录与退出标志（管理器计数器已随 NetManager 迁入 C#，引擎直连入账）
@@ -17,11 +17,11 @@ Public Module ModNet
         '下载管理器（NetManager）的宿主层接线：缓存清理目录与守护线程异常上报（AlertThenCrash 路径）
         DownloadManager.TempFolderProvider = Function() PathTemp
         DownloadManager.CrashAlert = Sub(ex) Logger.Error(ex, Nothing, LogBehavior.AlertThenCrash)
-        '登录核（LoginCores）的宿主层接线：Mojang UUID 的 ini 缓存目录、已选实例原版版本号与 UI 线程守卫（W3 Task 3）
+        '登录核（LoginCores）的宿主层接线：Mojang UUID 的 ini 缓存目录、已选实例原版版本号与 UI 线程守卫
         PCLCS.Launch.LoginCores.MojangUuidCacheFolder = Function() PathTemp & "Cache\Uuid"
         PCLCS.Launch.LoginCores.SelectedVanillaMajor = Function() McInstanceSelected?.Version.Vanilla.Major
         PCLCS.Launch.LoginCores.RunInUiProvider = AddressOf RunInUi
-        '微软登录步核（MsLoginSteps）的宿主层接线：OAuth ClientId 与 UI 线程守卫（W3 Task 4）
+        '微软登录步核（MsLoginSteps）的宿主层接线：OAuth ClientId 与 UI 线程守卫
         PCLCS.Launch.MsLoginSteps.OAuthClientIdProvider = Function() OAuthClientId
         PCLCS.Launch.MsLoginSteps.RunInUiProvider = AddressOf RunInUi
     End Sub

@@ -113,7 +113,7 @@ public static class ModRequests
 
     /// <summary>
     /// 拉取并重写 Forge 推荐版本缓存（ModDownloadLib.vb:1450-1465 的决策核）。
-    /// 失败直接抛出；“开始/成功”日志、线程派生与 Catch 留在宿主层 RunInNewThread 入口（计划裁定 3）。
+    /// 失败直接抛出；“开始/成功”日志、线程派生与 Catch 留在宿主层 RunInNewThread 入口。
     /// </summary>
     public static void ForgeRecommendedRefreshCore()
     {

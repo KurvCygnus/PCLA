@@ -5,7 +5,7 @@ namespace PCLCS.Launch;
 
 /// <summary>
 /// 进程输出与取消的回调面（原宿主层读取收敛：<see cref="IsCanceled"/> 对应 Loader.IsCanceled，
-/// <see cref="Log"/> 对应 McLaunchLog 默认级；输出侧行回调供 Watcher（Task 7）对接，
+/// <see cref="Log"/> 对应 McLaunchLog 默认级；输出侧行回调供 Watcher 对接，
 /// SaveBatch 相关回调保留宿主层 UI/加载器依赖）。
 /// </summary>
 public sealed class ProcessCallbacks
@@ -43,7 +43,7 @@ public sealed class GameProcessInputs
     public string WorkingDirectory = null!;
     /// <summary>启动参数串（原 McLaunchArgument，经宿主转发属性传入）。</summary>
     public string Arguments = null!;
-    /// <summary>输出编码（原 McLaunchEncoding，经宿主转发属性传入，Task 1 归属随迁注）。</summary>
+    /// <summary>输出编码（原 McLaunchEncoding，经宿主转发属性传入）。</summary>
     public Encoding Encoding = null!;
 }
 
@@ -78,7 +78,7 @@ public sealed class CustomInputs
 
 /// <summary>
 /// 进程启动核（自宿主层 ModLaunch.vb McLaunchRun/McLaunchCustom :1764-1812/:1674-1763 移植）。
-/// StartProcess 长路径处理（ModBase.vb:878-890）随迁为私有实现；输出侧经回调（Watcher（Task 7）以事件对接）。
+/// StartProcess 长路径处理（ModBase.vb:878-890）随迁为私有实现；输出侧经回调（Watcher 以事件对接）。
 /// </summary>
 public static class ProcessRunner
 {
@@ -96,7 +96,7 @@ public static class ProcessRunner
         var startInfo = new ProcessStartInfo(inputs.JavaExePath); //使用 javaw.exe 会导致 #6263
 
         //设置环境变量
-        //? net8 差异（随 Task 1 编码注）：net8 下 UseShellExecute=true 时访问 EnvironmentVariables 抛
+        //? net8 差异（编码注）：net8 下 UseShellExecute=true 时访问 EnvironmentVariables 抛
         //? InvalidOperationException；运行目标为 net48（与 VB 行为 1:1），net8 仅 AOT 冒烟
         var pathEnv = startInfo.EnvironmentVariables["Path"];
         var paths = new List<string>();
@@ -125,7 +125,7 @@ public static class ProcessRunner
             return null;
         }
 
-        //输出侧回调接线（Task 7 Watcher 对接；宿主层 Watcher 现状对进程自行接线，未传回调时保持原状）
+        //输出侧回调接线（Watcher 对接；宿主层 Watcher 现状对进程自行接线，未传回调时保持原状）
         if (callbacks.StdoutLine is not null || callbacks.StderrLine is not null)
         {
             if (callbacks.StdoutLine is not null) gameProcess.OutputDataReceived += (_, e) => { if (e.Data is not null) callbacks.StdoutLine(e.Data); };

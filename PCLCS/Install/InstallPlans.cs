@@ -5,7 +5,7 @@ namespace PCLCS.Install;
 
 /// <summary>
 /// 安装总装决策核（ModDownloadLib.vb McInstallLoadersGet/McModificationStart 的决策段迁入；
-/// LoaderCombo 树装配、清单写入调用点、Natives 枚举、GetNativesFolder、Rename 协调与 WPF 留宿主层——裁定 10）：
+/// LoaderCombo 树装配、清单写入调用点、Natives 枚举、GetNativesFolder、Rename 协调与 WPF 留宿主层）：
 /// TempMcFolder 无空格需求判定（:1535-1537）、主候选空格边界（ModMain.vb:947）、Modable 与 OptiFineAsMod 判定
 /// （:1553-1564，含 #8147 的 OptiFine 缓存改写）、重复版本判定（:1574-1576）、.pclignore 内容常量与删除决策
 /// （:1584/:1692-1695）、Fabric API/OptiFabric 依赖下载组装（:1585-1598）、Natives 占用检查判定

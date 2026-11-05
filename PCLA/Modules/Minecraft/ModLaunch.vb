@@ -901,7 +901,7 @@ LoginFinish:
     '返回符合离线皮肤设置的 UUID
     Private Function McLoginLegacyUuidWithCustomSkin(UserName As String, SkinType As Integer, SkinName As String) As String
         '皮肤调整决策核已迁 C#（PCLCS.Launch.LoginCores.LegacyUuidWithCustomSkin，旧 :1105-1142 逐行：
-        'Steve/Alex/正版/自定义四态与 #3746 的 1.20- 限制；皮肤性别经 W1 SkinProfile.GetModel，正版查询经 MojangUuid 转发）
+        'Steve/Alex/正版/自定义四态与 #3746 的 1.20- 限制；皮肤性别经 SkinProfile.GetModel，正版查询经 MojangUuid 转发）
         Return PCLCS.Launch.LoginCores.LegacyUuidWithCustomSkin(UserName, SkinType, SkinName)
     End Function
     '根据用户名返回对应 UUID，需要多线程
@@ -1043,7 +1043,7 @@ LoginFinish:
     Private Function McLaunchArgumentsJVM() As List(Of String)
         Return PCLCS.Launch.LaunchArguments.BuildJvmArguments(McLaunchJvmInputs())
     End Function
-    '游戏参数部分（:1325-1398 决策核已迁 C# LaunchArguments.BuildGameArguments；裁定 10：写盘经回调绑定 FileUtils.Write）
+    '游戏参数部分（:1325-1398 决策核已迁 C# LaunchArguments.BuildGameArguments；写盘经回调绑定 FileUtils.Write）
     Private Function McLaunchArgumentsGame() As List(Of String)
         Return PCLCS.Launch.LaunchArguments.BuildGameArguments(
             McLaunchGameInputs(),

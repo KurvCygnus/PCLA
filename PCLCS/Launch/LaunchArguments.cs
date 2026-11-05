@@ -138,7 +138,7 @@ public sealed class LaunchArgumentInputs
     /// <summary>替换标记段输入。</summary>
     public TokenInputs Token = null!;
     /// <summary>
-    /// 版本 JSON 改写的写盘回调（裁定 10：旧 FileUtils.Write 路径 1:1，写函数由宿主层绑定，
+    /// 版本 JSON 改写的写盘回调（旧 FileUtils.Write 路径 1:1，写函数由宿主层绑定，
     /// 以保 C# 侧无宿主层依赖）；收到的内容即应写入版本 JSON 的全文。
     /// </summary>
     public Action<string>? VersionJsonWriter;
@@ -203,7 +203,7 @@ public static class LaunchArguments
 
     /// <summary>
     /// JVM 段（:1192-1323 决策面）：VersionArguments.CollectJvm → 自定义参数合并去重 → 统一通行证/Authlib
-    /// （预取经 NetRequestByClientRetry）→ JLW 判定 → LUA（裁定 9：经 Libraries.ListGetJson）→ 内存 →
+    /// （预取经 NetRequestByClientRetry）→ JLW 判定 → LUA（经 Libraries.ListGetJson）→ 内存 →
     /// GcPolicy → log4j → 编码 → JLW -jar → 再去重。
     /// </summary>
     public static List<string> BuildJvmArguments(JvmInputs inputs)
@@ -285,7 +285,7 @@ public static class LaunchArguments
         //LUA
         var useLua =
             !SettingsService.Get<bool>("LaunchAdvanceDisableLUA") && !SettingsService.Get<bool>("VersionAdvanceDisableLUA", instance.InstanceSettingsKey) &&
-            Libraries.ListGetJson(instance.VersionJson, customMcFolder: instance.McFolderSelected) //裁定 9：LUA 判定经 C# 支持库解析等价（旧 McLibListGet(…, False)）
+            Libraries.ListGetJson(instance.VersionJson, customMcFolder: instance.McFolderSelected) //LUA 判定经 C# 支持库解析等价（旧 McLibListGet(…, False)）
                 .Any(entry => entry.Name == "org.lwjgl:lwjgl:3.4.1");
         if (useLua) args.Add($@"-javaagent:""{inputs.LwjglUnsafeAgentJar()}""");
         log?.Invoke("使用 LUA：" + useLua);
@@ -370,7 +370,7 @@ public static class LaunchArguments
 
     /// <summary>
     /// 游戏段（:1325-1398 决策面）：CollectGame → 自定义参数 → OptiFineForgeTweaker 挪位 + 版本 JSON 改写
-    /// （裁定 10：写盘经 <paramref name="versionJsonWriter"/> 回调，宿主层绑定 FileUtils.Write）→ 分割去重 →
+    /// （写盘经 <paramref name="versionJsonWriter"/> 回调，宿主层绑定 FileUtils.Write）→ 分割去重 →
     /// 额外参数 → 全屏/进服（QuickPlay 分支）→ 再去重。
     /// </summary>
     public static List<string> BuildGameArguments(GameInputs inputs, Action<string>? versionJsonWriter)
@@ -415,7 +415,7 @@ public static class LaunchArguments
                 arg = arg.Replace(" --tweakClass optifine.OptiFineTweaker", "") + " --tweakClass optifine.OptiFineForgeTweaker";
                 try
                 {
-                    //裁定 10：旧 :1357-1359 的 FileUtils.Write(path, ReadAsString(path).Replace(…)) 1:1——
+                    //旧 :1357-1359 的 FileUtils.Write(path, ReadAsString(path).Replace(…)) 1:1——
                     //读取在 C# 侧，写盘经回调交宿主层绑定
                     versionJsonWriter?.Invoke(FileUtils.ReadAsString(
                         InstancePaths.GetJsonPath(instance.PathVersion, instance.Name))

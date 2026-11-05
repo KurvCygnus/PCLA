@@ -8,9 +8,12 @@ Public Module ModWatcher
         PCLCS.Watch.Watcher.LaunchLog = AddressOf McLaunchLog
         PCLCS.Watch.Watcher.CrashHint = Sub() Hint("检测到 Minecraft 出现错误，错误分析已开始……", HintType.Red)
         PCLCS.Watch.Watcher.Feedback = AddressOf FeedbackInfo
+        '崩溃分析核（PCLCS.Crash.CrashAnalyzer，W4 T1）的导出脱敏接线：FilterUserName/FilterAccessToken 留 ModMinecraft，
+        'T2 导出核经此消费（FilterChar 作用于 AccessToken 过滤，用户名过滤固定 *，同旧 Output :906 组合）
+        PCLCS.Crash.CrashAnalyzer.DesensitizeFilters = Function(raw, filterChar) FilterUserName(FilterAccessToken(raw, filterChar), "*")
     End Sub
 
-    '对全体的监视（全局态已迁 C#：PCLCS.Watch.Watcher.McWatcherList/HasRunningMinecraft，裁定 5；以下为薄转发，公共名保留）
+    '对全体的监视（全局态已迁 C#：PCLCS.Watch.Watcher.McWatcherList/HasRunningMinecraft；以下为薄转发，公共名保留）
 
     Public ReadOnly Property McWatcherList As List(Of PCLCS.Watch.Watcher)
         Get

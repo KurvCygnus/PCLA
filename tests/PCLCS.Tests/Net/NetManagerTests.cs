@@ -35,7 +35,7 @@ public class NetManagerTests
     }
 
     [Theory]
-    [InlineData(0, 104858L)]  //(0+1) * 0.1 * 1024 * 1024 → Convert.ToInt64（CLng 银行家舍入语义，Task 2 已证等价）
+    [InlineData(0, 104858L)]  //(0+1) * 0.1 * 1024 * 1024 → Convert.ToInt64（CLng 银行家舍入语义，已证等价）
     [InlineData(14, 1572864L)]
     [InlineData(15, 2097152L)] //(15-11) * 0.5 * 1024 * 1024
     [InlineData(31, 10485760L)]

@@ -69,7 +69,7 @@ public class McLoginServer : McLoginData
             .GetStableHashCode() % int.MaxValue));
 }
 
-/// <summary>微软登录输入（旧 :354-373；本 Task 仅随迁模型，消费核属 Task 4）。</summary>
+/// <summary>微软登录输入（旧 :354-373；仅随迁模型，消费核在登录核）。</summary>
 public class McLoginMs : McLoginData
 {
     /// <summary>

@@ -2,7 +2,7 @@ Public Module ModJava
 
     Sub New()
         '选择编排核（JavaSelection）的宿主层接线：Mojang Java 列表的下载结果供给
-        '（裁定 6：NetRequestByLoader + DlVersionListOrder 保持 1:1 下载机制；旧 SelectOrDownloadJava :212-215 的抓取点）
+        '（NetRequestByLoader + DlVersionListOrder 保持 1:1 下载机制；旧 SelectOrDownloadJava :212-215 的抓取点）
         PCLCS.JavaSelection.JavaListFetcher = Function() NetRequestByLoader(DlVersionListOrder(
             {"https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"},
             {"https://bmclapi2.bangbang93.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"}
@@ -16,7 +16,7 @@ Public Module ModJava
     Public Sub JavaInit()
         '初始化决策核已迁 C#（PCLCS.JavaRequirement.InitAsync，旧 :8-48 决策面逐行：
         'JavaConfigVersion=0 老版本迁移 → Configs.JavaList 读缓存 → 无 Java 判定）；
-        '搜索触发留在宿主层（裁定 8）；旧 :44 Catch 的掩蔽语义（TECHDEBT §11）在核内保持：Failed 时不触发搜索
+        '搜索触发留在宿主层；旧 :44 Catch 的掩蔽语义（TECHDEBT §11）在核内保持：Failed 时不触发搜索
         If PCLCS.JavaRequirement.InitAsync().Run() = PCLCS.JavaInitState.NoJava Then JavaListRefreshWorker.Start()
     End Sub
 
@@ -120,8 +120,8 @@ Public Module ModJava
     ''' <returns>最适合的 Java。若找不到或失败则返回 null，除非取消否则不会抛出异常。</returns>
     Public Function SelectOrDownloadJava(Target As OneOf(Of ValueRange(Of Version), McInstance), TryFixOrHint As Boolean, Optional c As CancellationToken = Nothing, Optional p As ProgressProvider = Nothing) As Java
         '选择编排核已迁 C#（PCLCS.JavaSelection.SelectOrDownload，旧 :113-305 决策面逐行：迁移判定 → 分支 2 版本文件夹搜索 /
-        '分支 3 JavaForced（PreviewGet 自动重置 + CheckAsync 验活，裁定 7）/ 自动 = 需求区间 → 列表选择 → 搜索等待与重搜（#3797 JavaLock）→
-        'Mojang 清单匹配（裁定 6 JavaListFetcher）→ 无匹配手装提示 → 下载重选）；
+        '分支 3 JavaForced（PreviewGet 自动重置 + CheckAsync 验活）/ 自动 = 需求区间 → 列表选择 → 搜索等待与重搜（#3797 JavaLock）→
+        'Mojang 清单匹配（JavaListFetcher）→ 无匹配手装提示 → 下载重选）；
         'VB 侧仅提取实例基元（PathVersion/Name/Config/需求区间提供者）并供给回调面
         Dim Face As OneOf(Of ValueRange(Of Version), JavaSelectionInstance)
         If Target.Is(Of McInstance) Then
@@ -186,7 +186,7 @@ Public Module ModJava
     ''' <summary>
     ''' 构建下载指定 Java 的加载器。
     ''' 文件清单产出已迁 C#（PCLCS.JavaSelection.CreateJavaDownloadFiles，旧 :546-558 决策面：piston-meta manifest → NetFile 清单，
-    ''' 3 哈希跳过 #3827）；此处仅保留 LoaderDownload+LoaderWorker 组装（裁定 6）。
+    ''' 3 哈希跳过 #3827）；此处仅保留 LoaderDownload+LoaderWorker 组装）。
     ''' </summary>
     Private Function CreateJavaDownloadLoader(Target As JavaDownloadInfo) As LoaderCombo(Of Integer)
 
@@ -211,7 +211,7 @@ Public Module ModJava
     End Function
 
     ''' <summary>
-    ''' manifest 获取供给（旧 :548 的 NetRequestByLoader 下载；裁定 6：保持 1:1 下载机制）。
+    ''' manifest 获取供给（旧 :548 的 NetRequestByLoader 下载；保持 1:1 下载机制）。
     ''' </summary>
     Private Function FetchJavaManifest(Urls As IEnumerable(Of String)) As String
         Return NetRequestByLoader(Urls, IsJson:=True)

@@ -99,7 +99,7 @@ public sealed class NetSource
     public int FailCount;
     public Exception? Ex;
     /// <summary>若该下载源正在进行强制单线程下载，标记这个唯一的线程。</summary>
-    //? Task 2 已按计划收紧为 NetThread（原计划备注：Task 2: 收紧为 NetThread）
+    //? 已按迁移计划收紧为 NetThread
     public NetThread? SingleThread;
     public bool IsFailed;
 

@@ -1,6 +1,6 @@
 # 设置目录对拍快照：key|defaultValue|source|encrypted|type
 # 由重写前的 PCLA\Pages\PageSetup\Settings.vb:5-188 的 182 行 New Setting(...) 一次性机械生成
-#（生成脚本见 .superpowers/sdd/2026-10-29-w1-instances-settings/task-3-report.md，不入库），
+#（一次性脚本生成，脚本未入库），
 # 是 182 键迁移的唯一权威对账物；SettingsCatalogParityTests 逐行钉住 SettingsCatalog 与之一致。
 # source: Normal=旧全局 Setup.ini / Registry=注册表 / Instance=版本独立设置；type 为 C# 默认值类型名。
 Identify||Registry|False|String

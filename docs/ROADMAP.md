@@ -13,13 +13,13 @@
 
 ## 进行中
 
-- 启动参数抽离（已完成，`docs\superpowers\specs\2026-10-21-launch-argument-extraction-design.md`）
-- 下载源与清单解析抽离（已完成，2026-10-22 实机验收，`docs\superpowers\plans\2026-10-21-download-metadata-extraction.md`）
-- 实例模型与设置后端 C# 化（W1 完成，`docs\superpowers\plans\2026-10-29-w1-instances-settings.md`）
-- 下载与安装网络栈 C# 化（W2 完成：网络请求/下载引擎、资源检索数据面、安装决策核、整合包判定与部署，`docs\superpowers\plans\2026-11-01-w2-download-network.md`）
-- 启动栈 C# 化（W3 完成：启动参数拼装核、进程启动与文件核、登录网络/算法核、Java 管理核、日志看门狗，`docs\superpowers\plans\2026-11-03-w3-launch.md`）
-- 重复逻辑与样板代码治理（调研见 `docs\superpowers\research\2026-10-21-duplication-survey.md`）
-- C# 化前加固四件套（S1–S4，2026-10-28 全部完成并合并）：品牌与发布基线（`docs\superpowers\specs\2026-10-22-brand-release-baseline-design.md`）、异常兜底与 Result（`docs\superpowers\specs\2026-10-23-error-handling-design.md`）、行为黄金语料（`docs\superpowers\specs\2026-10-23-behavior-golden-corpus-design.md`）、.NET 解耦与 NativeAOT（`docs\superpowers\specs\2026-10-23-dotnet-decoupling-aot-design.md`）
+- 启动参数抽离（已完成）
+- 下载源与清单解析抽离（已完成，2026-10-22 实机验收）
+- 实例模型与设置后端 C# 化（已完成）
+- 下载与安装网络栈 C# 化（完成：网络请求/下载引擎、资源检索数据面、安装决策核、整合包判定与部署）
+- 启动栈 C# 化（完成：启动参数拼装核、进程启动与文件核、登录网络/算法核、Java 管理核、日志看门狗）
+- 重复逻辑与样板代码治理（调研已完成）
+- C# 化前加固四件套（S1–S4，2026-10-28 全部完成并合并）：品牌与发布基线、异常兜底与 Result、行为黄金语料、.NET 解耦与 NativeAOT
 
 ## 提前项：全面 C# 化与 UI 框架更换
 
@@ -33,7 +33,7 @@ C# 化与 MCP 候选共用同一批核心层，谁先做都不返工。
 
 ## 候选项：UIA 自测能力（AutomationId）
 
-**状态**：本轮实现，设计见 `docs\superpowers\specs\2026-10-22-uia-testability-design.md`。
+**状态**：已实现。
 **目标**：让 Agent 能自己跑 GUI 验收，不再每次请用户手点。
 
 - 为导航、下载、实例列表等关键控件补稳定的 `AutomationId`（AID），不依赖可见文本定位。
@@ -106,9 +106,9 @@ C# 化与 MCP 候选共用同一批核心层，谁先做都不返工。
 
 ## 候选项：下载模块重设计（迁移完成后的优先事项）
 
-**状态**：概念设计已完成（`docs\superpowers\specs\2026-11-03-download-redesign-concept.md`），实施排期为**迁移完成后（W4 之后）的优先事项**；实施前须基于当时引擎现状重新出详细 spec 并走 brainstorming。
+**状态**：概念设计已完成，实施排期为**迁移完成后的优先事项**；实施前须基于当时引擎现状重新出详细设计。
 
-**背景**：下载模块存在四个老问题——任务无法暂停/保存、代理检测不积极且不支持动态切换、退出程序任务全部消失、下载 UI 天然只适合单任务。W2 已把下载引擎（NetFile/NetThread/NetManager）1:1 迁入 C# 并过终审与实机冒烟，为重设计提供了带行为锁的演进基座。
+**背景**：下载模块存在四个老问题——任务无法暂停/保存、代理检测不积极且不支持动态切换、退出程序任务全部消失、下载 UI 天然只适合单任务。下载引擎（NetFile/NetThread/NetManager）已 1:1 迁入 C# 并经实机冒烟验收，为重设计提供了带行为锁的演进基座。
 
 **目标形态（四问题 → 四能力）**：
 

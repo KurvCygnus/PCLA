@@ -6,7 +6,7 @@ namespace PCLCS.Settings;
 /// <summary>
 /// 182 个设置项的目录，自 PCLA\Pages\PageSetup\Settings.vb:5-188 逐键 1:1 机械迁移。
 /// 构造参数顺序保持 (key, defaultValue, source, encrypted)；VB 的 OnChanged 全部剥离
-/// （VB 侧在启动时重新注册，见 Task 3 的迁移表），值类型由默认值推导。
+/// （VB 侧在启动时重新注册，见迁移表），值类型由默认值推导。
 /// </summary>
 public static class SettingsCatalog
 {

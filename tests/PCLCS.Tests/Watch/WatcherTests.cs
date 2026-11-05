@@ -797,7 +797,7 @@ public class WatcherTests : IDisposable
     [Fact]
     public void Global_statics_hold_list_and_running_flag()
     {
-        //裁定 5：McWatcherList/HasRunningMinecraft 由 C# 持有；VB 侧经薄转发属性读写
+        //McWatcherList/HasRunningMinecraft 由 C# 持有；VB 侧经薄转发属性读写
         Assert.Empty(Watcher.McWatcherList);
         Assert.False(Watcher.HasRunningMinecraft);
         Watcher.HasRunningMinecraft = true;

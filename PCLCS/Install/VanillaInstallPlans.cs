@@ -2,7 +2,7 @@ namespace PCLCS.Install;
 
 /// <summary>
 /// 原版客户端安装决策（ModDownloadLib.vb McDownloadClientLoader:13-73 的决策段迁入）：
-/// 版本 Json 落盘路径与 clientVersion 标记写入。Loader 链本体留 VB（计划裁定）。
+/// 版本 Json 落盘路径与 clientVersion 标记写入。Loader 链本体留 VB。
 /// </summary>
 public static class VanillaInstallPlans
 {

@@ -59,7 +59,7 @@ public sealed class Watcher
         public DateTime? ProcessStartTime;
     }
 
-    //全局态（ModWatcher.vb:4-6 移植；裁定 5：C# 持有，VB 以薄转发属性保留公共名）
+    //全局态（ModWatcher.vb:4-6 移植；C# 持有，VB 以薄转发属性保留公共名）
     /// <summary>全部看门狗（原 Public McWatcherList；构造时剔除终态项并追加自身，旧 :74-81）。</summary>
     public static List<Watcher> McWatcherList = [];
     /// <summary>是否有运行中的 Minecraft（原 Public HasRunningMinecraft；VB MinecraftStart/Stop 经转发属性写入）。</summary>

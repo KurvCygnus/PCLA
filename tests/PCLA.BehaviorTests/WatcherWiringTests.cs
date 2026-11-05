@@ -5,7 +5,7 @@ using Xunit;
 namespace PCLA.BehaviorTests;
 
 /// <summary>
-/// 看门狗宿主回调接线时序门（回归：W3 Task 7 评审 Critical）。
+/// 看门狗宿主回调接线时序门（历史 Critical 回归的守门用例）。
 /// ModWatcher 模块的 Sub New 是四个宿主回调（StateChanged/LaunchLog/CrashHint/Feedback）的唯一接线落点，
 /// 而嵌套类型实例化（New WatcherHost）与委托创建（ldftn）均不触发模块初始化——直连 C# 构造会丢失会话
 /// 首个看门狗的全部宿主回调（构造/阶段/窗口/退出日志经 ?.Invoke 静默吞掉、汇总翻转守卫随即闩死，

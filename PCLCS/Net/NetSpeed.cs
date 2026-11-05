@@ -3,7 +3,7 @@ using PCLCS.Settings;
 namespace PCLCS.Net;
 
 /// <summary>
-/// 下载引擎的全局调度状态（原 ModNet.vb:311-351 随引擎迁入；Task 2 曾暂置 NetFile，Task 3 归位于此独立承载，
+/// 下载引擎的全局调度状态（原 ModNet.vb:311-351 随引擎迁入；曾暂置于 NetFile，后归位于此独立承载，
 /// 与管理器/引擎分离）。VB 侧经 ModNet 的同名转发成员访问。
 /// </summary>
 public static class NetSpeed

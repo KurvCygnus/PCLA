@@ -163,7 +163,7 @@ public static class LaunchFiles
         var profiles = FileUtils.ReadAsJson(filePath) as JsonObject
             ?? throw new InvalidCastException($"launcher_profiles.json 的根不是 JSON 对象（{filePath}）");
         MergeJson(profiles, replaceJson); //与 JObject.Merge 默认语义对齐（见 MergeJson 注）
-        //? net8 差异（随 Task 1 编码注）：net8 未注册 CodePagesEncodingProvider 时 GetEncoding("GB18030") 抛出；
+        //? net8 差异（编码注）：net8 未注册 CodePagesEncodingProvider 时 GetEncoding("GB18030") 抛出；
         //? 运行目标为 net48，net8 仅 AOT 冒烟
         FileUtils.Write(filePath, profiles.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), Encoding.GetEncoding("GB18030"));
         log?.Invoke(successLog);

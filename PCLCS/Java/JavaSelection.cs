@@ -21,7 +21,7 @@ namespace PCLCS;
 public sealed record JavaDownloadInfo(string ComponentName, JsonNode? Java, Version JavaVersion);
 
 /// <summary>
-/// 版本实例面：选择编排与迁移核所需的 McInstance 提取基元（宿主层转发时构造，Task 5 JavaRequirementQuery 同模式）。
+/// 版本实例面：选择编排与迁移核所需的 McInstance 提取基元（宿主层转发时构造，与 JavaRequirementQuery 同模式）。
 /// </summary>
 /// <param name="PathVersion">版本文件夹路径（旧 Instance.PathVersion：分支 2/迁移的搜索目标与 instanceKey 面）。</param>
 /// <param name="Name">版本名（旧 Instance.Name：迁移日志）。</param>
@@ -72,18 +72,18 @@ internal interface IJavaSelectionConfigAccess
 
 /// <summary>
 /// Java 选择编排核（自宿主层 ModJava.vb 移植）：
-/// 选择编排（旧 SelectOrDownloadJava :113-305 决策面逐行：迁移判定 → 分支 2 版本文件夹搜索 / 分支 3 JavaForced（PreviewGet 自动重置 + CheckAsync 验活，裁定 7）/
-/// 自动 = 需求区间 → 既有列表 → 搜索等待与重搜（#3797 JavaLock）→ Mojang 清单匹配（裁定 6 JavaListFetcher）→ 无匹配手装提示 → 下载重选），
+/// 选择编排（旧 SelectOrDownloadJava :113-305 决策面逐行：迁移判定 → 分支 2 版本文件夹搜索 / 分支 3 JavaForced（PreviewGet 自动重置 + CheckAsync 验活）/
+/// 自动 = 需求区间 → 既有列表 → 搜索等待与重搜（#3797 JavaLock）→ Mojang 清单匹配（JavaListFetcher）→ 无匹配手装提示 → 下载重选），
 /// 版本独立 Java 设置迁移决策（旧 MigrateInstanceJavaSettings :318-363：UI 禁用/恢复两点经回调），
-/// 下载清单产出（旧 CreateJavaDownloadLoader :546-558 决策面：piston-meta manifest → NetFile 清单，3 哈希跳过 #3827；LoaderDownload+LoaderWorker 组装留宿主层，裁定 6）。
-/// 搜索触发、弹窗与 Loader 组装留在宿主层（裁定 6/8）。
+/// 下载清单产出（旧 CreateJavaDownloadLoader :546-558 决策面：piston-meta manifest → NetFile 清单，3 哈希跳过 #3827；LoaderDownload+LoaderWorker 组装留宿主层）。
+/// 搜索触发、弹窗与 Loader 组装留在宿主层。
 /// </summary>
 public static class JavaSelection
 {
 
     // ============================================ 宿主与测试接线面 ============================================
 
-    /// <summary>Mojang Java 列表的下载结果供给（裁定 6：宿主层经 NetRequestByLoader + DlVersionListOrder 供给，保持 1:1 下载机制；ModJava.vb Sub New 接线）。</summary>
+    /// <summary>Mojang Java 列表的下载结果供给（宿主层经 NetRequestByLoader + DlVersionListOrder 供给，保持 1:1 下载机制；ModJava.vb Sub New 接线）。</summary>
     public static Func<string>? JavaListFetcher { get; set; }
 
     //* 测试注入面（JavaRequirement.SortAsyncOverride 同模式）：分支 2 与迁移的版本文件夹搜索替换点。
@@ -98,7 +98,7 @@ public static class JavaSelection
     private static Result<Java, JavaCheckError> Check(Java java, CancellationToken c)
         => (CheckAsyncOverride?.Invoke(java, c) ?? java.CheckAsync(c)).Run();
 
-    //* 测试注入面（Task 5 IJavaConfigAccess 同模式）：默认直读全局 Configs（与旧 ModJava.vb 直读一致，含 JavaForced PreviewGet）；
+    //* 测试注入面（IJavaConfigAccess 同模式）：默认直读全局 Configs（与旧 ModJava.vb 直读一致，含 JavaForced PreviewGet）；
     //* 测试注入内存实现以隔离真实 %APPDATA%（ConfigProviders.Default 落真实用户目录）
     internal static IJavaSelectionConfigAccess ConfigAccess { get; set; } = new GlobalJavaSelectionConfigAccess();
 
@@ -173,7 +173,7 @@ public static class JavaSelection
             {
                 JavaSelectionInstance inst = instance!;
                 //=============================== 强制指定特定 Java ===============================
-                Java? chosenJava = ConfigAccess.JavaForcedGet(inst.Config);   //旧 :138（PreviewGet 自动重置 1:1，裁定 7）
+                Java? chosenJava = ConfigAccess.JavaForcedGet(inst.Config);   //旧 :138（PreviewGet 自动重置 1:1）
                 Logger.Info($"版本设置中强制指定的 Java：{inst.PathVersion} → {chosenJava}");
                 if (chosenJava is null)
                 {
@@ -189,7 +189,7 @@ public static class JavaSelection
                 }
                 if (!ConfigAccess.JavaListGet().Contains(chosenJava))
                 {
-                    ConfigAccess.JavaForcedReset(inst.Config);   //旧 :149（手动重置保留，不与 PreviewGet 顺手去重——裁定 7）
+                    ConfigAccess.JavaForcedReset(inst.Config);   //旧 :149（手动重置保留，不与 PreviewGet 顺手去重）
                     callbacks.UpdateJavaLists?.Invoke();
                     if (tryFixOrHint)
                     {
@@ -456,8 +456,8 @@ public static class JavaSelection
     /// <summary>
     /// 下载清单产出（旧 CreateJavaDownloadLoader :546-558 决策面）：piston-meta manifest → NetFile 清单
     /// （跳过 downloads.raw 缺失项；跳过 3 个无意义大量重复文件 #3827 :556-557）。
-    /// manifest 的网络获取经 <paramref name="manifestFetcher"/> 供给（裁定 6：宿主层保持 NetRequestByLoader 的 1:1 下载机制）；
-    /// LoaderDownload+LoaderWorker 组装留宿主层（裁定 6）。
+    /// manifest 的网络获取经 <paramref name="manifestFetcher"/> 供给（宿主层保持 NetRequestByLoader 的 1:1 下载机制）；
+    /// LoaderDownload+LoaderWorker 组装留宿主层。
     /// </summary>
     /// <param name="target">要下载的 Java 条目。</param>
     /// <param name="preferMojang">旧 DlSourcePreferMojang（宿主层读设置后传入，InstallerPlans 同口径）。</param>
@@ -503,7 +503,7 @@ public static class JavaSelection
     // ============================================ Mojang Java 列表解析（旧 :209-239 的 Static worker） ============================================
 
     /// <summary>
-    /// 构建 Mojang Java 列表 worker（旧 :209-239）：下载经 <see cref="JavaListFetcher"/> 供给（裁定 6），解析为 <see cref="JavaDownloadInfo"/> 列表。
+    /// 构建 Mojang Java 列表 worker（旧 :209-239）：下载经 <see cref="JavaListFetcher"/> 供给，解析为 <see cref="JavaDownloadInfo"/> 列表。
     /// 成功后缓存（HasSucceeded），应用生命周期内不重复下载（旧 Static 语义）。
     /// </summary>
     private static RedoableWorker<List<JavaDownloadInfo>> CreateDownloadListWorker() => new(token =>

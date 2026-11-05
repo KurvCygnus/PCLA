@@ -24,7 +24,8 @@ public sealed class CrashAnalyzerTests : IDisposable
         var logPath = Path.Combine(logDir, "latest.log");
         File.WriteAllText(logPath, c.Log);
 
-        var analyzer = new CrashAnalyzer();
+        //分析核已迁 C#（W4 T1）：构造限定名更新，TaskTemp 经回调走宿主层 RequestTaskTempFolder（保持 VB 原路径）
+        var analyzer = new PCLCS.Crash.CrashAnalyzer(static () => ModMain.RequestTaskTempFolder());
         analyzer.Import(logPath);
         Assert.True(analyzer.Prepare());
         analyzer.Analyze();

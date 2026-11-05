@@ -145,7 +145,7 @@ public class LaunchArgumentsTests : IDisposable
             "--add-exports",
             "cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED",
             "-Doolloo.jlw.tmpdir=${pure_directory}",
-            // LUA：库列表含 org.lwjgl:lwjgl:3.4.1（裁定 9：经 Libraries.ListGetJson）
+            // LUA：库列表含 org.lwjgl:lwjgl:3.4.1（经 Libraries.ListGetJson）
             "-javaagent:\"" + inputs.LwjglUnsafeAgentJar() + "\"",
             // 内存：Floor(2 * 1024) = 2048
             "-Xmx2048m",
@@ -267,7 +267,7 @@ public class LaunchArgumentsTests : IDisposable
     [Fact]
     public void Game_arguments_optifine_tweaker_rewrites_version_json()
     {
-        // ModLaunch.vb:1347-1364（裁定 10）：错误 TweakClass 挪位 + 版本 JSON 改写经 versionJsonWriter 回调写盘恰好一次
+        // ModLaunch.vb:1347-1364：错误 TweakClass 挪位 + 版本 JSON 改写经 versionJsonWriter 回调写盘恰好一次
         var instance = NewInstance("tweaker", new JsonObject
         {
             ["id"] = "tweaker",
@@ -389,7 +389,7 @@ public class LaunchArgumentsTests : IDisposable
     [Fact]
     public void Lua_check_uses_libraries_list_get_json()
     {
-        // 裁定 9：LUA 判定经 C# Libraries.ListGetJson 等价（ModLaunch.vb:1254-1258 两态 + 精确版本匹配 + 设置开关）
+        // LUA 判定经 C# Libraries.ListGetJson 等价（ModLaunch.vb:1254-1258 两态 + 精确版本匹配 + 设置开关）
         var withLua = NewInstance("withlua", BaseJson("withlua", Jvm("-Dtest.jvm=1"), null, "org.lwjgl:lwjgl:3.4.1"));
         var withoutLua = NewInstance("withoutlua", BaseJson("withoutlua", Jvm("-Dtest.jvm=1"), null, "org.lwjgl:lwjgl:3.2.1"));
         var disabled = NewInstance("disabledlua", BaseJson("disabledlua", Jvm("-Dtest.jvm=1"), null, "org.lwjgl:lwjgl:3.4.1"));

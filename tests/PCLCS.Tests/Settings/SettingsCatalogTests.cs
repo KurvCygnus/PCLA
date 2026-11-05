@@ -7,7 +7,7 @@ public class SettingsCatalogTests
     [Fact]
     public void Entry_count_is_182() => Assert.Equal(182, SettingsCatalog.Entries.Count);
 
-    // 代表性钉子：默认值/Source/Encrypted/Type 与 Settings.vb:5-188 一致（完整一致性由 Task 3 的
+    // 代表性钉子：默认值/Source/Encrypted/Type 与 Settings.vb:5-188 一致（完整一致性由
     // “VB 目录 vs C# 目录”对拍测试兜底）。
     [Theory]
     [InlineData("WindowWidth", 900, SettingsSource.Normal, false)]

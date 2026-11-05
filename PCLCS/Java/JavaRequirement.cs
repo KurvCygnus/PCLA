@@ -46,7 +46,7 @@ public sealed record JavaRequirementQuery(
 /// Java 版本需求表与初始化决策核（自宿主层 ModJava.vb 移植）：
 /// 需求区间表（旧 GetJavaRequirement :129-274 逐行：原版/OptiFine/Forge/NeoForge/Fabric/LiteLoader/统一通行证 → <see cref="ValueRange{Version}"/> 交集），
 /// 初始化决策面（旧 JavaInit :8-48：JavaConfigVersion=0 老版本迁移 → Configs.JavaList 读缓存 → 无 Java 判定）。
-/// 搜索触发（JavaListRefreshWorker.Start）与全部弹窗留在宿主层（裁定 8）；旧 :44 Catch 的掩蔽语义（TECHDEBT §11）保持。
+/// 搜索触发（JavaListRefreshWorker.Start）与全部弹窗留在宿主层；旧 :44 Catch 的掩蔽语义（TECHDEBT §11）保持。
 /// </summary>
 public static class JavaRequirement
 {
@@ -119,7 +119,7 @@ public static class JavaRequirement
                 Logger.Info($"共有 {list.Count} 个可用的 Java：\r\n- {list.Select(java => java.ToString()).Join("\r\n- ")}");
                 return JavaInitState.HasCache;
             }
-            //如果没有 Java，则触发搜索（旧 :41-43；触发动作 JavaListRefreshWorker.Start 留在宿主层，裁定 8）
+            //如果没有 Java，则触发搜索（旧 :41-43；触发动作 JavaListRefreshWorker.Start 留在宿主层）
             Logger.Warn("初始化未找到可用的 Java，将自动触发搜索");
             return JavaInitState.NoJava;
         } catch (Exception ex)
@@ -324,7 +324,7 @@ public static class JavaRequirement
 
     /// <summary>
     /// 版本独立设置读取（宿主层 Settings.vb:140-149 的 instanceKey 面：先懒式导入该实例的旧设置，再经服务读取；导入失败不阻断读取）。
-    /// internal：Task 6 JavaSelection 的实例设置读取共用同一 instanceKey 面。
+    /// internal：JavaSelection 的实例设置读取共用同一 instanceKey 面。
     /// </summary>
     internal static T GetInstanceSetting<T>(string key, string instanceKey)
     {
