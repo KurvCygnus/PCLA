@@ -1,4 +1,4 @@
 [submodule "MeloongCore"]
 	path = MeloongCore
 	url = https://github.com/KurvCygnus/MCA.git
-	branch = pcla-pin
+	branch = main
