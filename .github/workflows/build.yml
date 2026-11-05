@@ -55,6 +55,9 @@ jobs:
       - name: Test
         run: dotnet test tests\PCLCS.Tests\PCLCS.Tests.csproj -c Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }}
 
+      - name: Restore PCLA packages
+        run: msbuild PCLA\PCLA.vbproj -t:Restore -p:Configuration=Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }} -m:2
+
       - name: Build PCLA
         run: msbuild PCLA\PCLA.vbproj -t:Rebuild -p:Configuration=Release -p:PclaChannel=${{ inputs.channel }} -p:PclaCommit=${{ inputs.commit }} -m:2
 
