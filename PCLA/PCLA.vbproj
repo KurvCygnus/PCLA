@@ -710,6 +710,7 @@
     <Import Include="Newtonsoft.Json" />
     <Import Include="Newtonsoft.Json.Linq" />
     <Import Include="PCLCS" />
+    <Import Include="PCLCS.Validate" />
     <Import Include="System" />
     <Import Include="System.Collections.Concurrent" />
     <Import Include="System.Collections.Generic" />
