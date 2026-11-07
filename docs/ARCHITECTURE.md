@@ -7,7 +7,7 @@
 | 项目 | 语言 | 目标框架 | 作用 |
 | --- | --- | --- | --- |
 | `Plain Craft Launcher 2` | VB.NET + XAML | .NET Framework 4.8 | 启动器主体：UI、业务、Minecraft 域 |
-| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（见 §5.5 与 §6.7），网络请求/下载引擎与安装、整合包决策核（见 §5.6 与 §6.8-6.10），启动栈决策核（参数/进程/文件/登录）与 Java 管理核、日志看门狗（见 §6.11-6.13） |
+| `PCLCS` | C# | net48;net8.0 | 逐步外迁的强类型层：`McVersion`、`McInstallManifest`、`Java`、常量、下载清单解析、设置后端与实例模型（见 §5.5 与 §6.7），网络请求/下载引擎与安装、整合包决策核（见 §5.6 与 §6.8-6.10），启动栈决策核（参数/进程/文件/登录）与 Java 管理核、日志看门狗（见 §6.11-6.13），崩溃分析/导出核、输入校验族、基础工具与事件/杂项业务核（见 §5.7-5.8 与 §6.14） |
 | `MeloongCore` | C#（子模块） | net48 / netstandard2.0 | 通用基础设施：日志、路径、配置、网络、文件工具 |
 | `MeloongCore.Wpf` | C# | net48 | WPF 相关基础件 |
 | `PCLCS.AotSmoke` | C# | net10.0 | NativeAOT 冒烟工程：发布 `PCLCS` + `MeloongCore.Shared` 的解析与迁移路径（见下文 §1.1） |
@@ -40,6 +40,12 @@ PCLCS (McVersion 等强类型) + MeloongCore (日志/路径/配置/HTTP 基础�
 ```
 
 实际依赖是双向的：引擎层直接引用窗体（`ModLaunch.vb:108` 取 `FrmLaunchLeft`，`ModWatcher.vb:30-54` 直接 `RunInUi`），页面层直接做文件 IO 与网络请求（`Pages\PageLaunch\PageLaunchLeft.xaml.vb:24-108`）。没有依赖注入容器，也没有 ViewModel；模块级 `Public` 变量就是全局服务总线（`Modules\ModMain.vb:365-420`）。
+
+### 2.1 核心层迁移完成（W4 收官，2026-11-07）
+
+- 业务核心已全部按"决策核迁 C#、宿主壳留 VB"外迁：W1 实例与设置（§5.5/§6.7）、W2 网络与安装（§5.6/§6.8-6.10）、W3 启动栈（§6.11-6.13）、W4 崩溃/校验/基础工具/事件杂项（§5.7-5.8/§6.14）。
+- 剩余 VB 为 UI 框架绑定面：视图层（Pages/Controls 的 XAML 与 code-behind）、窗口管理（FormMain/Application）、`LoaderBase`/`LoaderTask` 任务框架体系（P0-2）、WPF 辅助（MyMsgBox/Hint/动画/主题/自绘控件）、`RunInUi` 家族与 ModBase 全局态声明（逐项清单见 `docs\TECHDEBT.md` §15）。这些归属 UI 框架更换阶段处置，不在核心层迁移范围。
+- 后续：ROADMAP 的"整顿轮"（异步化改造、架构接口抽象、Settings 强类型化）→ UI 框架更换阶段。
 
 ## 3. 启动与生命周期
 
@@ -141,6 +147,21 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - **宿主边界**：`LoaderDownload` 与 `LoaderBase` 任务树留守 VB（Loader 体系不迁），以 `INetTaskHost`（`PCLCS\Net\NetFile.cs` 内接口）接入引擎——引擎经此通知单文件完成/失败并同步失败计数，VB 侧 `LoaderDownload` 用 `Implements` 承接（`ModNet.vb:194` 起）。`ModNet.vb` 的 `Sub New` 完成全部 provider 接线（`ModNet.vb:10-17`）。
 - **net48/net8 差异**：CacheCow 磁盘缓存协商仅在 net48 编译（`NetRequest.cs` 内 `#if NET48`），net8 为无缓存裸 `HttpClient`；过渡债见 `docs\TECHDEBT.md` §12。
 
+### 5.7 基础工具收敛（PCLCS\Common）
+
+`ModBase.vb`/`ModMain.vb`/`ModEvent.vb` 的可测工具核按"工具迁 C#、调用点零改动"收敛，VB 消费点经 `PCLA.vbproj:712-713` 的项目级 Imports（`PCLCS`/`PCLCS.Validate`）直达 C# 类型，行为由 `tests\PCLCS.Tests\Common` 锁定：
+
+- **`CommonUtils.cs`**（901 行）：ini 家族（ReadIni/WriteIni/HasIniKey/DeleteIniKey/IniClearCache，缓存与编码语义逐字）、权限检查（`CheckPermission`/`CheckPermissionWithException` 四异常面）、`Val` 的 `Conversion.Val` 语义复刻（含 `&H`/`&O` 分支）、搜索家族（`Search` + `Models.cs` 的 `SearchEntry`/`SearchSource`，VB 侧以继承薄壳保持调用点类型零改动）、`GetResultWithTimeout`（自 `NetRequest.cs` 私有等价实现提升为公共版，原消费点已改指）、UUID/时间与随机（`RandomOne`/`RandomInteger`/`Shuffle`）。
+- **`TempFolders.cs`**：任务缓存文件夹核（清理闩 + 申请链，`ModMain.vb` 旧 :906-958 逐字；带空格判定核复用 `Install.InstallPlans.ShouldUseTempFallback`）；宿主 PathTemp/OsDrive 经参数注入，`CrashAnalyzer` 构造回调（T1）在 T5 迁核后改调本类型。
+- **`EventActions.cs`**：自定义事件的 IO 业务核（`GetAbsoluteUrls` 六分支、打开文件/执行命令 case、修改变量/写入变量注册表面）；弹窗/Hint/页面入口/下载客户端经回调注入，`EventOpenKind` 按名映射不做数值镜像。
+- **`HelpEntry.cs`**：帮助条目解析核（`ModMain.vb` 旧 :489-523 逐字）；Newtonsoft → `JsonNodeUtils` 宽松层的 §9 逐点对照见类型头注，`ArgumentReplace` 经回调注入。
+- **`ProcessStarter.cs`**：进程启动（ToShortPath 长路径处理语义）；`WindowNative.cs`：窗口置顶 Win32 核（PostMessage/SetForegroundWindow，比照 `Watcher.cs` 的 P/Invoke 先例随核进入 PCLCS）。
+- **VB 壳**：`ModBase.vb`/`ModMain.vb`/`ModEvent.vb` 保留旧公共名薄转发与页面域 case（弹窗编排、`ArgumentReplace`、`ExtractResources`、全局态声明等，见 `docs\TECHDEBT.md` §15）。
+
+### 5.8 输入校验族（PCLCS\Validate）
+
+`ModValidate.vb`（旧 :8-424，15 类）整体迁入 `PCLCS\Validate\Validate.cs`（一文件多类按旧文件布局）：聚合入口 `Validate.ValidateAll`（VB 模块函数名 `Validate`——C# 成员不得与封闭类型同名 CS0542，故改记）、抽象基类 `Validate.Check`（旧 `MustOverride Validate` 同因改名）与各规则类逐字移植，派生类以非虚转发保留旧公共名 `Validate`。宿主层仅余模块壳转发与六类 XAML 薄壳（ValidateExcept/FolderPath/Http/Integer/Length/Nullable——XAML `local:` 实例化面），其余消费点直达 C#；行为由 `tests\PCLCS.Tests\Validate` 锁定，`FolderPath` 缺盘符测试为全套件唯一环境依赖前提（`docs\TECHDEBT.md` §15）。
+
 ## 6. Minecraft 域
 
 ### 6.1 模型
@@ -192,7 +213,7 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 ### 6.6 整合包与崩溃分析
 
->格式识别链与部署计划核迁入 `PCLCS\Modpack`（见 §6.10）；解压、overrides 落盘与 Loader 编排仍留 VB。
+>格式识别链与部署计划核迁入 `PCLCS\Modpack`（见 §6.10）；崩溃分析核与导出核迁入 `PCLCS\Crash`（见 §6.14）；解压、overrides 落盘、Loader 编排与崩溃弹窗编排仍留 VB。下文为迁移前锚点。
 
 - 五种格式：CurseForge `manifest.json`、Modrinth `modrinth.index.json`、HMCL `mcbbs.packmeta`、MultiMC `mmc-pack.json`、MCBBS；入口 `ModpackInstall`（`ModModpack.vb:31`），按压缩包内文件名嗅探（`:44-72`），overrides 复制到版本目录并写入 `VersionArgumentIndie`（`:126-143`）。
 - 崩溃分析 `CrashAnalyzer`（`ModCrash.vb:1`）：收集最近 3 分钟的 crash-report 与 latest.log（`:21-85`），按文件类型截取头尾窗口（`:214-264`），再用约 60 条 `String.Contains` 规则匹配原因（`:474-584`），最后做 Mixin/模组名归因（`:589-670`）。规则即产品知识，行为由 `tests\PCLA.BehaviorTests` 的黄金语料锁定。
@@ -260,15 +281,23 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 - **回调面**：`StateChanged`（→ MinecraftStart/MinecraftStop）、`LaunchLog`（→ `McLaunchLog`，脱敏留 VB）、`CrashHint`（Hint 文案留 VB）、`Feedback`（→ FeedbackInfo）在 `ModWatcher.Sub New` 接线；崩溃分析（CrashAnalyzer，W4 域）经构造参数委托留 VB；`WindowProbe` 为窗口枚举的测试注入缝。
 - **宿主面与工厂**：构造参数 Loader/Instance 的读取收敛为 `IWatcherHost`（游戏进程、进度、取消、版本发布时间；`ModWatcher.WatcherHost` 以 `Implements` 承接）。看门狗构造统一走 `ModWatcher.CreateWatcher` 工厂（`ModWatcher.vb:116`，调用点 `ModLaunch.vb:1376`）：模块成员调用先于方法体触发 `Sub New` 的回调接线——嵌套类型实例化与委托创建不会触发模块初始化，直连 C# 构造会静默丢失会话首个看门狗的全部宿主回调（时序缺陷已修，见提交 a872dcc）。
 
+### 6.14 崩溃分析与导出核（PCLCS\Crash）
+
+`ModCrash.vb`（旧 1113 行）按"分析核与文件操作核迁 C#、弹窗编排留 VB"拆分（终态 112 行），行为由 `tests\PCLCS.Tests\Crash` 与 `PCLA.BehaviorTests` 的黄金语料双面锁定：
+
+- **分析核 `CrashAnalyzer.cs`**（1407 行）：五步流水 Collect/Import 收集 → Prepare 分类（五类分流 + head/tail 截断魔数逐字，§3 P2）→ Analyze（Crit1→Crit2→条件堆栈→Crit3，约 60 条规则逐字）→ GetAnalyzeResult 文本组装，Mixin/模组名归因与语料契约随迁。Import 空 Catch 等既有怪癖带 `//!` 注记逐字保留（`docs\TECHDEBT.md` §3 P0-5/§15）；暂存文件夹申请经构造回调改调 `TempFolders.RequestTaskTempFolder`（T5 迁核后的既定改调点）；脱敏组合 `DesensitizeFilters` 由宿主 `ModMinecraft.vb` 的 `Sub New` 接线（FilterChar 按重命名后的文件名判定）。
+- **导出核 `CrashExport.cs`**：删旧文件 → 收集 OutputFiles+ExtraFiles → 重命名表逐条（旧 :894-903，不合并不补默认分支）→ 存在性过滤 → 读取脱敏 → zip 打包与 Report 工作目录清理；失败记日志返回 null，SaveFile/MyMsgBox/Hint/OpenExplorer 与 FeedbackInfo 留宿主壳。
+- **VB 壳**：`ModCrash.vb` 保留旧公共签名（Collect/Import/Prepare/Analyze/Output/GetAnalyzeResult）做薄转发，`Output` 仅余弹窗编排（`docs\TECHDEBT.md` §15）。
+
 ## 7. 测试
 
 ### 7.1 PCLCS 单元测试
 
-`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测，W2 迁入的网络请求/下载引擎（本机回环服务器夹具）、资源检索数据面、安装决策核与整合包判定/部署，以及 W3 迁入的启动参数拼装/进程/文件/登录核（回环与假响应夹具）、Java 需求表与选择编排、日志看门狗（假窗口枚举注入）。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
+`tests\PCLCS.Tests` 覆盖已经外迁到 C# 的类型：版本元数据、下载清单解析、下载源与 Java 探测，W2 迁入的网络请求/下载引擎（本机回环服务器夹具）、资源检索数据面、安装决策核与整合包判定/部署，W3 迁入的启动参数拼装/进程/文件/登录核（回环与假响应夹具）、Java 需求表与选择编排、日志看门狗（假窗口枚举注入），以及 W4 迁入的崩溃分析与导出核、输入校验族、基础工具（ini/Val/搜索/临时目录/事件 IO/帮助条目解析/GPU 偏好）。它们不依赖 VB 工程，直接用 `dotnet test` 运行。
 
 ### 7.2 行为黄金语料
 
-- `tests\PCLA.BehaviorTests` 通过 `ProjectReference` 直连 `PCLA`，覆盖 `McInstance`、`CrashAnalyzer`、`Settings`。
+- `tests\PCLA.BehaviorTests` 通过 `ProjectReference` 直连 `PCLA`，覆盖 `McInstance`、`CrashAnalyzer`（崩溃分析 8 项经宿主壳直通 C# 分析核）、`Settings`。
 - 测试进程内初始化临时目录；不启动 WPF、不访问网络、不写真实用户目录。
 - `CrashAnalyzer.GetAnalyzeResult` 是唯一生产可见性接缝（`Friend` + `InternalsVisibleTo`）。
 - 语料是合成数据；行为变化必须显式更新断言，不能靠放宽断言通过。
@@ -286,4 +315,4 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 | 下载文件 | `LoaderDownload.Start` `ModNet.vb:1396` | `NetManager:1639` → `NetFile:579` |
 | 资源搜索 | `ResourceSearcher.Search:73` | CurseForge / Modrinth JSON |
 | 微软登录 | `McLoginMsStart:547` | 六步核 `MsLoginSteps`（PCLCS\Launch）：`BeginDeviceCodeFlow`..`Profile` |
-| 崩溃分析 | `CrashAnalyzer:1` | `AnalyzeCrit1..3` `:474-670` |
+| 崩溃分析 | `ModCrash.CrashAnalyzer`（壳，弹窗编排） | 分析核 `PCLCS\Crash\CrashAnalyzer.cs`（Crit1..3）、导出核 `CrashExport.cs` |

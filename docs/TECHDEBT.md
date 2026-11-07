@@ -261,3 +261,52 @@
 - **net8 未注册 CodePagesEncodingProvider（仅 AOT 冒烟影响面）。** 启动编码段与 `launcher_profiles.json` 写回使用 `Encoding.GetEncoding("GBK"/"GB18030")`（`LaunchArguments.cs:343`、`LaunchFiles.cs:168`），net48 为运行目标不受影响；net8 下未注册 CodePages 提供程序时该处抛 `ArgumentException`，ANSICodePage 回退同样会抛且不受保护（`LaunchArguments.cs:332-335` `//?` 注记在位）。同族注记：`ProcessRunner.RunGameProcess` 在 net8 下 `UseShellExecute=true` 时访问 `EnvironmentVariables` 抛 `InvalidOperationException`（同样仅 AOT 冒烟面，注记在位）。如需 net8 运行：启动时 `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)`。与 §9 的 GB18030 条目同源。
 - **Config 序列化不能往返 Java 对象（登记于实例与设置迁移期，非启动栈迁移回归）。** `MeloongCore\Shared\General\Config.cs:38` 的序列化选项未开 `IncludeFields`，而 `Java` 的数据成员全为公开字段（Folder/Version）——`JavaForced`/`JavaList` 落盘为 `{}`；重启后 `Read<Java>` 经主构造器绑定（folder=null）抛参数异常，外层仅捕 `CryptographicException`，异常上抛落入 §11 的掩蔽路径。该行为自实例与设置迁移起 `JavaForced`/`JavaList` 持久化即如此（旧 VB 同走同一 C# Configs 路径），启动栈迁移的 1:1 移植未引入回归；测试面不受影响（同 provider 实例内 Set→Get 走内存缓存）。修复方向：`IncludeFields` 或 Java 自定义转换器，归后续整顿轮处理。
 - **既有缺陷现状交叉引用（启动栈迁移未触碰，仅提示仍 open）。** §13 的 Fabric/Forge 实例默认图标 pack-URI 失败链（修复方向 A/B/C 待用户裁决）与 NeoForge 官方源（maven.neoforged.net）不可达均维持 open；启动栈迁移范围（启动参数/进程/登录/Java/看门狗）不涉及上述缺陷路径，无需重复记录。
+
+## 15. 崩溃/校验/基础工具/事件杂项核 C# 化的过渡债（2026-11-07）
+
+以下条目是崩溃/校验/基础工具/事件杂项核 C# 化（核心层迁移收官轮）移植与收尾盘点出的已知决策、边界与残留，合并各部分审查的递延项；除标注"待裁决"的三项外均经核验；除标注外行为与旧版一致，**本轮仅记录，不修**。
+
+**既有怪癖随核保留（引用既有条目，不重复登记）**
+
+- **ModCrash Import 空 Catch 的保留确认（§3 P0-5）。** 压缩包探测的空 Catch 逐字迁入 `PCLCS\Crash\CrashAnalyzer.cs:146`（带 `//!` 注记指向 §3 P0-5）——非压缩包导入静默回退复制分支为既有行为，原样保留。§3 P0-5 所记 `ModCrash.vb:100` 为迁移前行号；迁移后 VB 弹窗编排壳的导出 Catch 反而补了 `Logger.Error`（`ModCrash.vb:99-101`），崩溃分析域的空 Catch 只剩 C# 核内这一处（本轮迁移面内同形的还有 `TempFolders.cs:73` 的申请主路径兜底，同样带 `//!` 注记）。整改随 §3 P0-5 的"禁止空 Catch"方向在整顿轮一并处理。
+- **崩溃日志截断魔数的保留确认（§3 P2）。** head/tail 窗口魔数 200/100、300/700、1500/500、1000/0（另有兜底 0/500）逐字迁入 `PCLCS\Crash\CrashAnalyzer.cs:307-383` 的 `GetHeadTailLines` 调用点，与 §3 P2 所记 `ModCrash.vb:214-264` 同源；规则即产品知识，随 §3 P2 卫生清理统一提常量。
+- **Config.cs 序列化隐患（交叉引用）。** `MeloongCore\Shared\General\Config.cs` 不开 `IncludeFields` 致 `JavaForced`/`JavaList` 落盘为 `{}` 的既有隐患已登记于 §14 末条；本次迁移未触碰该路径，无需重复记录。
+
+**VB 侧剩余面（核心层迁移完成后的宿主残留，归属 UI 框架更换阶段与整顿轮）**
+
+- **ModCrash.vb 仅余弹窗编排壳（112 行）。** 分析核（`PCLCS\Crash\CrashAnalyzer.cs`）与导出文件操作核（`PCLCS\Crash\CrashExport.cs`）已迁 C#，本类保留旧公共签名做薄转发；`Output` 仅余 ShowWindowToTop/MyMsgBox/SaveFile/Hint/OpenExplorer 与 FeedbackInfo 诊断输出，深绑 WPF 弹窗与文件对话框，比照 §12/§14 宿主层先例留 VB，随 UI 框架更换阶段处置。
+- **ModEvent UI case 残留面。** `PCLA\Modules\ModEvent.vb`（391 行）保留 `EventType` 枚举、`CustomEventService` 三个 WPF 附加属性（Events/EventType/EventData，XAML 绑定面）与 `Raise` 的 Select Case 调度；已迁 C# 的为打开类 IO 核、修改变量/写入变量注册表面与帮助 URL 解析（`PCLCS\Common\EventActions.cs`）。弹出窗口/弹出提示/切换页面/刷新主页/刷新页面/刷新帮助/复制文本/今日人品/内存优化/清理垃圾/加入房间/检查更新/导入整合包/安装整合包等 case 直呼页面、弹窗与 Hint 入口，属页面域，随 UI 框架更换阶段处置。
+- **「下载文件」case 按页面域排除条款留 VB。** `ModEvent.vb:290-312`：协议校验 MyMsgBox、`EventSafetyConfirm` 确认与 `PageOtherTest.StartCustomDownload` 分发全是页面域调用，无独立业务核可迁；经核验落档确认，该 case 的存废随 UI 框架更换阶段重排下载入口。
+- **ArgumentReplace 留 VB。** `PCLA\Modules\ModMain.vb:789` 起的 `{...}` 替换标记处理器深绑页面数据与全局路径，C# 侧仅经回调消费（`PCLCS\Common\HelpEntry.cs` 构造参数 `argumentReplace`）；迁移成本高于接缝收益，随 UI 框架更换阶段处置。
+- **ExtractResources 留 VB。** `PCLA\Modules\Base\ModBase.vb:820`：`My.Resources.ResourceManager` 强绑定宿主程序集资源模型（§12 MMC instance.cfg 同先例），文件写入与哈希比对已用 C# 工具面；迁核须连资源面一并搬走，收益低，留 VB。
+- **ModBase 全局态声明留 VB 清单。** `Handle`（`ModBase.vb:42`，主窗口句柄）、`PathImage`（`:50`，pack URI 前缀）、`PathTemp`（`:54`，缓存根）、`ModeDebug`（`:84`）、`PathPure`（`:590`）等模块级全局状态留在 VB：属 WPF/宿主生命周期状态，C# 核一律经参数或 provider 注入（`TempFolders`/`EventActions` 的 pathTemp/osDrive 形参、各静态 provider），自核心层迁移起不再新增直读点。本清单是整顿轮做全局态收敛（P0-3）时的核对底册。
+- **FeedbackInfo 诊断串留 VB（待裁决：补迁或留 VB 落档）。** `PCLA\Modules\ModMain.vb:914` 的反馈诊断串拼装不在迁移任务文件清单内，本次未触碰，崩溃导出弹窗路径（`ModCrash.Output`）仍调用；深绑版本常量与遥测/登录态全局面，默认按宿主诊断面落档，可再评估随崩溃域补迁。
+- **ModValidate 六类 XAML 薄壳与项目级 Imports（终态 91 行，超计划假设的 ~20 行）。** `PCLA\Modules\Base\ModValidate.vb` 仅余模块壳转发与六类继承薄壳（ValidateExcept/FolderPath/Http/Integer/Length/Nullable）——XAML 以 `local:`（宿主 clr-namespace）实例化这六类，无法直达 C# 类型；其余消费点经 `PCLA.vbproj:712-713` 的项目级 Imports（`PCLCS`/`PCLCS.Validate`）直达 C#。计划行数假设不成立已经核验，无需修；薄壳随 UI 框架更换阶段处置。
+
+**W4 移植偏差（逐字性让步）**
+
+- **TrimEnd 保真偏差 ×5（待裁决：补 `//!` 注记或改 `TrimEnd('\r')`）。** 旧 VB `TrimEnd(vbCrLf)` 在 Option Strict Off 下的实参绑定实际仅裁 CR（本机 Roslyn vbc 实验复核：对以 `\r\n` 结尾的串无操作、对仅 `\r` 结尾的串裁 CR），C# 移植改裁 CR+LF，涉及 `PCLCS\Crash\CrashAnalyzer.cs:608/:638/:718/:737/:812` 五处规则捕获清洗，均无 `//!` 标注。影响面：仅分析结论文本里捕获串的尾部换行差异（`[^\n]+` 形捕获不会以 LF 结尾，`[\w\W]+?` 形捕获在 `\tMod` 前以 LF 结尾时 C# 多裁一个），不改变规则命中；补注记接受 C# 形态还是对齐 VB，由后续评审定夺。
+- **ProcessReturnValues/RestartException 留 VB（待裁决项）。** `PCLA\Modules\Base\ModBase.vb:441/:606`：VB 枚举与异常类型无别名转发机制，迁 C# 会改变 `EndProgramForce`（`PclLogger.vb:50`）、`RunAsAdmin` 返回判等（`ModLaunch.vb:1114`）与微软登录重试环（`ModLaunch.vb:785`）等旧公共签名面的类型身份；T4 File Map 原列迁移、实作留 VB。评审决定补迁（连带更新消费点）或确认留 VB 落档。
+- **HelpEntry 的空字符串枚举偏差（§9 家族补记）。** 旧 `ToObject(Of CustomEvent.EventType)` 对空串抛 `ArgumentException`，新宿主壳 `EnumUtils.FromString`（`PCLA\Modules\ModMain.vb:503`）对 `""` 与不可解析串返回 None（与旧字段默认一致）；该偏差未按 T5 计划补入 `PCLCS\Common\HelpEntry.cs` 头注的 §9 对照清单，本条补记。触发输入为帮助 JSON 声明 `IsEvent: true` 但 `EventType` 为空串/不可解析串（病态输入），正常输入与旧版一致。
+- **ToOpenKind 非打开类型映射 None 的日志字样降级。** `PCLA\Modules\ModEvent.vb:366`（壳侧映射）对非打开类事件返回 `EventOpenKind.None`，该值进入 `PCLCS\Common\EventActions.cs` 的日志插值时字样为"None"而非旧版的真实事件名；生产调用点 `PCLA\Controls\MyListItem.xaml.vb:660`（帮助条目预读路径）。行为不变（None 与旧版同样落入 FileNotFoundException 分支），仅诊断文本降级。
+- **GpuPreference 单路径收敛（已裁定）。** 计划文本虚构 `Set(isAmd, isNvidia, exePath)` 签名，VB 实际（旧 `ModMain.vb:803-814`）仅单一 exe 路径形参、读现状一致则跳过否则写 `UserGpuPreferences`，T5 按"签名按实际读取面收敛"落为 `PCLCS\Launch\GpuPreference.cs` 的 `Set(string exePath)` 逐字。T5 复审已裁定成立，记录防回潮。
+- **导出前删旧文件的重排（已披露，含单行回滚方案）。** 旧 `ModCrash.vb` 的 `Delete(FileAddress)` 紧随 SaveFile（旧 :876），现随导出核内联为 `PCLCS\Crash\CrashExport.cs:21` 的首个语句：宿主层 FeedbackInfo/日志 Flush 若在核调用前抛出（双重失败场景），目标 zip 不再被预删，旧压缩包得以保留——仅失败路径的残留物差异，成功路径与旧版一致。回滚方案：把 `FileUtils.Delete(savePath)` 移回宿主层 SaveFile 之后（单行）。
+
+**测试与样式面**
+
+- **崩溃/导出测试的 Dispose 仅捕 IOException（T1/T2 同形）。** `tests\PCLCS.Tests\Crash\CrashAnalyzerCoreTests.cs:27` 与 `CrashExportTests.cs:25-28`：临时目录清理仅捕 `IOException`，`UnauthorizedAccessException` 会泄漏临时目录；测试卫生项，顺手清理。
+- **CrashExportTests 的静态 seam 每测设置/恢复。** 测试逐测设置/恢复 `CrashAnalyzer.DesensitizeFilters` 静态槽位，xUnit 类内串行下安全；若未来开启集合级并行（`xunit.runner.json` 当前全局串行，§12 已记）需改为夹具注入。
+- **生产代码内的测试注入静态。** `EventActions.RegistryWriteProbe`（`EventActions.cs:218`）、`GpuPreference.ReadOverride/WriteOverride`（`:11-12`）、`TempFolders.TestResetGlobals`（`:87`）：internal 静态注入面进入生产程序集，测试外无调用者，测试类已自行复位；收敛为构造注入需扩公共面，W4 按"最小公共面"取舍保留。
+- **ValidateAll/Check 改名的 CS0542 外观债。** `PCLCS\Validate\Validate.cs`：聚合入口与抽象虚方法因 CS0542（成员不得与封闭类型同名）记作 `ValidateAll`/`Check`，派生类以非虚转发保留旧公共名 `Validate`；T3 复审核验全库无基类型虚分发点，纯外观收敛，整顿轮重排类型边界时可复原命名。
+- **FolderName/FileName 捕获路径无确定性测试。** Validate 族这两条捕获组路径与旧 VB 覆盖相当（无确定性夹具触发），补夹具属覆盖增强而非缺陷。
+- **FolderPath_MissingDriveLetter_HeadError 假定空闲盘符。** 该测试是全套件唯一环境依赖前提（其余全为合成夹具），跨环境跑测试时留意。
+- **ReadZipText 的 ToDictionary(FullName) 重名条目抛错。** 导入压缩包含重名条目时显式失败，可接受；显式失败好过静默覆盖。
+- **DesensitizeFilters 公共静态可变字段。** `PCLCS\Crash\CrashAnalyzer.cs` 的脱敏 provider 槽位为公共静态可变字段（T1 观察；T2 消费者已做空检查）；与其他核的 provider 模式一致，收敛为不可变注入随整顿轮。
+- **差分字母表缺 `\n` 与 `\u3000`、max length 12 不可达 16/17 位十六进制形。** T4 ini/Val 差分测试的字母表与长度上限的覆盖空隙，策划用例已由复审独立核真（现行输入空间内无行为差）；扩展字母表属覆盖增强。
+- **Models.cs 弱样式建议。** `PCLCS\Common\Models.cs` 的 expression body 与冗余 ToString 建议与既有文件同级，随整顿轮统一。
+- **T5 帮助条目 JSON 形状用例为 [Fact] 多断言（brief 字面为 Theory）。** 覆盖等效，xUnit 参数化收益有限，记录备案。
+- **RandomOne 用 ElementAt 的边界差。** `CommonUtils.RandomOne` 对非 IList 的 ICollection 走 ElementAt 计数（VB 晚绑定索引为直接下标），仅该形态有行为/性能差；现行调用者全部为 IList，无实际影响。
+
+**过程备注**
+
+- **VB 壳调用点的参数顺序回归单测不可达。** `PCLCS.Tests` 以命名参数直调 C# 核，VB 壳转发调用点的参数顺序回归（T5 Critical：`ModEvent.vb:204-210` basePath/pathTemp 颠倒，`d450c75` 修复）无法被单测捕获，只能靠人工复审与行为语料（37 项）拦截；W4 后新增接线点沿用此认知。连带备案：`PCLCS.Tests` 的 `Microsoft.VisualBasic` 框架引用经用户追认保留（2026-11-07，家族规则 §5.6 例外），仅测试工程，`PCLCS` 源零 VB 依赖（rg 门禁基线 10 行/6 文件维持）。
