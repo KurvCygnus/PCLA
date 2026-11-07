@@ -61,13 +61,27 @@ Public Class MyBitmap
     Public Sub New(FilePathOrResourceName As String)
         Try
             FilePathOrResourceName = FilePathOrResourceName.Replace("pack://application:,,,/images/", PathImage)
+            'TECHDEBT §13：ini 里可能持久化其他程序集名（上游 PCL2 写入的 Forge 实例图标）的 pack URI；
+            '统一归一化为本程序集资源前缀，使缓存分支与内嵌资源解码回退对两者一致生效
+            If FilePathOrResourceName.StartsWithF("pack://application:,,,/") Then
+                Dim ComponentIndex = FilePathOrResourceName.IndexOfF(";component/Images/", True)
+                If ComponentIndex >= 0 Then
+                    FilePathOrResourceName = PathImage & FilePathOrResourceName.Substring(ComponentIndex + ";component/Images/".Length)
+                End If
+            End If
             If FilePathOrResourceName.StartsWithF(PathImage) Then
                 '使用缓存
                 Static Cache As New Concurrent.ConcurrentDictionary(Of String, MyBitmap)
                 If Cache.ContainsKey(FilePathOrResourceName) Then
                     Pic = Cache(FilePathOrResourceName).Pic
                 Else
-                    Pic = New MyBitmap(CType((New ImageSourceConverter).ConvertFromString(FilePathOrResourceName), ImageSource))
+                    Try
+                        Pic = New MyBitmap(CType((New ImageSourceConverter).ConvertFromString(FilePathOrResourceName), ImageSource))
+                    Catch PackEx As Exception
+                        '§13：WPF 对 pack URI 的资源解析失败时改从自身内嵌资源解码；非 pack 输入原样上抛
+                        If Not FilePathOrResourceName.StartsWithF("pack://") Then Throw
+                        Pic = DecodeFromOwnResources(FilePathOrResourceName, PackEx)
+                    End Try
                     Cache.TryAdd(FilePathOrResourceName, Pic)
                 End If
             Else
@@ -102,6 +116,31 @@ Public Class MyBitmap
             End If
         End Try
     End Sub
+    ''' <summary>
+    ''' 从主程序集内嵌资源（PCLA.g.resources）解码 pack 图标，绕过 WPF pack 资源解析与文件路径回落
+    ''' （TECHDEBT §13：pack URI 解析失败后会按本地路径误读并必败）。键为主程序集内完整资源路径的
+    ''' 小写形式（如 images/blocks/fabric.png）。资源不存在时原样抛出 pack 解析异常，保持既有回退。
+    ''' </summary>
+    Private Shared Function DecodeFromOwnResources(PackUri As String, PackEx As Exception) As System.Drawing.Bitmap
+        Dim ResourceKey = ("Images/" & PackUri.Substring(PathImage.Length)).ToLowerInvariant()
+        Using ResourceStream = Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PCLA.g.resources")
+            Using Reader As New System.Resources.ResourceReader(ResourceStream)
+                For Each Entry As System.Collections.DictionaryEntry In Reader
+                    If CStr(Entry.Key) = ResourceKey Then
+                        Using EntryStream = DirectCast(Entry.Value, IO.Stream)
+                            'Bitmap 的 GDI+ 句柄要求底层流在其生命周期内保持可用，故此 MemoryStream 有意不释放
+                            Dim Copy As New IO.MemoryStream()
+                            EntryStream.CopyTo(Copy)
+                            Copy.Seek(0, IO.SeekOrigin.Begin)
+                            Return New System.Drawing.Bitmap(Copy)
+                        End Using
+                    End If
+                Next
+            End Using
+        End Using
+        Throw PackEx
+    End Function
+
     Public Sub New(Image As ImageSource)
         Using MS = New MemoryStream()
             Dim Encoder = New PngBitmapEncoder()
