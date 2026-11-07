@@ -1,3 +1,4 @@
+using PCLCS.Common;
 using PCLCS.Settings;
 #if NET48
 using PCLCS.Startup;
@@ -466,26 +467,5 @@ public static class NetRequest
         };
     }
 
-    /// <summary>为 Task 设置超时，在超时时抛出 TimeoutException（ModBase.vb:764 扩展的私有等价实现，逐字语义）。</summary>
-    private static T GetResultWithTimeout<T>(this Task<T> targetTask, CancellationTokenSource tokenSource, int timeoutMs)
-    {
-        var delayTask = Task.Delay(timeoutMs);
-        if (Task.WhenAny(targetTask, delayTask).ConfigureAwait(false).GetAwaiter().GetResult() != delayTask)
-            return targetTask.GetAwaiter().GetResult(); //VB 的 TargetTask.Run()
-        tokenSource.Cancel();
-        throw new TimeoutException($"任务超时（{timeoutMs} ms）");
-    }
-
-    /// <summary>为 Task 设置超时，在超时时抛出 TimeoutException（ModBase.vb:775 扩展的私有等价实现，逐字语义）。</summary>
-    private static void GetResultWithTimeout(this Task targetTask, CancellationTokenSource tokenSource, int timeoutMs)
-    {
-        var delayTask = Task.Delay(timeoutMs);
-        if (Task.WhenAny(targetTask, delayTask).ConfigureAwait(false).GetAwaiter().GetResult() != delayTask)
-        {
-            targetTask.GetAwaiter().GetResult();
-            return;
-        }
-        tokenSource.Cancel();
-        throw new TimeoutException($"任务超时（{timeoutMs} ms）");
-    }
+    //GetResultWithTimeout 扩展已收敛至 PCLCS.Common.CommonUtils（ModBase.vb:764-782 公共版），此处消重改指
 }

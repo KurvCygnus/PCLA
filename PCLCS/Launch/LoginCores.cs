@@ -1,3 +1,4 @@
+using PCLCS.Common;
 using PCLCS.Instances;
 using PCLCS.Net;
 using PCLCS.Settings;
@@ -115,7 +116,7 @@ public static class LoginCores
         if (name.Trim().Length == 0) return new string('0', 32);
         var mojangIni = Path.Combine(MojangUuidCacheFolder!(), "Mojang.ini");   //旧 PathTemp & "Cache\Uuid\Mojang.ini"
         //从缓存获取
-        var uuid = IniRead(mojangIni, name);
+        var uuid = CommonUtils.ReadIni(mojangIni, name);   //ini 读写已收敛至 Common 公共版（含全局缓存，旧单文件收敛版消重）
         if (uuid.Length == 32) return uuid;
         //从官网获取
         try
@@ -139,62 +140,14 @@ public static class LoginCores
         }
         //写入缓存
         if (uuid.Length != 32) throw new Exception("获取的正版 Uuid 长度不足（" + uuid + "）");
-        IniWrite(mojangIni, name, uuid);
+        CommonUtils.WriteIni(mojangIni, name, uuid);
         return uuid;
     }
 
     #endregion
 
-    #region ini 缓存（旧 ModBase.ReadIni/WriteIni 的 Mojang.ini 单文件收敛版）
-
-    //* 迁移后 Mojang.ini 仅本核读写（旧 MySkin 只删除整个目录并 IniClearCache，无读面），故不引入 VB 侧的全局 ini 缓存，
-    //* 每次现读现写与旧“读缓存 + 写时全量重写”的文件内容语义一致；
-    //* 失败语义对齐旧 IniGetContent/WriteIni：读失败 → Toast + 视为空（旧 :496-499），写失败 → Toast + 吞掉（旧 :561-563）
-    private static Dictionary<string, string>? IniTryLoad(string fileName)
-    {
-        try
-        {
-            if (!FileUtils.Exists(fileName)) return null;   //旧 :488：文件不存在静默返回 Nothing
-            var ini = new Dictionary<string, string>();
-            foreach (var line in FileUtils.ReadAsString(fileName).Split(["\r\n", "\n"], StringSplitOptions.None))
-            {
-                var index = line.IndexOfF(":");
-                if (index > 0) ini[line[..index]] = line[(index + 1)..];   //可能会有重复键，见 #3616
-            }
-            return ini;
-        } catch (Exception ex)
-        {
-            Logger.Error(ex, $"生成 ini 文件缓存失败（{fileName}）", LogBehavior.Toast);   //旧 :497 文案逐字
-            return null;
-        }
-    }
-
-    private static string IniRead(string fileName, string key)
-    {
-        var ini = IniTryLoad(fileName);
-        if (ini is null) return "";   //旧 :509：Content Is Nothing → DefaultValue
-        return ini.GetOrDefault(key, "")!;   //值经 IniTryLoad 构造必非 null；旧 ReadIni 的 DefaultValue="" 恒非空
-    }
-
-    private static void IniWrite(string fileName, string key, string value)
-    {
-        try
-        {
-            if (key.Contains(':')) throw new Exception($"尝试写入 ini 文件 {fileName} 的键名中包含了冒号：{key}");
-            key = key.ReplaceLineEndings("");
-            value = value.ReplaceLineEndings("");
-            var ini = IniTryLoad(fileName) ?? [];   //旧 :539-540：Content Is Nothing → 新空字典
-            if (ini.TryGetValue(key, out var existing) && existing == value) return;   //无需处理
-            ini[key] = value;
-            FileUtils.Write(fileName, string.Join("\r\n", ini.Select(pair => pair.Key + ":" + pair.Value)) + "\r\n");
-        } catch (Exception ex)
-        {
-            //旧 :561-563 逐字：写失败（含键名校验）Toast + 吞掉，调用方照常拿到返回值
-            Logger.Error(ex, $"写入文件失败（{fileName} → {key}:{value}）", LogBehavior.Toast);
-        }
-    }
-
-    #endregion
+    //ini 缓存（旧 ModBase.ReadIni/WriteIni 的 Mojang.ini 单文件收敛版）已消重改指 CommonUtils 公共版：
+    //Mojang.ini 仅本核读写，公共版的全局缓存与旧现读现写在文件内容语义上一致，失败语义（Toast + 吞掉）逐字相同
 
     #region Server 登录三段请求核
 

@@ -1,3 +1,4 @@
+using PCLCS.Common;
 using PCLCS.Settings;
 using System.Diagnostics;
 
@@ -78,7 +79,7 @@ public sealed class CustomInputs
 
 /// <summary>
 /// 进程启动核（自宿主层 ModLaunch.vb McLaunchRun/McLaunchCustom :1764-1812/:1674-1763 移植）。
-/// StartProcess 长路径处理（ModBase.vb:878-890）随迁为私有实现；输出侧经回调（Watcher 以事件对接）。
+/// StartProcess 长路径处理（ModBase.vb:878-890）已收敛至 PCLCS.Common.ProcessStarter，本核改指公共版；输出侧经回调（Watcher 以事件对接）。
 /// </summary>
 public static class ProcessRunner
 {
@@ -116,7 +117,7 @@ public static class ProcessRunner
         startInfo.Arguments = inputs.Arguments;
 
         //开始进程
-        var gameProcess = StartProcess(startInfo);
+        var gameProcess = ProcessStarter.Start(startInfo);
         log?.Invoke("已启动游戏进程：" + inputs.JavaExePath);
         if (callbacks.IsCanceled?.Invoke() ?? false)
         {
@@ -231,7 +232,7 @@ public static class ProcessRunner
         Process? customProcess = null;
         try
         {
-            customProcess = StartProcess(new ProcessStartInfo
+            customProcess = ProcessStarter.Start(new ProcessStartInfo
             {
                 FileName = "cmd.exe",
                 Arguments = $"/c \"{command}\"",
@@ -259,17 +260,6 @@ public static class ProcessRunner
         }
     }
 
-    /// <summary>
-    /// 启动进程并返回进程实例，若失败则抛出异常。会自动进行长路径处理。
-    /// （原宿主层 StartProcess(ProcessStartInfo)，ModBase.vb:885-890，逐字移植豁免。）
-    /// </summary>
-    private static Process StartProcess(ProcessStartInfo startInfo)
-    {
-        startInfo.FileName = PathUtils.ToShortPath(startInfo.FileName);
-        if (!string.IsNullOrEmpty(startInfo.WorkingDirectory)) startInfo.WorkingDirectory = PathUtils.ToShortPath(startInfo.WorkingDirectory);
-        Logger.Info($"启动进程：{startInfo.FileName} {startInfo.Arguments}");
-        //? net8 注解将返回值标为可空（启动失败时抛异常而非返回 null，与 VB 语义一致），此处收紧
-        return Process.Start(startInfo)!;
-    }
+    //StartProcess 已收敛至 PCLCS.Common.ProcessStarter.Start（ModBase.vb:885-890 公共版，ToShortPath 语义），此处消重改指
 
 }

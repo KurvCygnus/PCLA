@@ -25,6 +25,11 @@
 		<Reference Include="System.IO.Compression.FileSystem" />
 	</ItemGroup>
 
+	<!-- CommonUtils.Val 差分对照基线：net48 框架程序集，仅测试工程引用（PCLCS 源保持零 VB 运行时依赖） -->
+	<ItemGroup>
+		<Reference Include="Microsoft.VisualBasic" />
+	</ItemGroup>
+
 	<!-- net48 下 NetRequest.SendRequest 经 CacheCow 懒初始化（ModNet.vb:226），测试输出需随附这些本地 DLL；
 	     PCLCS 侧为 Private=False，故测试工程自引用并复制 -->
 	<ItemGroup>

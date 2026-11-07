@@ -1,5 +1,13 @@
+'基础工具族已迁 C#（PCLCS\Common\CommonUtils.cs / ProcessStarter.cs / Models.cs）：ini 家族、权限检查、Val/引号、
+'搜索排序、UUID/时间/随机、进程启动与 Task 超时收敛为 Common 公共版；W2/W3 私有端口（NetRequest.GetResultWithTimeout、
+'ProcessRunner.StartProcess、LoginCores ini）同批改指公共版消重。本文件仅余模块壳转发（保持 VB 调用点零改动）、
+'WPF/UI 面（RunInUi 家族、剪贴板、资源管理器、XML、DPI、命中测试）与全局状态声明。
+'死代码已删除（零调用者核实）：GetDate、GetLocalTime、GetProgramArgument、VB 版 GetResultWithTimeout ×2。
+'//! 逐字移植豁免：壳内公共签名形参名逐字（PascalCase）与根命名空间省略为工程级惯例（ModValidate.vb 同模式），非新代码问题
 Imports System.Runtime.CompilerServices
 Imports System.Xaml
+Imports CommonUtils = PCLCS.Common.CommonUtils
+Imports ProcessStarter = PCLCS.Common.ProcessStarter
 
 Public Module ModBase
 
@@ -461,43 +469,15 @@ Public Module ModBase
 
 #Region "文件"
 
-    'ini
+    'ini（:466-564 已迁 C# CommonUtils；本壳转发保持 VB 调用点零改动）
 
-    Private ReadOnly IniCache As New ConcurrentDictionary(Of String, ConcurrentDictionary(Of String, String))
     ''' <summary>
     ''' 清除某 ini 文件的运行时缓存。
     ''' </summary>
     ''' <param name="FileName">文件完整路径或简写文件名。简写将会使用“ApplicationName\文件名.ini”作为路径。</param>
     Public Sub IniClearCache(FileName As String)
-        If Not FileName.Contains(":\") Then FileName = $"{Paths.BaseThenName}{FileName}.ini"
-        IniCache.Remove(FileName)
+        CommonUtils.IniClearCache(FileName)
     End Sub
-    ''' <summary>
-    ''' 获取 ini 文件缓存。如果没有，则新读取 ini 文件内容。
-    ''' 在文件不存在或读取失败时返回 Nothing。
-    ''' </summary>
-    ''' <param name="FileName">文件完整路径或简写文件名。简写将会使用“ApplicationName\文件名.ini”作为路径。</param>
-    Private Function IniGetContent(FileName As String) As ConcurrentDictionary(Of String, String)
-        Try
-            '还原文件路径
-            If Not FileName.Contains(":\") Then FileName = $"{Paths.BaseThenName}{FileName}.ini"
-            '检索缓存
-            Dim Cache As ConcurrentDictionary(Of String, String) = Nothing
-            If IniCache.TryGetValue(FileName, Cache) Then Return Cache
-            '读取文件
-            If Not FileUtils.Exists(FileName) Then Return Nothing
-            Dim Ini As New ConcurrentDictionary(Of String, String)
-            For Each Line In FileUtils.ReadAsLines(FileName, True)
-                Dim Index As Integer = Line.IndexOfF(":")
-                If Index > 0 Then Ini(Line.Substring(0, Index)) = Line.Substring(Index + 1) '可能会有重复键，见 #3616
-            Next
-            IniCache(FileName) = Ini
-            Return Ini
-        Catch ex As Exception
-            Logger.Error(ex, $"生成 ini 文件缓存失败（{FileName}）", LogBehavior.Toast)
-            Return Nothing
-        End Try
-    End Function
     ''' <summary>
     ''' 读取 ini 文件。这可能会使用到缓存。
     ''' </summary>
@@ -505,22 +485,19 @@ Public Module ModBase
     ''' <param name="Key">键。</param>
     ''' <param name="DefaultValue">没有找到键时返回的默认值。</param>
     Public Function ReadIni(FileName As String, Key As String, Optional DefaultValue As String = "") As String
-        Dim Content = IniGetContent(FileName)
-        If Content Is Nothing Then Return DefaultValue
-        Return Content.GetOrDefault(Key, DefaultValue)
+        Return CommonUtils.ReadIni(FileName, Key, DefaultValue)
     End Function
     ''' <summary>
     ''' 判断 ini 文件中是否包含某个键。这可能会使用到缓存。
     ''' </summary>
     Public Function HasIniKey(FileName As String, Key As String) As Boolean
-        Dim Content = IniGetContent(FileName)
-        Return Content IsNot Nothing AndAlso Content.ContainsKey(Key)
+        Return CommonUtils.HasIniKey(FileName, Key)
     End Function
     ''' <summary>
     ''' 从 ini 文件中移除某个键。这会更新缓存。
     ''' </summary>
     Public Sub DeleteIniKey(FileName As String, Key As String)
-        WriteIni(FileName, Key, Nothing)
+        CommonUtils.DeleteIniKey(FileName, Key)
     End Sub
     ''' <summary>
     ''' 写入 ini 文件，这会更新缓存。
@@ -530,37 +507,7 @@ Public Module ModBase
     ''' <param name="Key">键。</param>
     ''' <param name="Value">值。</param>
     Public Sub WriteIni(FileName As String, Key As String, Value As String)
-        Try
-            '预处理
-            If Key.Contains(":") Then Throw New Exception($"尝试写入 ini 文件 {FileName} 的键名中包含了冒号：{Key}")
-            Key = Key.ReplaceLineEndings("")
-            Value = Value?.ReplaceLineEndings("")
-            '获取目前文件
-            Dim Content = IniGetContent(FileName)
-            If Content Is Nothing Then Content = New ConcurrentDictionary(Of String, String)
-            '更新值
-            If Value Is Nothing Then
-                If Not Content.Remove(Key) Then Return '无需处理
-            Else
-                Dim ExistingValue As String = Nothing
-                If Content.TryGetValue(Key, ExistingValue) AndAlso ExistingValue = Value Then Return '无需处理
-                Content(Key) = Value
-            End If
-            '写入文件
-            Dim FileContent As New StringBuilder
-            For Each Pair In Content
-                FileContent.Append(Pair.Key)
-                FileContent.Append(":")
-                FileContent.Append(Pair.Value)
-                FileContent.Append(vbCrLf)
-            Next
-            If Not FileName.Contains(":\") Then FileName = $"{Paths.BaseThenName}{FileName}.ini"
-            '处理相对路径
-            FileName = If(FileName.Contains(":\"), FileName, Paths.Base & FileName)
-            FileUtils.Write(FileName, FileContent.ToString)
-        Catch ex As Exception
-            Logger.Error(ex, $"写入文件失败（{FileName} → {Key}:{Value}）", LogBehavior.Toast)
-        End Try
+        CommonUtils.WriteIni(FileName, Key, Value)
     End Sub
 
     '权限检查
@@ -569,19 +516,7 @@ Public Module ModBase
     ''' 检查是否拥有某一文件夹的 I/O 权限。如果文件夹不存在，会返回 False。
     ''' </summary>
     Public Function CheckPermission(Folder As String) As Boolean
-        Try
-            If String.IsNullOrEmpty(Folder) Then Return False
-            Folder = PathUtils.AddSlashSuffix(Folder)
-            If Folder.EndsWithF(":\System Volume Information\", True) OrElse Folder.EndsWithF(":\$RECYCLE.BIN\", True) Then Return False
-            If Not DirectoryUtils.Exists(Folder) Then Return False
-            Dim TestFilePath As String = $"{Folder}CheckPermission{GetUuid()}.txt"
-            FileUtils.Write(TestFilePath, "临时文件，用于检测该文件夹的权限是否正常。")
-            FileUtils.Delete(TestFilePath)
-            Return True
-        Catch ex As Exception
-            Logger.Warn(ex, $"没有对文件夹 {Folder} 的权限，请尝试以管理员权限运行 PCL")
-            Return False
-        End Try
+        Return CommonUtils.CheckPermission(Folder)
     End Function
     ''' <summary>
     ''' 检查是否拥有某一文件夹的 I/O 权限。如果出错，则抛出异常。
@@ -599,20 +534,15 @@ Public Module ModBase
 #End Region
 
 #Region "文本"
-    Public vbLQ As Char = Convert.ToChar(8220)
-    Public vbRQ As Char = Convert.ToChar(8221)
+    Public vbLQ As Char = CommonUtils.VbLQ
+    Public vbRQ As Char = CommonUtils.VbRQ
 
     ''' <summary>
     ''' 不会报错的 Val。
     ''' 如果输入有误，返回 0。
     ''' </summary>
     Public Function Val(Str As Object) As Double
-        If Str Is Nothing Then Return 0
-        Try
-            Return If(TypeOf Str Is String AndAlso Str = "&", 0, Conversion.Val(Str))
-        Catch
-            Return 0
-        End Try
+        Return CommonUtils.Val(Str)   'Conversion.Val 扫描器语义已逐行移植 C#（含 &H/&O 回绕与 VB6 类型后缀）
     End Function
 
 #End Region
@@ -620,166 +550,44 @@ Public Module ModBase
 #Region "搜索"
 
     ''' <summary>
-    ''' 获取搜索文本的相似度。
-    ''' </summary>
-    ''' <param name="Source">被搜索的长内容。</param>
-    ''' <param name="Query">用户输入的搜索文本。</param>
-    Private Function SearchSimilarity(Source As String, Query As String) As Double
-        If String.IsNullOrEmpty(Source) OrElse String.IsNullOrEmpty(Query) Then Return 0
-        Dim qp As Integer = 0, lenSum As Double = 0
-        Dim str As New StringBuilder(Source.Length)
-        str.Append(Source.Lower().Replace(" ", ""))
-        Query = Query.Lower().Replace(" ", "")
-        Dim sourceLength As Integer = str.Length, queryLength As Integer = Query.Length '用于计算最后因数的长度缓存
-        If queryLength = 0 Then Return 0
-        Do While qp < queryLength
-            '对 qp 作为开始位置计算
-            Dim sp As Integer = 0, lenMax As Integer = 0, spMax As Integer = 0
-            Dim currentSourceLength As Integer = str.Length
-            Do While sp < currentSourceLength
-                Dim len As Integer = 0
-                While (qp + len) < queryLength AndAlso (sp + len) < currentSourceLength AndAlso str(sp + len) = Query(qp + len)
-                    len += 1
-                End While
-                '存储 len
-                If len > lenMax Then
-                    lenMax = len
-                    spMax = sp
-                End If
-                '根据结果增加 sp
-                sp += If(len > 0, len, 1)
-            Loop
-            If lenMax > 0 Then
-                str.Remove(spMax, lenMax) '将源中的对应字段移除
-                '存储 lenSum
-                Dim IncWeight = (Math.Pow(1.4, 3 + lenMax) - 3.6) '根据长度加成
-                IncWeight *= 1 + 0.3 * Math.Max(0, 3 - Math.Abs(qp - spMax)) '根据位置加成
-                lenSum += IncWeight
-            End If
-            qp += If(lenMax > 0, lenMax, 1)
-        Loop
-        '计算结果：重复字段量 × 源长度影响比例
-        Return (lenSum / queryLength) * (3 / Math.Sqrt(sourceLength + 15)) * If(queryLength <= 2, 3 - queryLength, 1)
-    End Function
-    ''' <summary>
-    ''' 获取多段文本加权后的相似度。
-    ''' </summary>
-    Private Function SearchSimilarityWeighted(Source As List(Of SearchSource), Query As String) As Double
-        Dim TotalWeight As Double = 0
-        Dim Sum As Double = 0
-        For Each Pair In Source
-            If Pair.Aliases.Any Then
-                Sum += Pair.Aliases.Max(Function(a) SearchSimilarity(a, Query)) * Pair.Weight
-            End If
-            TotalWeight += Pair.Weight
-        Next
-        Return Sum / TotalWeight
-    End Function
-    ''' <summary>
-    ''' 用于搜索的项目。
+    ''' 用于搜索的项目。（旧 :681-702 已迁 C#，本壳继承转发——字段与相似度经基类共享）
     ''' </summary>
     Public Class SearchEntry(Of T)
-        ''' <summary>
-        ''' 该项目对应的源数据。
-        ''' </summary>
-        Public Item As T
-        ''' <summary>
-        ''' 该项目用于搜索的文本源。
-        ''' 在搜索时，会对每个文本源单独加权，但单个文本源内的多个别名只取最高的一个的相似度。
-        ''' </summary>
-        Public SearchSource As List(Of SearchSource)
-        ''' <summary>
-        ''' 相似度。
-        ''' </summary>
-        Public Similarity As Double
-        ''' <summary>
-        ''' 是否完全匹配。
-        ''' </summary>
-        Public AbsoluteRight As Boolean
-        Public Overrides Function ToString() As String
-            Return Math.Round(Similarity, 3) & " - " & Item.ToString()
-        End Function
+        Inherits PCLCS.Common.SearchEntry(Of T)
     End Class
+
     ''' <summary>
-    ''' 单个用于搜索的文本源。
+    ''' 单个用于搜索的文本源。（旧 :706-717 已迁 C#，本壳继承转发）
     ''' </summary>
     Public Class SearchSource
-        Public Aliases As String()
-        Public Weight As Double
+        Inherits PCLCS.Common.SearchSource
+
         Public Sub New(Aliases As String(), Optional Weight As Double = 1)
-            Me.Aliases = Aliases
-            Me.Weight = Weight
+            MyBase.New(Aliases, Weight)
         End Sub
+
         Public Sub New(Text As String, Optional Weight As Double = 1)
-            Me.Aliases = {Text}
-            Me.Weight = Weight
+            MyBase.New(Text, Weight)
         End Sub
     End Class
+
     ''' <summary>
-    ''' 进行多段文本加权搜索，获取相似度较高的数项结果。
+    ''' 进行多段文本加权搜索，获取相似度较高的数项结果。（旧 :725-755 已迁 C#；List 不变型经元素级转换对接壳类型）
     ''' 在搜索时，会对每个文本源单独加权，但单个文本源内的多个别名只取最高的一个的相似度。
     ''' 这会修改 Entries 中每项的 Similarity 与 AbsoluteRight 字段。
     ''' </summary>
     ''' <param name="MaxBlurCount">返回的最大模糊结果数。</param>
     ''' <param name="MinBlurSimilarity">返回结果要求的最低相似度。</param>
     Public Function Search(Of T)(Entries As List(Of SearchEntry(Of T)), Query As String, Optional MaxBlurCount As Integer = 5, Optional MinBlurSimilarity As Double = 0.1) As List(Of SearchEntry(Of T))
-        '初始化
-        Dim ResultList As New List(Of SearchEntry(Of T))
-        If Not Entries.Any() Then Return ResultList
-        '进行搜索，获取相似信息
-        Dim QueryParts = Query.Split(" ", True)
-        Dim Candidates As New List(Of SearchEntry(Of T))
-        For Each Entry In Entries
-            Entry.Similarity = SearchSimilarityWeighted(Entry.SearchSource, Query)
-            Entry.AbsoluteRight =
-                QueryParts.All( '对于按空格分割的每一段
-                Function(QueryPart) Entry.SearchSource.Any( '若与任意一个搜索源完全匹配，则标记为完全匹配项
-                Function(Source) Source.Aliases.Any(
-                Function([Alias]) [Alias].Replace(" ", "").ContainsIgnoreCase(QueryPart))))
-            If Entry.AbsoluteRight OrElse Entry.Similarity >= MinBlurSimilarity Then Candidates.Add(Entry)
-        Next
-        '按照相似度进行排序
-        Candidates = Candidates.SortByComparison(Function(Left, Right) If(Left.AbsoluteRight <> Right.AbsoluteRight, Left.AbsoluteRight, Left.Similarity > Right.Similarity))
-        '返回结果
-        Dim BlurCount As Integer = 0
-        For Each Entry In Candidates
-            If Entry.AbsoluteRight Then
-                ResultList.Add(Entry) '完全匹配，直接加入
-            Else
-                If BlurCount = MaxBlurCount Then Exit For
-                ResultList.Add(Entry)
-                BlurCount += 1 '模糊结果计数
-            End If
-        Next
-        Return ResultList
+        Return CommonUtils.Search(
+                 Entries.Cast(Of PCLCS.Common.SearchEntry(Of T)).ToList(),
+                 Query, MaxBlurCount, MinBlurSimilarity).
+                 Cast(Of SearchEntry(Of T)).ToList()
     End Function
 
 #End Region
 
 #Region "系统"
-
-    ''' <summary>
-    ''' 为 Task 设置超时，在超时时抛出 TimeoutException。
-    ''' </summary>
-    <Extension> Public Function GetResultWithTimeout(Of T)(TargetTask As Task(Of T), TokenSource As CancellationTokenSource, TimeoutMs As Integer) As T
-        Dim DelayTask = Task.Delay(TimeoutMs)
-        If Task.WhenAny(TargetTask, DelayTask).ConfigureAwait(False).GetAwaiter().GetResult() Is DelayTask Then
-            TokenSource.Cancel()
-            Throw New TimeoutException($"任务超时（{TimeoutMs} ms）")
-        End If
-        Return TargetTask.Run()
-    End Function
-    ''' <summary>
-    ''' 为 Task 设置超时，在超时时抛出 TimeoutException。
-    ''' </summary>
-    <Extension> Public Sub GetResultWithTimeout(TargetTask As Task, TokenSource As CancellationTokenSource, TimeoutMs As Integer)
-        Dim DelayTask = Task.Delay(TimeoutMs)
-        If Task.WhenAny(TargetTask, DelayTask).ConfigureAwait(False).GetAwaiter().GetResult() Is DelayTask Then
-            TokenSource.Cancel()
-            Throw New TimeoutException($"任务超时（{TimeoutMs} ms）")
-        End If
-        TargetTask.Run()
-    End Sub
 
     ''' <summary>
     ''' 可用于临时存放文件的，不含任何特殊字符的文件夹路径，以“\”结尾。
@@ -814,49 +622,31 @@ Public Module ModBase
         Return NewProcess.ExitCode
     End Function
 
-    Private Uuid As Integer = 1
-    Private UuidLock As Object
     ''' <summary>
-    ''' 获取一个全程序内不会重复的数字（伪 Uuid）。
+    ''' 获取一个全程序内不会重复的数字（伪 Uuid）。（旧 :822-828 已迁 C#，全局计数器语义）
     ''' </summary>
     Public Function GetUuid() As Integer
-        If UuidLock Is Nothing Then UuidLock = New Object
-        SyncLock UuidLock
-            Uuid += 1
-            Return Uuid
-        End SyncLock
+        Return CommonUtils.GetUuid()
     End Function
 
     '时间相关
     ''' <summary>
-    ''' 获取一个单调递增时间值（毫秒）。
+    ''' 获取一个单调递增时间值（毫秒）。（旧 :834 已迁 C#）
     ''' </summary>
     Public Function GetTimeMs() As Long
-        Return Stopwatch.GetTimestamp() \ (Stopwatch.Frequency \ 1000L)
+        Return CommonUtils.GetTimeMs()
     End Function
     ''' <summary>
-    ''' 获取十进制 Unix 时间戳。
+    ''' 获取十进制 Unix 时间戳。（旧 :840 已迁 C#）
     ''' </summary>
     Public Function GetUnixTimestampUtc() As Long
-        Return (Now.ToUniversalTime().Ticks - 621355968000000000) / 10000000
+        Return CommonUtils.GetUnixTimestampUtc()
     End Function
     ''' <summary>
     ''' 获取十进制 Unix 时间戳。
     ''' </summary>
     Public Function ToUnixTimestampUtc(Time As Date) As Long
         Return (Time.ToUniversalTime().Ticks - 621355968000000000) / 10000000
-    End Function
-    ''' <summary>
-    ''' 时间戳转化为日期。
-    ''' </summary>
-    Public Function GetDate(timeStamp As Integer) As Date
-        Return DateTimeOffset.FromUnixTimeSeconds(timeStamp).LocalDateTime
-    End Function
-    ''' <summary>
-    ''' 将 UTC 时间转化为当前时区的时间。
-    ''' </summary>
-    Public Function GetLocalTime(UtcDate As Date) As Date
-        Return DateTime.SpecifyKind(UtcDate, DateTimeKind.Utc).ToLocalTime
     End Function
 
     ''' <summary>
@@ -873,20 +663,17 @@ Public Module ModBase
 
     ''' <summary>
     ''' 启动进程并返回进程实例，若失败则抛出异常。
-    ''' 会自动进行长路径处理。
+    ''' 会自动进行长路径处理。（旧 :878-884 已迁 C# ProcessStarter）
     ''' </summary>
     Public Function StartProcess(FileName As String, Optional Arguments As String = "") As Process
-        Return StartProcess(New ProcessStartInfo With {.FileName = FileName, .Arguments = Arguments})
+        Return ProcessStarter.Start(FileName, Arguments)
     End Function
     ''' <summary>
     ''' 启动进程并返回进程实例，若失败则抛出异常。
-    ''' 会自动进行长路径处理。
+    ''' 会自动进行长路径处理。（旧 :885-890 已迁 C# ProcessStarter）
     ''' </summary>
     Public Function StartProcess(StartInfo As ProcessStartInfo) As Process
-        StartInfo.FileName = PathUtils.ToShortPath(StartInfo.FileName)
-        If Not String.IsNullOrEmpty(StartInfo.WorkingDirectory) Then StartInfo.WorkingDirectory = PathUtils.ToShortPath(StartInfo.WorkingDirectory)
-        Logger.Info($"启动进程：{StartInfo.FileName} {StartInfo.Arguments}")
-        Return Process.Start(StartInfo)
+        Return ProcessStarter.Start(StartInfo)
     End Function
 
     ''' <summary>
@@ -954,35 +741,10 @@ Public Module ModBase
 
     ''' <summary>
     ''' 按照既定的函数进行选择排序。
-    ''' 返回第一个对象是否应该排在前面（a > b）。
+    ''' 返回第一个对象是否应该排在前面（a > b）。（旧 :959-970 已迁 C#，会排空传入列表）
     ''' </summary>
     <Extension> Public Function SortByComparison(Of T)(List As IList(Of T), SortRule As Func(Of T, T, Boolean)) As List(Of T)
-        Dim NewList As New List(Of T)
-        While List.Any
-            Dim Highest = List(0)
-            For i = 1 To List.Count - 1
-                If SortRule(List(i), Highest) Then Highest = List(i)
-            Next
-            List.Remove(Highest)
-            NewList.Add(Highest)
-        End While
-        Return NewList
-    End Function
-
-    ''' <summary>
-    ''' 获取程序启动参数。
-    ''' </summary>
-    ''' <param name="Name">参数名。</param>
-    ''' <param name="DefaultValue">默认值。</param>
-    Public Function GetProgramArgument(Name As String, Optional DefaultValue As Object = "")
-        Dim AllArguments() As String = Command.Split(" ")
-        For i = 0 To AllArguments.Length - 1
-            If AllArguments(i) = "-" & Name Then
-                If AllArguments.Length = i + 1 OrElse AllArguments(i + 1).StartsWithF("-") Then Return True
-                Return AllArguments(i + 1)
-            End If
-        Next
-        Return DefaultValue
+        Return CommonUtils.SortByComparison(List, SortRule)
     End Function
 
     ''' <summary>
@@ -1179,32 +941,25 @@ Public Module ModBase
 
 #Region "随机"
 
-    Private ReadOnly Random As New Random
-
     ''' <summary>
-    ''' 随机选择其一。
+    ''' 随机选择其一。（旧 :1187 已迁 C#）
     ''' </summary>
     Public Function RandomOne(Of T)(objects As ICollection(Of T)) As T
-        Return objects(RandomInteger(0, objects.Count - 1))
+        Return CommonUtils.RandomOne(objects)
     End Function
 
     ''' <summary>
-    ''' 取随机整数（包含）。
+    ''' 取随机整数（包含）。（旧 :1194 已迁 C#）
     ''' </summary>
     Public Function RandomInteger(min As Integer, max As Integer) As Integer
-        Return Math.Floor((max - min + 1) * Random.NextDouble) + min
+        Return CommonUtils.RandomInteger(min, max)
     End Function
 
     ''' <summary>
-    ''' 将数组随机打乱。
+    ''' 将数组随机打乱。（旧 :1201 已迁 C#）
     ''' </summary>
-    <Extension> Public Iterator Function Shuffle(Of T)(Raw As IEnumerable(Of T)) As IEnumerable(Of T)
-        Dim RawCopy As New List(Of T)(Raw)
-        Do While RawCopy.Any
-            Dim i As Integer = RandomInteger(0, RawCopy.Count - 1)
-            Yield RawCopy(i)
-            RawCopy.RemoveAt(i)
-        Loop
+    <Extension> Public Function Shuffle(Of T)(Raw As IEnumerable(Of T)) As IEnumerable(Of T)
+        Return CommonUtils.Shuffle(Raw)
     End Function
 
 #End Region
