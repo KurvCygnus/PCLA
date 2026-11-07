@@ -11,6 +11,7 @@ namespace PCLCS.Common;
 ///   Logo 缺失为 null（旧 :501「为保持 Nothing，不要加 If」）；Show* 缺失保持默认 True（旧 :502-504）；Types 缺失为空列表（旧 :506）。
 /// - 属性名大小写：统一层大小写不敏感（JsonNodeUtils.NodeOptions；旧 Newtonsoft JObject 索引器大小写敏感——病态输入差异按 §9 记录）。
 /// - 数字/字符串宽松：按目标类型经 Convert 语义（1→True、"true"→True；"1" 抛 FormatException 与旧隐转一致；数字→ToString 用不变文化）。
+/// - 空字符串事件类型：旧 ToObject(Of EventType) 对 "" 抛 ArgumentException；新宿主层壳 EnumUtils.FromString("") 返回 None（枚举零值，与旧字段默认一致）——病态输入差异按 §9 记录。
 /// - null 与缺失：STJ 中 JSON null 与缺失同判（统一层口径；旧 Newtonsoft 对 null JValue 隐转 False/空串——病态输入差异按 §9 记录不修）。
 /// - 注释 Skip、尾逗号允许（DocumentOptions）；帮助 JSON 无日期字段，日期/时区点不涉及。
 /// </summary>

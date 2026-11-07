@@ -151,7 +151,7 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 `ModBase.vb`/`ModMain.vb`/`ModEvent.vb` 的可测工具核按"工具迁 C#、调用点零改动"收敛，VB 消费点经 `PCLA.vbproj:712-713` 的项目级 Imports（`PCLCS`/`PCLCS.Validate`）直达 C# 类型，行为由 `tests\PCLCS.Tests\Common` 锁定：
 
-- **`CommonUtils.cs`**（901 行）：ini 家族（ReadIni/WriteIni/HasIniKey/DeleteIniKey/IniClearCache，缓存与编码语义逐字）、权限检查（`CheckPermission`/`CheckPermissionWithException` 四异常面）、`Val` 的 `Conversion.Val` 语义复刻（含 `&H`/`&O` 分支）、搜索家族（`Search` + `Models.cs` 的 `SearchEntry`/`SearchSource`，VB 侧以继承薄壳保持调用点类型零改动）、`GetResultWithTimeout`（自 `NetRequest.cs` 私有等价实现提升为公共版，原消费点已改指）、UUID/时间与随机（`RandomOne`/`RandomInteger`/`Shuffle`）。
+- **`CommonUtils.cs`**（902 行）：ini 家族（ReadIni/WriteIni/HasIniKey/DeleteIniKey/IniClearCache，缓存与编码语义逐字）、权限检查（`CheckPermission`/`CheckPermissionWithException` 四异常面）、`Val` 的 `Conversion.Val` 语义复刻（含 `&H`/`&O` 分支）、搜索家族（`Search` + `Models.cs` 的 `SearchEntry`/`SearchSource`，VB 侧以继承薄壳保持调用点类型零改动）、`GetResultWithTimeout`（自 `NetRequest.cs` 私有等价实现提升为公共版，原消费点已改指）、UUID/时间与随机（`RandomOne`/`RandomInteger`/`Shuffle`）。
 - **`TempFolders.cs`**：任务缓存文件夹核（清理闩 + 申请链，`ModMain.vb` 旧 :906-958 逐字；带空格判定核复用 `Install.InstallPlans.ShouldUseTempFallback`）；宿主 PathTemp/OsDrive 经参数注入，`CrashAnalyzer` 构造回调（T1）在 T5 迁核后改调本类型。
 - **`EventActions.cs`**：自定义事件的 IO 业务核（`GetAbsoluteUrls` 六分支、打开文件/执行命令 case、修改变量/写入变量注册表面）；弹窗/Hint/页面入口/下载客户端经回调注入，`EventOpenKind` 按名映射不做数值镜像。
 - **`HelpEntry.cs`**：帮助条目解析核（`ModMain.vb` 旧 :489-523 逐字）；Newtonsoft → `JsonNodeUtils` 宽松层的 §9 逐点对照见类型头注，`ArgumentReplace` 经回调注入。
@@ -285,7 +285,7 @@ W1 后 `Settings.vb` 只剩薄转发：目录、存储、导入与加密全部�
 
 `ModCrash.vb`（旧 1113 行）按"分析核与文件操作核迁 C#、弹窗编排留 VB"拆分（终态 112 行），行为由 `tests\PCLCS.Tests\Crash` 与 `PCLA.BehaviorTests` 的黄金语料双面锁定：
 
-- **分析核 `CrashAnalyzer.cs`**（1407 行）：五步流水 Collect/Import 收集 → Prepare 分类（五类分流 + head/tail 截断魔数逐字，§3 P2）→ Analyze（Crit1→Crit2→条件堆栈→Crit3，约 60 条规则逐字）→ GetAnalyzeResult 文本组装，Mixin/模组名归因与语料契约随迁。Import 空 Catch 等既有怪癖带 `//!` 注记逐字保留（`docs\TECHDEBT.md` §3 P0-5/§15）；暂存文件夹申请经构造回调改调 `TempFolders.RequestTaskTempFolder`（T5 迁核后的既定改调点）；脱敏组合 `DesensitizeFilters` 由宿主 `ModMinecraft.vb` 的 `Sub New` 接线（FilterChar 按重命名后的文件名判定）。
+- **分析核 `CrashAnalyzer.cs`**（1413 行）：五步流水 Collect/Import 收集 → Prepare 分类（五类分流 + head/tail 截断魔数逐字，§3 P2）→ Analyze（Crit1→Crit2→条件堆栈→Crit3，约 60 条规则逐字）→ GetAnalyzeResult 文本组装，Mixin/模组名归因与语料契约随迁。Import 空 Catch 等既有怪癖带 `//!` 注记逐字保留（`docs\TECHDEBT.md` §3 P0-5/§15）；暂存文件夹申请经构造回调改调 `TempFolders.RequestTaskTempFolder`（T5 迁核后的既定改调点）；脱敏组合 `DesensitizeFilters` 由 `ModWatcher.vb:13`（ModWatcher 模块 `Sub New`，宿主副作用接线点）接线，`ModMinecraft.vb` 仅定义过滤函数 `FilterAccessToken`/`FilterUserName`（`:1445/:1463`）；FilterChar 按重命名后的文件名判定。
 - **导出核 `CrashExport.cs`**：删旧文件 → 收集 OutputFiles+ExtraFiles → 重命名表逐条（旧 :894-903，不合并不补默认分支）→ 存在性过滤 → 读取脱敏 → zip 打包与 Report 工作目录清理；失败记日志返回 null，SaveFile/MyMsgBox/Hint/OpenExplorer 与 FeedbackInfo 留宿主壳。
 - **VB 壳**：`ModCrash.vb` 保留旧公共签名（Collect/Import/Prepare/Analyze/Output/GetAnalyzeResult）做薄转发，`Output` 仅余弹窗编排（`docs\TECHDEBT.md` §15）。
 

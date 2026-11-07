@@ -285,7 +285,7 @@
 
 **W4 移植偏差（逐字性让步）**
 
-- **TrimEnd 保真偏差 ×5（待裁决：补 `//!` 注记或改 `TrimEnd('\r')`）。** 旧 VB `TrimEnd(vbCrLf)` 在 Option Strict Off 下的实参绑定实际仅裁 CR（本机 Roslyn vbc 实验复核：对以 `\r\n` 结尾的串无操作、对仅 `\r` 结尾的串裁 CR），C# 移植改裁 CR+LF，涉及 `PCLCS\Crash\CrashAnalyzer.cs:608/:638/:718/:737/:812` 五处规则捕获清洗，均无 `//!` 标注。影响面：仅分析结论文本里捕获串的尾部换行差异（`[^\n]+` 形捕获不会以 LF 结尾，`[\w\W]+?` 形捕获在 `\tMod` 前以 LF 结尾时 C# 多裁一个），不改变规则命中；补注记接受 C# 形态还是对齐 VB，由后续评审定夺。
+- **TrimEnd 保真偏差 ×5（待裁决：补 `//!` 注记或改 `TrimEnd('\r')`，其中 `:737` 旧 VB 为 `Trim(vbCrLf)`、对应改 `Trim('\r')`）。** 旧 VB `TrimEnd(vbCrLf)` 在 Option Strict Off 下的实参绑定实际仅裁 CR（本机 Roslyn vbc 实验复核：对以 `\r\n` 结尾的串无操作、对仅 `\r` 结尾的串裁 CR），C# 移植改裁 CR+LF，涉及 `PCLCS\Crash\CrashAnalyzer.cs:608/:638/:718/:737/:812` 五处规则捕获清洗，均无 `//!` 标注。影响面：仅分析结论文本里捕获串的尾部换行差异（`[^\n]+` 形捕获不会以 LF 结尾，`[\w\W]+?` 形捕获在 `\tMod` 前以 LF 结尾时 C# 多裁一个），不改变规则命中；补注记接受 C# 形态还是对齐 VB，由后续评审定夺。
 - **ProcessReturnValues/RestartException 留 VB（待裁决项）。** `PCLA\Modules\Base\ModBase.vb:441/:606`：VB 枚举与异常类型无别名转发机制，迁 C# 会改变 `EndProgramForce`（`PclLogger.vb:50`）、`RunAsAdmin` 返回判等（`ModLaunch.vb:1114`）与微软登录重试环（`ModLaunch.vb:785`）等旧公共签名面的类型身份；T4 File Map 原列迁移、实作留 VB。评审决定补迁（连带更新消费点）或确认留 VB 落档。
 - **HelpEntry 的空字符串枚举偏差（§9 家族补记）。** 旧 `ToObject(Of CustomEvent.EventType)` 对空串抛 `ArgumentException`，新宿主壳 `EnumUtils.FromString`（`PCLA\Modules\ModMain.vb:503`）对 `""` 与不可解析串返回 None（与旧字段默认一致）；该偏差未按 T5 计划补入 `PCLCS\Common\HelpEntry.cs` 头注的 §9 对照清单，本条补记。触发输入为帮助 JSON 声明 `IsEvent: true` 但 `EventType` 为空串/不可解析串（病态输入），正常输入与旧版一致。
 - **ToOpenKind 非打开类型映射 None 的日志字样降级。** `PCLA\Modules\ModEvent.vb:366`（壳侧映射）对非打开类事件返回 `EventOpenKind.None`，该值进入 `PCLCS\Common\EventActions.cs` 的日志插值时字样为"None"而非旧版的真实事件名；生产调用点 `PCLA\Controls\MyListItem.xaml.vb:660`（帮助条目预读路径）。行为不变（None 与旧版同样落入 FileNotFoundException 分支），仅诊断文本降级。
@@ -309,4 +309,4 @@
 
 **过程备注**
 
-- **VB 壳调用点的参数顺序回归单测不可达。** `PCLCS.Tests` 以命名参数直调 C# 核，VB 壳转发调用点的参数顺序回归（T5 Critical：`ModEvent.vb:204-210` basePath/pathTemp 颠倒，`d450c75` 修复）无法被单测捕获，只能靠人工复审与行为语料（37 项）拦截；W4 后新增接线点沿用此认知。连带备案：`PCLCS.Tests` 的 `Microsoft.VisualBasic` 框架引用经用户追认保留（2026-11-07，家族规则 §5.6 例外），仅测试工程，`PCLCS` 源零 VB 依赖（rg 门禁基线 10 行/6 文件维持）。
+- **VB 壳调用点的参数顺序回归单测不可达。** `PCLCS.Tests` 以命名参数直调 C# 核，VB 壳转发调用点的参数顺序回归（T5 Critical：`ModEvent.vb:204-210` basePath/pathTemp 颠倒，`d450c75` 修复）无法被单测捕获，只能靠人工复审与行为语料（37 项）拦截；W4 后新增接线点沿用此认知。连带备案：`PCLCS.Tests` 的 `Microsoft.VisualBasic` 框架引用经用户追认保留，仅测试工程，`PCLCS` 源零 VB 依赖（rg 门禁基线 10 行/6 文件维持）。

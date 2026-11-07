@@ -605,6 +605,7 @@ public sealed class CrashAnalyzer
         if (LogCrash is not null)
         {
             if (LogCrash.Contains("Unable to make protected final java.lang.Class java.lang.ClassLoader.defineClass")) AppendReason(CrashReason.Java版本过高);
+            //! 旧 VB TrimEnd(vbCrLf) 实际仅裁 CR（String→Char 缩窄绑定）；此处裁 CR+LF 为有意保留的归一（TECHDEBT §15）
             if (LogCrash.Contains("Failed loading config file ")) AppendReason(CrashReason.Mod配置文件导致游戏崩溃, [TryAnalyzeModName((LogCrash.RegexSeek(@"(?<=Failed loading config file .+ for modid )[^\n]+") ?? "").TrimEnd('\r', '\n')).First(), (LogCrash.RegexSeek(@"(?<=Failed loading config file ).+(?= of type)") ?? "").TrimEnd('\r', '\n')]); //#7071
         }
 
@@ -635,6 +636,7 @@ public sealed class CrashAnalyzer
             if (LogMc.Contains("java.lang.RuntimeException: Shaders Mod detected. Please remove it, OptiFine has built-in support for shaders.")) AppendReason(CrashReason.ShadersMod与OptiFine同时安装);
             if (LogMc.Contains("java.lang.NoSuchMethodError: sun.security.util.ManifestEntryVerifier") || LogMc.Contains("java.lang.NoSuchMethodError: 'void sun.security.util.ManifestEntryVerifier")) AppendReason(CrashReason.低版本Forge与高版本Java不兼容);
             if (LogMc.Contains("1282: Invalid operation")) AppendReason(CrashReason.光影或资源包导致OpenGL1282错误);
+            //! 旧 VB TrimEnd(vbCrLf) 实际仅裁 CR（String→Char 缩窄绑定）；此处裁 CR+LF 为有意保留的归一（TECHDEBT §15）
             if (LogMc.Contains("signer information does not match signer information of other classes in the same package")) AppendReason(CrashReason.文件或内容校验失败, (LogMc.RegexSeek(@"(?<=class "")[^']+(?=""'s signer information)") ?? "").TrimEnd('\r', '\n'));
             if (LogMc.Contains("Maybe try a lower resolution resourcepack?")) AppendReason(CrashReason.材质过大或显卡配置不足);
             if (LogMc.Contains("java.lang.NoSuchMethodError: net.minecraft.world.server.ChunkManager$ProxyTicketManager.shouldForceTicks(J)Z") && LogMc.Contains("OptiFine")) AppendReason(CrashReason.OptiFine导致无法加载世界);
@@ -715,6 +717,7 @@ public sealed class CrashAnalyzer
             }
             if (LogCrash.Contains("Multiple entries with same key: ")) AppendReason(CrashReason.确定Mod导致游戏崩溃, TryAnalyzeModName((LogCrash.RegexSeek("(?<=Multiple entries with same key: )[^=]+") ?? "").TrimEnd('\r', '\n', ' ')));
             if (LogCrash.Contains("LoaderExceptionModCrash: Caught exception from ")) AppendReason(CrashReason.确定Mod导致游戏崩溃, TryAnalyzeModName((LogCrash.RegexSeek(@"(?<=LoaderExceptionModCrash: Caught exception from )[^\n]+") ?? "").TrimEnd('\r', '\n', ' ')));
+            //! 旧 VB TrimEnd(vbCrLf) 实际仅裁 CR（String→Char 缩窄绑定）；此处裁 CR+LF 为有意保留的归一（TECHDEBT §15）
             if (LogCrash.Contains("Failed loading config file ")) AppendReason(CrashReason.Mod配置文件导致游戏崩溃, [TryAnalyzeModName((LogCrash.RegexSeek(@"(?<=Failed loading config file .+ for modid )[^\n]+") ?? "").TrimEnd('\r', '\n')).First(), (LogCrash.RegexSeek(@"(?<=Failed loading config file ).+(?= of type)") ?? "").TrimEnd('\r', '\n')]);
         }
 
@@ -734,6 +737,7 @@ public sealed class CrashAnalyzer
             //Mixin 崩溃
             var isMixin = MixinAnalyze(LogMc);
             //常规信息
+            //! 旧 VB Trim(vbCrLf) 实际仅裁 CR（String→Char 缩窄绑定）；此处裁 CR+LF 为有意保留的归一（TECHDEBT §15）
             if (LogMc.Contains("An exception was thrown, the game will display an error screen and halt.")) AppendReason(CrashReason.Forge报错, LogMc.RegexSeek(@"(?<=the game will display an error screen and halt.[\n\r]+[^\n]+?Exception: )[\s\S]+?(?=\n\tat)")?.Trim('\r', '\n'));
             if (LogMc.Contains("A potential solution has been determined:")) AppendReason(CrashReason.Fabric报错并给出解决方案, (LogMc.RegexSeek(@"(?<=A potential solution has been determined:\n)(\s+ - [^\n]+\n)+") ?? "").RegexSearch(@"(?<=\s+)[^\n]+").Join("\n"));
             if (LogMc.Contains("A potential solution has been determined, this may resolve your problem:")) AppendReason(CrashReason.Fabric报错并给出解决方案, (LogMc.RegexSeek(@"(?<=A potential solution has been determined, this may resolve your problem:\n)(\s+ - [^\n]+\n)+") ?? "").RegexSearch(@"(?<=\s+)[^\n]+").Join("\n"));
@@ -809,6 +813,7 @@ public sealed class CrashAnalyzer
             //Mod 解析错误（常见于 Fabric 前置校验失败）
             if (LogMc.Contains("Mod resolution failed")) AppendReason(CrashReason.Mod加载器报错);
             //Mixin 失败可以导致大量 Mod 实例创建失败，因此需要放到低优先级中
+            //! 旧 VB TrimEnd(vbCrLf) 实际仅裁 CR（String→Char 缩窄绑定）；此处裁 CR+LF 为有意保留的归一（TECHDEBT §15）
             if (LogMc.Contains("Failed to create mod instance.")) AppendReason(CrashReason.Mod初始化失败, TryAnalyzeModName((LogMc.RegexSeek(@"(?<=Failed to create mod instance. ModID: )[^,]+") ?? LogMc.RegexSeek(@"(?<=Failed to create mod instance. ModId )[^\n]+(?= for )") ?? "").TrimEnd('\r', '\n')));
             //注意：Fabric 的 Warnings were found! 不一定是崩溃原因，它可能是单纯的警报
         }
