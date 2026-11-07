@@ -207,7 +207,7 @@ Public Class CustomEvent
                                 NetDownloadByClient(Url, LocalPath)
                                 Return True
                             End Function, AddressOf HelpTryExtract, AddressOf RunInUi,
-                            PathTemp, Paths.BaseThenName, OsDrive)
+                            Paths.BaseThenName, PathTemp, OsDrive)
                     End Sub)
 
                 Case EventType.启动游戏
