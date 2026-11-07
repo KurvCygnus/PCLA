@@ -12,11 +12,12 @@ Public Class CrashAnalyzer
 
     '构造函数
     ''' <summary>
-    ''' 构造函数（旧 :6-13）：暂存文件夹的申请经回调走宿主层 RequestTaskTempFolder（ModMain.vb:942 留 VB，T5 迁其核后改调 C#）。
+    ''' 构造函数（旧 :6-13）：暂存文件夹的申请经回调改调 C#（PCLCS.Common.TempFolders.RequestTaskTempFolder，
+    ''' T5 迁核后的既定改调点；PathTemp/OsDrive 模块状态经参数注入，回调体内直读 ModBase 模块成员）。
     ''' TargetInstance 形参按旧公共签名保留（旧 :5 的同名字段在分析核内无任何读取，未随核迁移）。
     ''' </summary>
     Public Sub New(Optional TargetInstance As McInstance = Nothing)
-        Core = New CrashAnalyzerCore(Function() RequestTaskTempFolder())
+        Core = New CrashAnalyzerCore(Function() PCLCS.Common.TempFolders.RequestTaskTempFolder(PathTemp, osDrive:=OsDrive))
     End Sub
 
     '暂存文件夹（旧 Private TempFolder :4）与可用于生成报告的文件（旧 Private OutputFiles :857）随导出核迁 C#，本壳不再消费

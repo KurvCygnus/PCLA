@@ -520,15 +520,10 @@ Public Module ModBase
     End Function
     ''' <summary>
     ''' 检查是否拥有某一文件夹的 I/O 权限。如果出错，则抛出异常。
+    ''' （旧 :524-532 已迁 C# CommonUtils.CheckPermissionWithException——TempFolders 备选路径链消费；本壳保持调用点零改动）
     ''' </summary>
     Public Sub CheckPermissionWithException(Folder As String)
-        If String.IsNullOrWhiteSpace(Folder) Then Throw New ArgumentNullException("文件夹名不能为空！")
-        Folder = PathUtils.AddSlashSuffix(Folder)
-        If Folder.EndsWithF(":\System Volume Information\", True) OrElse Folder.EndsWithF(":\$RECYCLE.BIN\", True) Then Throw New UnauthorizedAccessException("没有对系统文件夹的权限！")
-        If Not DirectoryUtils.Exists(Folder) Then Throw New DirectoryNotFoundException("文件夹不存在！")
-        Dim TestFilePath As String = $"{Folder}CheckPermission{GetUuid()}.txt"
-        FileUtils.Write(TestFilePath, "临时文件，用于检测该文件夹的权限是否正常。")
-        FileUtils.Delete(TestFilePath)
+        CommonUtils.CheckPermissionWithException(Folder)
     End Sub
 
 #End Region

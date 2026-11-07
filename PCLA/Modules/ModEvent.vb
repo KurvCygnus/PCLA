@@ -3,6 +3,7 @@
 #Region "附加属性"
 
 Imports PCL.FormMain
+Imports PCLCS.Common
 
 ''' <summary>
 ''' 用于在 XAML 中初始化列表对象。
@@ -195,28 +196,18 @@ Public Class CustomEvent
                     RunInThread(Sub() OpenWebsite(Arg))
 
                 Case EventType.打开文件, EventType.打开帮助, EventType.执行命令
+                    '打开类 IO 核已迁 C#（EventActions.OpenFileOrExecute，旧 :197-220 RunInThread 体内逐行）：
+                    '确认路径、StartProcess、异常吞咽在核内；帮助页入口与安全确认弹窗经回调留宿主层
+                    Dim Kind = ToOpenKind(Type)
                     RunInThread(
                     Sub()
-                        Try
-                            '确认实际路径
-                            Dim ActualPaths = GetAbsoluteUrls(Arg0, Type)
-                            Dim Location = ActualPaths(0), WorkingDir = ActualPaths(1)
-                            Logger.Info($"打开类自定义事件实际路径：{Location}，工作目录：{WorkingDir}")
-                            '执行
-                            If Type = EventType.打开帮助 Then
-                                PageOtherHelp.EnterHelpPage(Location)
-                            Else
-                                If Not EventSafetyConfirm("即将执行：" & Location & If(Args.Length >= 2, " " & Arg1, "")) Then Return
-                                Dim Info As New ProcessStartInfo With {
-                                    .Arguments = If(Args.Length >= 2, Arg1, ""),
-                                    .FileName = Location,
-                                    .WorkingDirectory = WorkingDir
-                                }
-                                StartProcess(Info)
-                            End If
-                        Catch ex As Exception
-                            Logger.Error(ex, "执行打开类自定义事件失败", LogBehavior.Alert)
-                        End Try
+                        EventActions.OpenFileOrExecute(Arg, Kind,
+                            AddressOf PageOtherHelp.EnterHelpPage, AddressOf EventSafetyConfirm,
+                            Function(Url, LocalPath)
+                                NetDownloadByClient(Url, LocalPath)
+                                Return True
+                            End Function, AddressOf HelpTryExtract, AddressOf RunInUi,
+                            PathTemp, Paths.BaseThenName, OsDrive)
                     End Sub)
 
                 Case EventType.启动游戏
@@ -326,12 +317,10 @@ Public Class CustomEvent
 
                 Case EventType.修改变量, EventType.写入变量
                     If Args.Length = 1 Then Throw New Exception($"EventType {Type} 需要至少 2 个以 | 分割的参数，例如 VariableName|SomeValue")
-                    Try
-                        RegistryUtils.Write($"HKEY_CURRENT_USER\Software\{RegFolder}", $"CustomEvent{Arg0}", Args(1))
-                        If Args.Length = 2 Then Hint($"已写入变量：{Arg0} → {Args(1)}", HintType.Green)
-                    Catch ex As Exception
-                        Logger.Warn(ex, $"写入变量失败：{Arg0} → {Args(1)}", LogBehavior.Toast)
-                    End Try
+                    '注册表写入核已迁 C#（EventActions.WriteVariable，旧 :329-334 的 RegistryUtils 面逐字；失败告警在核内），
+                    '成功提示的判长与文案留宿主层（Args.Length = 2 条件传入回调）
+                    EventActions.WriteVariable(Arg0, Args(1),
+                        If(Args.Length = 2, Sub() Hint($"已写入变量：{Arg0} → {Args(1)}", HintType.Green), Nothing))
 
                 Case EventType.加入房间
                     RunInUi(
@@ -358,73 +347,29 @@ Public Class CustomEvent
     ''' <summary>
     ''' 返回自定义事件的绝对 Url。实际返回 {绝对 Url, WorkingDir}。
     ''' 失败会抛出异常。
+    ''' 决策核已迁 C#（EventActions.GetAbsoluteUrls，旧 :362-428 逐行：json/xaml 下载 ×2、TaskTemp 申请、
+    ''' HelpTryExtract 判定与六分支路径解析）；下载客户端（NetDownloadByClient）、HelpTryExtract 与 RunInUi 经回调接线，
+    ''' PathTemp/Paths.BaseThenName/OsDrive 模块状态经参数注入（GetNativesFolder 同模式）。
     ''' </summary>
     Public Shared Function GetAbsoluteUrls(RelativeUrl As String, Type As EventType) As String()
+        Return EventActions.GetAbsoluteUrls(RelativeUrl, ToOpenKind(Type),
+            Function(Url, LocalPath)
+                NetDownloadByClient(Url, LocalPath)
+                Return True
+            End Function,
+            AddressOf HelpTryExtract, AddressOf RunInUi, Paths.BaseThenName, PathTemp, OsDrive).ToArray()
+    End Function
 
-        '网页确认
-        If RelativeUrl.StartsWithF("http", True) Then
-            If RunInUi() Then
-                Throw New Exception("能打开联网帮助页面的 MyListItem 必须手动设置 Title、Info 属性！")
-            End If
-            '获取文件名
-            Dim RawFileName As String
-            Try
-                RawFileName = PathUtils.GetLastPart(RelativeUrl)
-                If Not PathUtils.GetExtension(RawFileName) = "json" Then Throw New Exception("未指向 .json 后缀的文件")
-            Catch ex As Exception
-                Throw New Exception("联网帮助页面须指向一个帮助 JSON 文件，并在同路径下包含相应 XAML 文件！" & vbCrLf &
-                                    "例如：" & vbCrLf &
-                                    " - https://www.baidu.com/test.json（填写这个路径）" & vbCrLf &
-                                    " - https://www.baidu.com/test.xaml（同时也需要包含这个文件）", ex)
-            End Try
-            '下载文件
-            Dim LocalTemp As String = RequestTaskTempFolder() & RawFileName
-            Logger.Info($"转换网络资源：{RelativeUrl} -> {LocalTemp}")
-            Try
-                NetDownloadByClient(RelativeUrl, LocalTemp)
-                NetDownloadByClient(RelativeUrl.Replace(".json", ".xaml"), LocalTemp.Replace(".json", ".xaml"))
-            Catch ex As Exception
-                Throw New Exception("下载指定的文件失败！" & vbCrLf &
-                                    "注意，联网帮助页面须指向一个帮助 JSON 文件，并在同路径下包含相应 XAML 文件！" & vbCrLf &
-                                    "例如：" & vbCrLf &
-                                    " - https://www.baidu.com/test.json（填写这个路径）" & vbCrLf &
-                                    " - https://www.baidu.com/test.xaml（同时也需要包含这个文件）", ex)
-            End Try
-            RelativeUrl = LocalTemp
-        End If
-        RelativeUrl = RelativeUrl.Replace("/", "\").Lower.TrimStart("\")
-
-        '确认实际路径
-        Dim Location As String, WorkingDir As String = Paths.BaseThenName
-        HelpTryExtract()
-        If RelativeUrl.Contains(":\") Then
-            '绝对路径
-            Location = RelativeUrl
-            Logger.Info($"自定义事件中由绝对路径{Type}：{Location}")
-        ElseIf FileUtils.Exists(Paths.BaseThenName & RelativeUrl) Then
-            '相对 PCL 文件夹的路径
-            Location = Paths.BaseThenName & RelativeUrl
-            Logger.Info($"自定义事件中由相对 PCL 文件夹的路径{Type}：{Location}")
-        ElseIf FileUtils.Exists(Paths.BaseThenName & "Help\" & RelativeUrl) Then
-            '相对 PCL 本地帮助文件夹的路径
-            Location = Paths.BaseThenName & "Help\" & RelativeUrl
-            WorkingDir = Paths.BaseThenName & "Help\"
-            Logger.Info($"自定义事件中由相对 PCL 本地帮助文件夹的路径{Type}：{Location}")
-        ElseIf Type = EventType.打开帮助 AndAlso FileUtils.Exists(PathTemp & "Help\" & RelativeUrl) Then
-            '相对 PCL 自带帮助文件夹的路径
-            Location = PathTemp & "Help\" & RelativeUrl
-            WorkingDir = PathTemp & "Help\"
-            Logger.Info($"自定义事件中由相对 PCL 自带帮助文件夹的路径{Type}：{Location}")
-        ElseIf Type = EventType.打开文件 OrElse Type = EventType.执行命令 Then
-            '直接使用原有路径启动程序
-            Location = RelativeUrl
-            Logger.Info($"自定义事件中直接{Type}：{Location}")
-        Else
-            '打开帮助，但是格式不对劲
-            Throw New FileNotFoundException("未找到 EventData 指向的本地 xaml 文件：" & RelativeUrl, RelativeUrl)
-        End If
-
-        Return {Location, WorkingDir}
+    ''' <summary>
+    ''' 旧 CustomEvent.EventType → C# EventOpenKind 的按名映射（C# 核仅读取 打开文件/打开帮助/执行命令 三判定，见 EventOpenKind）。
+    ''' </summary>
+    Private Shared Function ToOpenKind(Type As EventType) As EventOpenKind
+        Select Case Type
+            Case EventType.打开文件 : Return EventOpenKind.打开文件
+            Case EventType.打开帮助 : Return EventOpenKind.打开帮助
+            Case EventType.执行命令 : Return EventOpenKind.执行命令
+            Case Else : Return EventOpenKind.None
+        End Select
     End Function
 
     ''' <summary>

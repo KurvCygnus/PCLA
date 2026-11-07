@@ -203,6 +203,32 @@ public static class CommonUtils
         }
     }
 
+    /// <summary>
+    /// 检查是否拥有某一文件夹的 I/O 权限。如果出错，则抛出异常。（ModBase.vb:524-532 逐字随迁；
+    /// TempFolders 备选路径链消费，宿主层 ModBase 壳同名转发）
+    /// </summary>
+    public static void CheckPermissionWithException(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            //! 逐字移植豁免：旧 :525 单参构造——ArgumentNullException 的单串参为 paramName（非 message），ParamName 即该中文串，
+            //! 与 nameof(folder) 语义不同，Rider 的 nameof 建议不适用
+            throw new ArgumentNullException("文件夹名不能为空！");
+        }
+        folder = PathUtils.AddSlashSuffix(folder);
+        if (folder.EndsWithF(":\\System Volume Information\\", true) || folder.EndsWithF(":\\$RECYCLE.BIN\\", true))
+        {
+            throw new UnauthorizedAccessException("没有对系统文件夹的权限！");
+        }
+        if (!DirectoryUtils.Exists(folder))
+        {
+            throw new DirectoryNotFoundException("文件夹不存在！");
+        }
+        var testFilePath = $"{folder}CheckPermission{GetUuid()}.txt";
+        FileUtils.Write(testFilePath, "临时文件，用于检测该文件夹的权限是否正常。");
+        FileUtils.Delete(testFilePath);
+    }
+
     #endregion
 
     #region 文本

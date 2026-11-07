@@ -485,41 +485,24 @@ EndHint:
 
         ''' <summary>
         ''' 从文件初始化 HelpEntry 对象，失败会抛出异常。
+        ''' 解析核已迁 C#（PCLCS.Common.HelpEntry，旧 :489-523 逐行，Newtonsoft→JsonNodeUtils 宽松层按 TECHDEBT §9 逐点对照）；
+        ''' ArgumentReplace 深绑页面数据留宿主层，经回调注入；本壳保持旧公共字段面并逐字段回拷。
         ''' </summary>
         Public Sub New(FilePath As String)
-            RawPath = FilePath
-            If Not FileUtils.Exists(FilePath) Then Throw New FileNotFoundException("未找到帮助文件：" & FilePath, FilePath)
-            Dim JsonData As JObject = ArgumentReplace(FileUtils.ReadAsString(FilePath), AddressOf StringUtils.XmlEscape).DeserializeJson()
-            '加载常规信息
-            If JsonData("Title") IsNot Nothing Then
-                Title = JsonData("Title")
-            Else
-                Throw New ArgumentException("未找到 Title 项")
-            End If
-            Desc = If(JsonData("Description"), "")
-            Search = If(JsonData("Keywords"), "")
-            Logo = JsonData("Logo") '为保持 Nothing，不要加 If
-            ShowInSearch = If(JsonData("ShowInSearch"), ShowInSearch)
-            ShowInPublic = If(JsonData("ShowInPublic"), ShowInPublic)
-            ShowInSnapshot = If(JsonData("ShowInSnapshot"), ShowInSnapshot)
-            Types = New List(Of String)
-            For Each NameOfType In If(JsonData("Types"), New JArray)
-                Types.Add(NameOfType)
-            Next
-            '加载事件信息
-            If If(JsonData("IsEvent"), False) Then
-                EventType = JsonData("EventType").ToObject(Of CustomEvent.EventType)
-                EventData = If(JsonData("EventData"), "")
-                IsEvent = True
-            Else
-                Dim XamlAddress As String = Path.ChangeExtension(FilePath, ".xaml")
-                If FileUtils.Exists(XamlAddress) Then
-                    XamlContent = FileUtils.ReadAsString(XamlAddress)
-                    IsEvent = False
-                Else
-                    Throw New FileNotFoundException("未找到帮助条目 .json 对应的 .xaml 文件（" & XamlAddress & "）")
-                End If
-            End If
+            Dim Parsed As New PCLCS.Common.HelpEntry(FilePath, Function(s) ArgumentReplace(s, AddressOf StringUtils.XmlEscape))
+            RawPath = Parsed.RawPath
+            Title = Parsed.Title
+            Desc = Parsed.Desc
+            Search = Parsed.Search
+            Types = New List(Of String)(Parsed.Types)
+            Logo = Parsed.Logo
+            ShowInSearch = Parsed.ShowInSearch
+            ShowInPublic = Parsed.ShowInPublic
+            ShowInSnapshot = Parsed.ShowInSnapshot
+            IsEvent = Parsed.IsEvent
+            EventType = EnumUtils.FromString(Of CustomEvent.EventType)(Parsed.EventType) '旧 ToObject(Of EventType) 语义（大小写不敏感、数字与数字串可达；""→None 同旧字段默认）
+            EventData = Parsed.EventData
+            XamlContent = Parsed.XamlContent
         End Sub
         ''' <summary>
         ''' 获取该 HelpEntry 对应的 MyListItem。
@@ -783,34 +766,21 @@ NextFile:
 
     ''' <summary>
     ''' 把某个 PCL 窗口拖到最前面。
+    ''' 核已迁 C#（PCLCS.Common.WindowNative.ShowWindowToTop，旧 :787-794 逐字；PostMessage P/Invoke 随核迁移）。
     ''' </summary>
     Public Sub ShowWindowToTop(Handle As IntPtr)
-        Try
-            PostMessage(Handle, 400 * 16 + 2, 0, 0)
-            SetForegroundWindow(Handle) '不在这里放不行，神秘 WinAPI，建议别动
-        Catch ex As Exception
-            Logger.Error(ex, "设置窗口置顶失败", LogBehavior.Toast)
-        End Try
+        PCLCS.Common.WindowNative.ShowWindowToTop(Handle)
     End Sub
     Public Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ClassName As String, WindowName As String) As IntPtr
     Public Declare Function SetForegroundWindow Lib "user32" (hWnd As IntPtr) As Integer
-    Private Declare Function PostMessage Lib "user32" Alias "PostMessageA" (hWnd As IntPtr, msg As UInteger, wParam As Long, lParam As Long) As Boolean
 
     ''' <summary>
     ''' 将特定程序设置为使用高性能显卡启动。
     ''' 如果失败，则抛出异常。
+    ''' 核已迁 C#（PCLCS.Launch.GpuPreference.Set，旧 :803-814 纯 RegistryUtils 面逐字）。
     ''' </summary>
     Public Sub SetGPUPreference(Executeable As String)
-        Const REG_KEY As String = "HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences"
-        Const REG_VALUE As String = "GpuPreference=2;"
-        '查看现有设置
-        If RegistryUtils.Read(REG_KEY, Executeable).result?.ToString() = REG_VALUE Then
-            Logger.Info($"无需调整显卡设置：{Executeable}")
-            Return
-        End If
-        '写入新设置
-        RegistryUtils.Write(REG_KEY, Executeable, REG_VALUE)
-        Logger.Info($"已调整显卡设置：{Executeable}")
+        PCLCS.Launch.GpuPreference.Set(Executeable)
     End Sub
 
     ''' <summary>
@@ -905,33 +875,15 @@ NextFile:
 
 #Region "任务缓存"
 
-    Private IsTaskTempCleared As Boolean = False
-    Private IsTaskTempClearing As Boolean = False
+    '清理闩与备选路径链已迁 C#（PCLCS.Common.TempFolders，旧 :906-958 逐字）；
+    'PathTemp/OsDrive 模块状态经参数注入（GetNativesFolder 同模式），本壳保持调用点零改动
 
     ''' <summary>
     ''' 尝试清理任务缓存文件夹。
     ''' 在整次运行中只会实际清理一次。
     ''' </summary>
     Public Sub TryClearTaskTemp()
-        If Not IsTaskTempCleared Then
-            IsTaskTempCleared = True
-            IsTaskTempClearing = True
-            Try
-                Logger.Info("开始清理任务缓存文件夹")
-                DirectoryUtils.Delete($"{OsDrive}ProgramData\{PCLCS.Startup.LauncherIdentity.FolderName}\TaskTemp\")
-                DirectoryUtils.Delete($"{PathTemp}TaskTemp\")
-                Logger.Info("已清理任务缓存文件夹")
-            Catch ex As Exception
-                Logger.Warn(ex, "清理任务缓存文件夹失败")
-            Finally
-                IsTaskTempClearing = False
-            End Try
-        ElseIf IsTaskTempClearing Then
-            '等待另一个清理步骤完成
-            Do While IsTaskTempClearing
-                Thread.Sleep(1)
-            Loop
-        End If
+        PCLCS.Common.TempFolders.TryClearTaskTemp(PathTemp, OsDrive)
     End Sub
 
     ''' <summary>
@@ -940,21 +892,7 @@ NextFile:
     ''' </summary>
     ''' <param name="RequireNonSpace">是否要求路径不包含空格。</param>
     Public Function RequestTaskTempFolder(Optional RequireNonSpace As Boolean = False) As String
-        TryClearTaskTemp()
-        Dim ResultFolder As String
-        Try
-            ResultFolder = $"{PathTemp}TaskTemp\{GetUuid()}-{RandomInteger(0, 1000000)}\"
-            If InstallPlans.ShouldUseTempFallback(ResultFolder, RequireNonSpace) Then Exit Try '带空格（判定核已迁 C#，ModMain.vb:947：半角序数比较，全角不触发）
-            DirectoryUtils.Create(ResultFolder)
-            CheckPermissionWithException(ResultFolder)
-            Return ResultFolder
-        Catch
-        End Try
-        '使用备用路径
-        ResultFolder = $"{OsDrive}ProgramData\{PCLCS.Startup.LauncherIdentity.FolderName}\TaskTemp\{GetUuid()}-{RandomInteger(0, 1000000)}\"
-        DirectoryUtils.Create(ResultFolder)
-        CheckPermission(ResultFolder)
-        Return ResultFolder
+        Return PCLCS.Common.TempFolders.RequestTaskTempFolder(PathTemp, RequireNonSpace, OsDrive)
     End Function
 
 #End Region
