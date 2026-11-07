@@ -310,3 +310,5 @@
 **过程备注**
 
 - **VB 壳调用点的参数顺序回归单测不可达。** `PCLCS.Tests` 以命名参数直调 C# 核，VB 壳转发调用点的参数顺序回归（T5 Critical：`ModEvent.vb:204-210` basePath/pathTemp 颠倒，`d450c75` 修复）无法被单测捕获，只能靠人工复审与行为语料（37 项）拦截；W4 后新增接线点沿用此认知。连带备案：`PCLCS.Tests` 的 `Microsoft.VisualBasic` 框架引用经用户追认保留，仅测试工程，`PCLCS` 源零 VB 依赖（rg 门禁基线 10 行/6 文件维持）。
+
+- **启动自动登录偶发 NRE：`OAuthClientIdProvider` 接线依赖 ModNet 模块 cctor，时序不保证。** 实机证据（2026-11-07 启动日志）：启动静默刷新登录（`ModLaunch.MsLoginStep1Refresh` → `PCLCS.Launch.MsLoginSteps.RefreshTokens`）在 `ModNet` 模块 cctor 运行前触达时，`OAuthClientIdProvider!()` 解引用 NRE（登录加载器失败）；数分钟后用户点启动游戏，同一调用全 6 步成功——接线挂在 `ModNet.vb:25`（模块 `Sub New`），启动登录路径此前未触达任何 ModNet 成员（模块静态构造时序缺陷的漏网变体：登录路径自身不经过 ModNet）。修复方向：在登录路径必经的宿主模块（如 `ModLaunch.vb`）`Sub New` 追加幂等接线，或提供 PCLCS 侧集中接线入口由宿主启动序列调用；本轮仅记录，不修。
