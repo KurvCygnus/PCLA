@@ -2,8 +2,8 @@
 Imports CrashAnalyzerCore = PCLCS.Crash.CrashAnalyzer
 
 ''' <summary>
-''' 崩溃分析器：分析核已迁 C#（PCLCS.Crash.CrashAnalyzer，旧 :6-1113 除 Output 外逐行移植），
-''' 本类保留旧公共签名做薄转发；Output（旧 :861-920）的弹窗编排暂留 VB 原样，T2 拆解为 C# 导出核 + VB 回调。
+''' 崩溃分析器：分析核已迁 C#（PCLCS.Crash.CrashAnalyzer，旧 :6-1113 除 Output 外逐行移植），导出核已迁 C#（PCLCS.Crash.CrashExport，旧 :861-920 文件操作面），
+''' 本类保留旧公共签名做薄转发；Output（旧 :861-920）仅余弹窗编排（ShowWindowToTop/MyMsgBox/SaveFile/Hint/OpenExplorer 与诊断输出）。
 ''' </summary>
 Public Class CrashAnalyzer
 
@@ -19,24 +19,11 @@ Public Class CrashAnalyzer
         Core = New CrashAnalyzerCore(Function() RequestTaskTempFolder())
     End Sub
 
-    '暂存文件夹（旧 Private TempFolder :4；C# 核构造时申请并建 Temp/Report 子目录，Output 段消费）
-    Private ReadOnly Property TempFolder As String
-        Get
-            Return Core.TempFolder
-        End Get
-    End Property
-
-    '在弹窗中选择直接打开的文件（旧 Private DirectFile :134；C# 核 Prepare 分类时赋值，Output 段消费）
+    '暂存文件夹（旧 Private TempFolder :4）与可用于生成报告的文件（旧 Private OutputFiles :857）随导出核迁 C#，本壳不再消费
+    '在弹窗中选择直接打开的文件（旧 Private DirectFile :134；C# 核 Prepare 分类时赋值，Output 弹窗「查看输出」消费）
     Private ReadOnly Property DirectFile As KeyValuePair(Of String, String())?
         Get
             Return Core.DirectFile
-        End Get
-    End Property
-
-    '可用于生成报告的文件（旧 Private OutputFiles :857；C# 核 Prepare 收集，Output 段消费）
-    Private ReadOnly Property OutputFiles As List(Of String)
-        Get
-            Return Core.OutputFiles
         End Get
     End Property
 
@@ -74,7 +61,7 @@ Public Class CrashAnalyzer
 
     '4：根据原因输出信息
     ''' <summary>
-    ''' 弹出崩溃弹窗，并指导导出崩溃报告。（旧 :861-920 原样保留，T2 拆解）
+    ''' 弹出崩溃弹窗，并指导导出崩溃报告。（旧 :861-920：弹窗编排留宿主层，导出文件操作面已迁 C# CrashExport.BuildExportArchive）
     ''' </summary>
     Public Sub Output(IsManualAnalyze As Boolean, Optional ExtraFiles As List(Of String) = Nothing)
         '弹窗提示
@@ -100,36 +87,14 @@ Public Class CrashAnalyzer
                     '获取文件路径
                     RunInUiWait(Sub() FileAddress = Dialogs.SaveFile("选择保存位置", "错误报告-" & Date.Now.ToString("G").Replace("/", "-").Replace(":", ".").Replace(" ", "_") & ".zip", filter:={("zip", "Minecraft 错误报告")}))
                     If FileAddress Is Nothing Then Return
-                    FileUtils.Delete(FileAddress)
                     '输出诊断信息
                     FeedbackInfo()
                     Logger.Instance.Flush()
-                    '复制文件
-                    If ExtraFiles IsNot Nothing Then OutputFiles.AddRange(ExtraFiles)
-                    For Each OutputFile In OutputFiles
-                        Dim FileName As String = PathUtils.GetLastPart(OutputFile)
-                        Dim FileEncoding As Encoding = Nothing
-                        Select Case FileName
-                            Case "LatestLaunch.bat"
-                                FileName = "启动脚本.bat"
-                            Case "Log1.txt"
-                                FileName = "PCL 启动器日志.txt"
-                                FileEncoding = Encoding.UTF8
-                            Case "RawOutput.log"
-                                FileName = "游戏崩溃前的输出.txt"
-                                FileEncoding = Encoding.UTF8
-                        End Select
-                        If Not FileUtils.Exists(OutputFile) Then Continue For
-                        Dim FileContent As String = FileUtils.ReadAsString(OutputFile, FileEncoding)
-                        FileContent = FilterUserName(FilterAccessToken(FileContent, If(FileName = "启动脚本.bat", "F", "*")), "*")
-                        FileUtils.Write(TempFolder & "Report\" & FileName, FileContent, FileEncoding)
-                        Logger.Info($"导出错误报告文件：{FileName}")
-                    Next
-                    '导出报告
-                    FileUtils.CreateZipFromDirectory(FileAddress, TempFolder & "Report\")
-                    DirectoryUtils.Delete(TempFolder & "Report\")
+                    '导出报告（C# 导出核：删旧文件、收集+脱敏、重命名表与 zip 打包；失败已记日志并返回 Nothing）
+                    Dim Exported As String = PCLCS.Crash.CrashExport.BuildExportArchive(Core, ExtraFiles, FileAddress)
+                    If Exported Is Nothing Then Return
                     Hint("错误报告已导出！", HintType.Green)
-                    OpenExplorer(FileAddress)
+                    OpenExplorer(Exported)
                 Catch ex As Exception
                     Logger.Error(ex, "导出错误报告失败")
                     Return
