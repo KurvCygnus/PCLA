@@ -7,6 +7,8 @@ Public Module ModDownload
     Sub New()
         'C# 数据面（ModRequests）对宿主层全局状态的接线：网络请求的 UI 线程守卫回调（与 ModNet.Sub New 同模式）
         ModRequests.RunInUiProvider = AddressOf RunInUi
+        '本模块是下载路径枢纽，可先于 ModNet 成员被触达：幂等接线 PCLCS 网络/登录核心（同 ModLaunch.Sub New）
+        ModNet.WirePclcsProviders()
     End Sub
 
 #Region "DlClient* | Minecraft 客户端"

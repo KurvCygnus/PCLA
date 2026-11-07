@@ -1,5 +1,11 @@
 Public Module ModLaunch
 
+    Sub New()
+        '本模块是登录路径枢纽，可先于 ModNet 成员被触达：在此幂等接线 PCLCS 登录/网络核心，
+        '避免 OAuthClientIdProvider 等静态提供者为空 NRE（机制见 TECHDEBT §14 启动自动登录偶发 NRE）
+        ModNet.WirePclcsProviders()
+    End Sub
+
 #Region "开始"
 
     Public CurrentLaunchOptions As McLaunchOptions = Nothing

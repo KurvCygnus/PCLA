@@ -7,6 +7,16 @@ Imports System.Net.Http.Headers
 Public Module ModNet
 
     Sub New()
+        WirePclcsProviders()
+    End Sub
+
+    ''' <summary>
+    ''' PCLCS 网络与登录核心的宿主层接线（幂等，可重复调用）。
+    ''' 登录与下载路径（ModLaunch / ModDownload）可能先于本模块成员被触达，故各枢纽的模块
+    ''' 初始化都调用本过程：VB 模块静态构造仅由成员访问触发，登录核此前曾因只挂在本模块
+    ''' Sub New 而出现 OAuthClientIdProvider 为空的 NRE（TECHDEBT §14 启动自动登录偶发 NRE）。
+    ''' </summary>
+    Friend Sub WirePclcsProviders()
         '将 VB 侧的签名实现接线到 C# 网络核心；签名逻辑留在 ModSecret（与 SettingsService.IdentifyProvider 同模式）
         NetRequest.CdnSigner = AddressOf SecretCdnSign
         NetRequest.HeadersSigner = AddressOf HeadersSignAdapter
